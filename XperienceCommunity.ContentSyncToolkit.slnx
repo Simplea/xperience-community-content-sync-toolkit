@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/examples/">
+    <Project Path="examples/DancingGoat/DancingGoat.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/XperienceCommunity.ContentSyncToolkit/XperienceCommunity.ContentSyncToolkit.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/XperienceCommunity.ContentSyncToolkit.Tests/XperienceCommunity.ContentSyncToolkit.Tests.csproj" />
+  </Folder>
+</Solution>

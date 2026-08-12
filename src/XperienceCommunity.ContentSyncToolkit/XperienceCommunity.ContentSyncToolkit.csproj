@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>XperienceCommunity.ContentSyncToolkit</PackageId>
+    <Title>Content Sync Toolkit for Xperience by Kentico</Title>
+    <Description>Open-source toolkit that helps content editors identify and resolve gaps in Xperience by Kentico content sync between instances.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Kentico.Xperience.Admin" />
+  </ItemGroup>
+
+</Project>

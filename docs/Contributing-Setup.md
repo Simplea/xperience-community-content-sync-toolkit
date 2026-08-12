@@ -1,25 +1,16 @@
 # Contributing Setup
 
----This documents the steps a maintainer or developer would follow to work on the library in their development environment---
-
----Update the details for this project, replacing "repotemplate" and anything else that needs changed---
+This documents the steps to set up a local development environment for Content
+Sync Toolkit.
 
 ## Required Software
-
-The requirements to setup, develop, and build this project are listed below.
 
 ### .NET Runtime
 
 .NET SDK 10.0 or newer
 
 - <https://dotnet.microsoft.com/en-us/download/dotnet/10.0>
-- See `global.json` file for specific SDK requirements
-
-### Node.js Runtime
-
-- [Node.js](https://nodejs.org/en/download) v24 or newer
-- [NVM for Windows](https://github.com/coreybutler/nvm-windows) to manage multiple installed versions of Node.js
-- See `engines` in the solution `package.json` for specific version requirements
+- See `global.json` for the specific SDK requirement
 
 ### C# Editor
 
@@ -35,30 +26,19 @@ SQL Server 2019 or newer compatible database
 
 ### SQL Editor
 
-- VS Code with official [MSSQL extension](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql)
+- VS Code with the official [MSSQL extension](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql)
 - MS SQL Server Management Studio
 
 ## Sample Project
 
 ### Database Setup
 
-Running the sample project requires creating a new Xperience by Kentico database using the included template.
+Running the sample project requires creating a new Xperience by Kentico database
+using the included template.
 
-Change directory in your console to `./examples/DancingGoat` and follow the instructions in the Xperience
-documentation on [creating a new database](https://docs.kentico.com/documentation/developers-and-admins/installation#create-the-project-database).
-
-### Admin Customization
-
-To run the Sample app Admin customization in development mode, add the following to your [User Secrets](https://learn.microsoft.com/en-us/aspnet/core/security/app-secrets?view=aspnetcore-10.0&tabs=windows#secret-manager) for the application.
-
-```json
-"CMSAdminClientModuleSettings": {
-  "kentico-xperience-integrations-repotemplate": {
-    "Mode": "Proxy",
-    "Port": 3009
-  }
-}
-```
+Change directory in your console to `./examples/DancingGoat` and follow the
+instructions in the Xperience documentation on
+[creating a new database](https://docs.kentico.com/documentation/developers-and-admins/installation#create-the-project-database).
 
 ## Development Workflow
 
@@ -67,9 +47,9 @@ To run the Sample app Admin customization in development mode, add the following
    - `refactor/` - for restructuring of existing features
    - `fix/` - for bugfixes
 
-1. Run `dotnet format` against the `Kentico.Xperience.RepoTemplate` solution
+1. Run `dotnet format` against the `XperienceCommunity.ContentSyncToolkit` solution
 
-   > use `dotnet: format` VS Code task.
+   > use the `dotnet: format` VS Code task.
 
 1. Commit changes, with a commit message preferably following the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary) convention.
 
