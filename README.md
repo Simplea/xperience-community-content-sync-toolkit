@@ -26,7 +26,7 @@ The project is developed and maintained by Andres Villenas at SimpleA.
 
 | Xperience Version | Library Version |
 | ----------------- | --------------- |
-| 31.2.1 or newer   | Unreleased      |
+| 30.8.0 or newer   | Unreleased      |
 
 See the [compatibility policy](./docs/Compatibility.md) for the supported range.
 

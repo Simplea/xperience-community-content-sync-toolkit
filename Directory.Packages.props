@@ -4,7 +4,10 @@
     <CentralPackageVersionOverrideEnabled>true</CentralPackageVersionOverrideEnabled>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
-    <XperienceMinimumVersion>31.2.1</XperienceMinimumVersion>
+    <!-- 30.8.0 is the first version where Content Sync covers both content-hub items (added 30.5.0,
+         May 2025 Refresh) and website channel pages (added 30.8.0, July 2025 Refresh). This toolkit
+         is meaningless on a version where the underlying Content Sync feature can't sync both. -->
+    <XperienceMinimumVersion>30.8.0</XperienceMinimumVersion>
     <XperienceLatestVersion>31.7.2</XperienceLatestVersion>
   </PropertyGroup>
   <ItemGroup>

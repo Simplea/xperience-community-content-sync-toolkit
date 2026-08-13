@@ -1263,7 +1263,7 @@
       "xperiencecommunity.contentsynctoolkit": {
         "type": "Project",
         "dependencies": {
-          "Kentico.Xperience.Admin": "[31.2.1, )"
+          "Kentico.Xperience.Admin": "[30.8.0, )"
         }
       }
     }

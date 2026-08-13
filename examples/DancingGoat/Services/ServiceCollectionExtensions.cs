@@ -1,5 +1,6 @@
-﻿
+using CMS.Base;
 using CMS.Commerce;
+using CMS.ContentEngine;
 
 using DancingGoat.Commerce;
 using DancingGoat.Models;
@@ -10,7 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace DancingGoat
 {
-    public static class IServiceCollectionExtensions
+    public static class ServiceCollectionExtensions
     {
         /// <summary>
         /// Injects DG services into the IoC container.
@@ -28,7 +29,8 @@ namespace DancingGoat
 
         private static void AddCommerceServices(IServiceCollection services)
         {
-            services.AddSingleton<ProductSkuValidationEventHandler>();
+            services.AddEventHandler<BeforeCreateContentItemEvent, ProductSkuValidationEventHandler>();
+            services.AddEventHandler<BeforeUpdateDraftEvent, ProductSkuValidationEventHandler>();
 
             services.AddSingleton<OrderService>();
             services.AddSingleton<CalculationService>();

@@ -346,7 +346,7 @@ footer {
 
 .form-group-label-required:after {
     content: "*";
-    color: #B4594A;
+    color: @color-error-soft;
 }
 
 .form-group-input input,
@@ -362,7 +362,7 @@ footer {
 
 .form-group-input .Error input,
 .form-group-input .Error textarea {
-    border-color: #D12127;
+    border-color: @color-error;
 }
 
 /*# Messages #*/
@@ -375,12 +375,12 @@ footer {
 }
 
 .error-label {
-    color: #D12127;
+    color: @color-error;
 }
 
 .info-label {
     color: white;
-    background-color: #497d04 !important;
+    background-color: @color-green-100 !important;
     padding: 1rem;
 }
 /*# Copyright #*/
@@ -579,7 +579,7 @@ a + .article-tile-info .article-tile-date {
 }
 
 .confirmation-page {
-    background: #FFF;
+    background: @color-white;
     
     .confirmation-text {
         padding-bottom: 29.375px;
@@ -927,6 +927,13 @@ a + .article-tile-info .article-tile-date {
     }
 }
 
+/*# Access denied - 403 #*/
+@media (min-width: 768px) {
+    .access-denied-content {
+        margin-left: 1rem;
+    }
+}
+
 /*# Home banner #*/
 .banner-section {
     display: flex;
@@ -943,7 +950,7 @@ a + .article-tile-info .article-tile-date {
 }
 
 .banner-heading {
-    color: #FFFFFF;
+    color: @color-white;
     font-weight: 700;
     font-size: 3rem;
     line-height: 1;
@@ -954,7 +961,7 @@ a + .article-tile-info .article-tile-date {
 }
 
 .banner-text {
-    color: #FFF;
+    color: @color-white;
     font-size: 1.375rem;
     padding: 1.5rem;
     display: block;
@@ -966,7 +973,7 @@ a + .article-tile-info .article-tile-date {
 }
 
 .banner-link {
-    color: #000000;
+    color: @color-black;
     text-decoration: none;
 }
 
@@ -1083,10 +1090,10 @@ a + .article-tile-info .article-tile-date {
     margin-bottom: 1rem;
 
     .product-tile {
-        background: #ffffff;
+        background: @color-white;
         text-align: center;
         margin: 0.5rem;
-        border: 1px solid #e5e5e5;
+        border: 1px solid @color-gray-150;
         height: 100%;
 
         a {
@@ -1445,7 +1452,7 @@ a + .article-tile-info .article-tile-date {
     background: @color-brown;
     display: inline-block;
     padding: 0 5px;
-    color: #fff;
+    color: @color-white;
 }
 
 .search-tile-subtitle {
@@ -1492,7 +1499,7 @@ a + .article-tile-info .article-tile-date {
                 display: block;
                 font-weight: bold;
                 text-align: left;
-                background-color: #D12127;
+                background-color: @color-error;
                 padding: 10px 12px;
                 margin-top: .3rem;
                 margin-bottom: .6rem;
@@ -1501,11 +1508,11 @@ a + .article-tile-info .article-tile-date {
     }
 
     .input-validation-error {
-        border-color: #d12127 !important;
+        border-color: @color-error !important;
     }
 
     .field-validation-error {
-        color: #d12127;
+        color: @color-error;
         display: block;
         padding-bottom: 10px;
         text-align: left;
@@ -1526,7 +1533,7 @@ a + .article-tile-info .article-tile-date {
 
     .separator {
         line-height: 1em;
-        border-bottom: 2px solid #bebebe;
+        border-bottom: 2px solid @color-border;
         margin: 1rem 0;
     }
 
@@ -1536,7 +1543,7 @@ a + .article-tile-info .article-tile-date {
         margin-left: -2.0rem;
         padding: 0 0.5rem;
         top: 0.5rem;
-        background: #E7E7E7;
+        background: @color-gray-155;
     }
 
     input[type="submit"] {
@@ -1550,11 +1557,11 @@ a + .article-tile-info .article-tile-date {
         margin-top: 0.25rem;
         padding-left: 0.5rem;
         padding-right: 0.5rem;
-        border: 2px solid #BEBEBE;
+        border: 2px solid @color-border;
     }
 
     .EditingFormErrorLabel {
-        color: #D12127;
+        color: @color-error;
     }
 }
 

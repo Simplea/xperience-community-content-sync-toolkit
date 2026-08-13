@@ -25,7 +25,8 @@ internal static class HtmlHelperExtensions
         var additionalViewData = new { htmlAttributes = new { data_storage = $"{GetModelName(html)}_{expression.GetExpressionText()}" } };
         var disabledAdditionalViewData = new { htmlAttributes = new { disabled = "disabled" } };
 
-        var editor = html.EditorFor(expression, !disabled ? additionalViewData : disabledAdditionalViewData);
+        object editorViewData = disabled ? disabledAdditionalViewData : additionalViewData;
+        var editor = html.EditorFor(expression, editorViewData);
         var message = html.ValidationMessageFor(expression);
         IHtmlContent explanationTextHtml = HtmlString.Empty;
 

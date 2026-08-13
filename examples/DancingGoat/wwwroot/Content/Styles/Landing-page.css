@@ -109,7 +109,7 @@ h1 {
 }
 mark {
   background: #ff0;
-  color: #000;
+  color: #000000;
 }
 small {
   font-size: 80%;
@@ -196,8 +196,8 @@ input[type="number"]:focus,
 input[type="email"]:focus,
 textarea:focus {
   outline: 0;
-  box-shadow: 0 0 1px #08768c;
-  border: 1px solid #08768c;
+  box-shadow: 0 0 1px #08768C;
+  border: 1px solid #08768C;
 }
 input[type="checkbox"],
 input[type="radio"] {
@@ -4522,7 +4522,7 @@ p {
 .btn {
   padding: 0.5rem 1rem;
   cursor: pointer;
-  background: #fff;
+  background: #ffffff;
   display: inline-block;
   text-decoration: none;
   letter-spacing: 2px;
@@ -4685,7 +4685,7 @@ header .stripe {
   top: 50%;
   transform: translateY(-50%);
   width: 15.625rem;
-  color: #FFFFFF;
+  color: #ffffff;
   background-color: rgba(39, 34, 25, 0.8);
   font-weight: normal;
   font-size: 1rem;
@@ -4705,7 +4705,7 @@ form label {
 form input[type=submit] {
   padding: 0.5rem 1rem;
   cursor: pointer;
-  background: #fff;
+  background: #ffffff;
   display: inline-block;
   text-decoration: none;
   letter-spacing: 2px;
@@ -4761,7 +4761,7 @@ form .form-field .editing-form-control-nested-control .ktc-checkbox label {
 /*# Footer #*/
 footer .footer-container {
   font-size: 13px;
-  color: #fff;
+  color: #ffffff;
   background: #1D1D1D;
   padding-top: 2rem;
   padding-bottom: 2rem;

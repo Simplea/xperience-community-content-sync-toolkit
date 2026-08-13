@@ -2,13 +2,12 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using CMS.Base;
+
 using DancingGoat;
 using DancingGoat.EmailComponents;
 using DancingGoat.Helpers.Generators;
 using DancingGoat.Models;
-
-using CMS;
-using CMS.Base;
 
 using Kentico.Activities.Web.Mvc;
 using Kentico.Commerce.Web.Mvc;
@@ -17,21 +16,25 @@ using Kentico.EmailBuilder.Web.Mvc;
 using Kentico.Membership;
 using Kentico.OnlineMarketing.Web.Mvc;
 using Kentico.PageBuilder.Web.Mvc;
-using Kentico.Xperience.Mjml;
 using Kentico.Web.Mvc;
-
+using Kentico.Xperience.Mjml;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Routing;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 using Samples.DancingGoat;
+
+using XperienceCommunity.ContentSyncToolkit;
+using XperienceCommunity.ContentSyncToolkit.Http;
+using XperienceCommunity.ContentSyncToolkit.Inventory;
+using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -71,6 +74,12 @@ builder.Services.AddLocalization()
 builder.Services.AddDancingGoatServices();
 builder.Services.AddSingleton<IEmailActivityTrackingEvaluator, EmailActivityTrackingEvaluator>();
 
+// TEMPORARY: manual two-instance test rig for the content sync toolkit foundation. Not part of the
+// packaged sample. Every value comes from configuration (environment variables at launch time), so
+// no secret or URL is ever hardcoded here — see docs/specs/content-inventory-foundation.md.
+builder.Services.AddContentSyncToolkit();
+builder.Services.Configure<ContentSyncToolkitOptions>(builder.Configuration.GetSection("ContentSyncToolkit"));
+
 ConfigureEmailBuilder(builder.Services);
 ConfigureMembershipServices(builder.Services);
 
@@ -82,8 +91,6 @@ if (builder.Environment.IsDevelopment())
 var app = builder.Build();
 
 app.InitKentico();
-
-app.InitializeDancingGoat();
 
 app.UseStaticFiles();
 
@@ -124,12 +131,42 @@ app.MapControllerRoute(
     }
 );
 
+// TEMPORARY: manual test rig for the content sync toolkit foundation — there is no admin UI yet
+// (that's a later slice), so these dev-only endpoints are the only way to see the diff result.
+// Remove once the sync-status admin page exists. Never mapped outside Development.
+if (app.Environment.IsDevelopment())
+{
+    app.MapGet("/dev/content-sync-toolkit/local/web-pages",
+        (string channelName, string languageName, ILocalContentInventoryService service, CancellationToken ct) =>
+            service.GetWebPagesAsync(channelName, languageName, ct));
+
+    app.MapGet("/dev/content-sync-toolkit/local/content-hub-items",
+        (string workspaceName, string languageName, ILocalContentInventoryService service, CancellationToken ct) =>
+            service.GetContentHubItemsAsync(workspaceName, languageName, ct));
+
+    app.MapGet("/dev/content-sync-toolkit/remote/web-pages",
+        (string channelName, string languageName, IContentInventoryClient client, CancellationToken ct) =>
+            client.GetWebPagesAsync(channelName, languageName, ct));
+
+    app.MapGet("/dev/content-sync-toolkit/remote/content-hub-items",
+        (string workspaceName, string languageName, IContentInventoryClient client, CancellationToken ct) =>
+            client.GetContentHubItemsAsync(workspaceName, languageName, ct));
+
+    app.MapGet("/dev/content-sync-toolkit/status/web-pages",
+        (string channelName, string languageName, IContentSyncStatusService service, CancellationToken ct) =>
+            service.GetWebPageSyncStatusAsync(channelName, languageName, ct));
+
+    app.MapGet("/dev/content-sync-toolkit/status/content-hub-items",
+        (string workspaceName, string languageName, IContentSyncStatusService service, CancellationToken ct) =>
+            service.GetContentHubSyncStatusAsync(workspaceName, languageName, ct));
+}
+
 app.Run();
 
 
 static void ConfigureMembershipServices(IServiceCollection services)
 {
-    services.AddIdentity<ApplicationUser, NoOpApplicationRole>(options =>
+    services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
     {
         options.Password.RequireDigit = false;
         options.Password.RequireNonAlphanumeric = false;
@@ -141,16 +178,18 @@ static void ConfigureMembershipServices(IServiceCollection services)
         options.SignIn.RequireConfirmedAccount = true;
     })
         .AddUserStore<ApplicationUserStore<ApplicationUser>>()
-        .AddRoleStore<NoOpApplicationRoleStore>()
+        .AddRoleStore<ApplicationRoleStore<ApplicationRole>>()
         .AddUserManager<UserManager<ApplicationUser>>()
+        .AddRoleManager<RoleManager<ApplicationRole>>()
         .AddSignInManager<SignInManager<ApplicationUser>>();
 
     services.ConfigureApplicationCookie(options =>
     {
         options.ExpireTimeSpan = TimeSpan.FromDays(14);
         options.SlidingExpiration = true;
-        options.AccessDeniedPath = new PathString("/account/login");
-        options.Events.OnRedirectToAccessDenied = ctx =>
+        options.LoginPath = new PathString("/account/login");
+        options.AccessDeniedPath = new PathString("/error/403");
+        options.Events.OnRedirectToLogin = ctx =>
         {
             var factory = ctx.HttpContext.RequestServices.GetRequiredService<IUrlHelperFactory>();
             var urlHelper = factory.GetUrlHelper(new ActionContext(ctx.HttpContext, new RouteData(ctx.HttpContext.Request.RouteValues), new ActionDescriptor()));

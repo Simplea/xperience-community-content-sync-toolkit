@@ -12,7 +12,7 @@ div.contact-us-form {
 
     .form-field-label-required:after {
         content: "*";
-        color: #B4594A;
+        color: @color-error-soft;
     }
 
     .input-style {
@@ -32,7 +32,7 @@ div.contact-us-form {
 
     .field-validation-error {
         font-weight: bold;
-        color: #D12127;
+        color: @color-error;
     }
 
     input[type="submit"] {
@@ -118,7 +118,7 @@ div.contact-us-form {
             .form-field();
             .input-style();
             display: inline-block;
-            border: 1px solid #BEBEBE;
+            border: 1px solid @color-border;
             position: relative;
             cursor: pointer;
         }
