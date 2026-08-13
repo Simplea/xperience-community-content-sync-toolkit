@@ -27,7 +27,7 @@
 .product-tile .product-tile-status {
     background-color: @color-lightgold;
     margin-top: 25%;
-    color: #FFF;
+    color: @color-white;
     padding: .5rem 1.25rem;
     margin-top: 20%;
     position: absolute;
@@ -66,7 +66,7 @@
 
 .product-tile {
     overflow: hidden;
-    border: 1px solid #E5E5E5;
+    border: 1px solid @color-gray-150;
     margin: 0 0 -2px -2px;
     background: @color-white;
 }
@@ -85,7 +85,7 @@
 }
 
 .product-tile a {
-    color: #000;
+    color: @color-black;
     text-decoration: none;
 }
 
@@ -96,7 +96,7 @@
     font-family: 'Source Sans Pro';
     font-style: normal;
     font-weight: 400;
-    border: 2px solid #08768C;
+    border: 2px solid @color-focus;
     text-transform: uppercase;
 }
 
@@ -113,7 +113,7 @@
 }
 
 .featured-product a {
-    color: #000;
+    color: @color-black;
     text-decoration: none;
 }
 
@@ -126,8 +126,8 @@
     top: 42%;
     left: 15%;
     right: 15%;
-    background-color: #08768C;
-    color: #FFF;
+    background-color: @color-focus;
+    color: @color-white;
     z-index: 2;
 }
 
@@ -207,7 +207,7 @@
     top: 10%;
     float: left;
     background-color: #383838;
-    color: #fff;
+    color: @color-white;
     padding: 0.5rem 1rem;
     z-index: 3;
     position: absolute;
@@ -215,7 +215,7 @@
 
 .product-detail .product-status.bestseller,
 .product-detail .product-status.onsale {
-    background-color: #B24143;
+    background-color: @color-sale;
 }
 
 /*# Product properties #*/
@@ -245,7 +245,7 @@
 .product-detail input[type=number],
 .product-detail textarea,
 .product-detail select {
-    border: 2px solid #BDBBBB;
+    border: 2px solid @color-gray-130;
     padding: 5px 7px;
 }
 
@@ -283,7 +283,7 @@
 
 /*# Image #*/
 .product-detail .image {
-    border: 1px solid #e5e5e5;
+    border: 1px solid @color-gray-150;
     margin: 0 0 1.25rem 0;
     text-align: center;
 }
@@ -313,7 +313,7 @@
 }
 
 .product-tile .product-tile-stock.notavailable {
-    background-color: #BEBEBE;
+    background-color: @color-border;
     padding: .7rem 1rem .7rem 1rem;
     position: absolute;
     top: 45%;
@@ -330,8 +330,8 @@
 }
 
 .product-detail .unavailable {
-    color: #B24143;
-    border-bottom: 1px solid #B24143;
+    color: @color-sale;
+    border-bottom: 1px solid @color-sale;
 }
 
 .product-detail .available {

@@ -156,7 +156,7 @@ header {
             top: 50%;
             transform: translateY(-50%);
             width: 15.625rem;
-            color: #FFFFFF;
+            color: @color-white;
             background-color: rgba(39, 34, 25, 0.8);
             font-weight: normal;
             font-size: 1rem;
@@ -180,7 +180,7 @@ form {
     input[type=submit] {
         padding: .5rem 1rem;
         cursor: pointer;
-        background: #fff;
+        background: @color-white;
         display: inline-block;
         text-decoration: none;
         letter-spacing: 2px;
@@ -252,7 +252,7 @@ form {
 footer {
     .footer-container {
         font-size: 13px;
-        color: #fff;
+        color: @color-white;
         background: #1D1D1D;
         padding-top: 2rem;
         padding-bottom: 2rem;
@@ -264,7 +264,7 @@ footer {
     margin-top: .3rem;
     margin-bottom: .6rem;
     display: block;
-    color: #D12127;
+    color: @color-error;
 }
 
 .info-label {
@@ -273,7 +273,7 @@ footer {
     margin-bottom: .6rem;
     display: block;
     color: white;
-    background-color: #497d04 !important;
+    background-color: @color-green-100 !important;
     padding: 1rem;
 }
 
@@ -377,22 +377,22 @@ footer {
 
     &.dark {
         .content {
-            color: #000000;
+            color: @color-black;
 
             .btn {
                 color: inherit;
-                border-color: #000000;
+                border-color: @color-black;
             }
         }
     }
 
     &.light {
         .content {
-            color: #ffffff;
+            color: @color-white;
 
             .btn {
                 color: inherit;
-                border-color: #ffffff;
+                border-color: @color-white;
             }
         }
     }

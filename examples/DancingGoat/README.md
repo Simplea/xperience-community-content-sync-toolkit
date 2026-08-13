@@ -7,42 +7,8 @@ This project implements a company website of a fictional coffee shop franchise t
 Follow the instructions in the [Installation](https://docs.xperience.io/x/DQKQC) documentation
 to troubleshoot any installation or configuration issues.
 
-## Project notes
+## AI-assisted development
 
-### Content type and reusable field schema code files
+The project is set up for AI coding assistants: agent instructions, a design-guidance skill, and the Kentico Docs MCP server configured in `.mcp.json`.
 
-[Content type](https://docs.xperience.io/x/gYHWCQ) and [reusable field schema](https://docs.xperience.io/x/D4_OD) code files under 
-
-- `./Models/Reusable` 
-- `./Models/WebPage`
-- `./Models/Schema`
-
-are generated using Xperience's [code generators](https://docs.xperience.io/x/5IbWCQ).
-
-If you change the site's content model (add or remove fields, define new content types or schemas, etc.), you can run the following commands from the root of the Dancing Goat project to regenerate the files.
-
-For _reusable field schemas_:
-
-```powershell
-dotnet run --no-build -- --kxp-codegen --location "./Models/Schema/" --type ReusableFieldSchemas --namespace "DancingGoat.Models"
-```
-
-This command regenerates the interfaces for all reusable field schemas in the project. Note that the specified `--namespace` must match the namespace where content type code files that reference the schemas are generated. You will get uncompilable code otherwise.
-
-For _reusable_ content types:
-
-```powershell
-dotnet run --no-build -- --kxp-codegen --location "./Models/Reusable/{name}/" --type ReusableContentTypes --include "DancingGoat.*" --namespace "DancingGoat.Models"
-```
-
-This command generates code files for content types with the `DancingGoat` namespace under the `./Models/Reusable` directory.
-
-For _page_ content types:
-
-```powershell
-dotnet run --no-build -- --kxp-codegen --location "./Models/WebPage/{name}/" --type PageContentTypes --include "DancingGoat.*" --namespace "DancingGoat.Models"
-```
-
-This command generates code files for content types with the `DancingGoat` namespace under the `./Models/WebPage` directory.
-
-You can adapt these examples for use in projects with a different folder structure by modifying the `location` parameter accordingly.
+The **Kentico Management MCP** is not set up by default because it requires the Management API, which is not enabled out of the box. To enable the API and add the MCP server, follow [Configure the Management MCP server](https://docs.kentico.com/documentation/developers-and-admins/api/management-api/configure-management-mcp-server).

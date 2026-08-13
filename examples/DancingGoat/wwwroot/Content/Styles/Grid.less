@@ -70,7 +70,7 @@ h1 {
 
 mark {
     background: #ff0;
-    color: #000;
+    color: @color-black;
 }
 
 small {
@@ -168,7 +168,7 @@ input {
 input[type="text"],
 input[type="email"],
 textarea {
-    border: 1px solid #BEBEBE;
+    border: 1px solid @color-border;
 }
 
 input[type="text"]:focus,
@@ -176,8 +176,8 @@ input[type="number"]:focus,
 input[type="email"]:focus,
 textarea:focus {
     outline: 0;
-    box-shadow: 0 0 1px #08768c;
-    border: 1px solid #08768c;
+    box-shadow: 0 0 1px @color-focus;
+    border: 1px solid @color-focus;
 }
 
 input[type="checkbox"],
@@ -252,7 +252,7 @@ body {
     font-size: 16px;
     line-height: 1.4;
     color: #1C1C1C;
-    background-color: #ffffff;
+    background-color: @color-white;
 }
 
 input,

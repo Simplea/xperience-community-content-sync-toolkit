@@ -6,7 +6,9 @@ Thank you for helping improve Content Sync Toolkit for Xperience by Kentico.
 
 - The .NET SDK version specified by `global.json`
 - SQL Server 2019 or newer for the Dancing Goat integration host
-- An Xperience by Kentico 31.2.1 database for runtime verification
+- An Xperience by Kentico 31.7.2 database for runtime verification (the latest
+  build-verified version; see [Compatibility](./docs/Compatibility.md) for the
+  full supported range)
 
 See the [Contributing Setup guide](./docs/Contributing-Setup.md) for detailed local
 environment and Dancing Goat database instructions.
@@ -23,10 +25,10 @@ Create one short-lived branch for each independent change. Use the existing
 prefixes with an issue number and a short description, for example:
 
 ```text
-feat/123-sync-status-admin-page
-fix/124-content-tree-badge
-refactor/125-diff-service
-docs/126-release-guide
+feat/sync-status-admin-page
+fix/content-tree-badge
+refactor/diff-service
+docs/release-guide
 ```
 
 Multiple branches may be active at the same time. Keep unrelated features and

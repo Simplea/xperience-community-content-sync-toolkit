@@ -90,7 +90,7 @@ public sealed class DancingGoatShoppingCartController : Controller
         var subtotalAfterLineDiscount = PriceCalculationTotalsCalculator.GetSubtotalAfterLineDiscount(calculationResult);
         var totalDiscount = PriceCalculationTotalsCalculator.GetTotalDiscountAmount(calculationResult);
 
-        var orderDiscountText = await GetOrderDiscountInfoText(calculationResult, subtotalAfterLineDiscount, cancellationToken);
+        var orderDiscountText = await GetOrderDiscountInfoText(calculationResult, subtotalAfterLineDiscount, shoppingCartData, cancellationToken);
 
         return View(new ShoppingCartViewModel(
             shoppingCartData.Items.Select(item =>
@@ -292,17 +292,19 @@ public sealed class DancingGoatShoppingCartController : Controller
     }
 
 
-    private async Task<string> GetOrderDiscountInfoText(DancingGoatPriceCalculationResult calculationResult, decimal subtotalAfterLineDiscount, CancellationToken cancellationToken)
+    private async Task<string> GetOrderDiscountInfoText(DancingGoatPriceCalculationResult calculationResult, decimal subtotalAfterLineDiscount, ShoppingCartDataModel shoppingCartData, CancellationToken cancellationToken)
     {
-        var text = await upsellOrderDiscountService.GetUpsellOrderDiscountMessage(subtotalAfterLineDiscount, cancellationToken);
+        var appliedOrderPromotion = calculationResult.PromotionData.OrderPromotionCandidates.FirstOrDefault(c => c.Applied);
+        var appliedOrderDiscountAmount = appliedOrderPromotion?.PromotionCandidate.OrderDiscountAmount ?? 0;
+
+        var text = await upsellOrderDiscountService.GetUpsellOrderDiscountMessage(subtotalAfterLineDiscount, appliedOrderDiscountAmount, appliedOrderPromotion?.PromotionID, shoppingCartData.CouponCodes, cancellationToken);
 
         if (string.IsNullOrEmpty(text))
         {
-            var appliedOrderDiscount = calculationResult.PromotionData.OrderPromotionCandidates.FirstOrDefault(c => c.Applied);
-            if (appliedOrderDiscount != null)
+            if (appliedOrderPromotion != null)
             {
                 var orderDiscountMessageSource = localizer["You qualified for a {0} discount. Enjoy your discount!"];
-                var priceString = priceFormatter.Format(appliedOrderDiscount.PromotionCandidate.OrderDiscountAmount, new PriceFormatContext());
+                var priceString = priceFormatter.Format(appliedOrderPromotion.PromotionCandidate.OrderDiscountAmount, new PriceFormatContext());
                 text = string.Format(orderDiscountMessageSource, priceString);
             }
         }
