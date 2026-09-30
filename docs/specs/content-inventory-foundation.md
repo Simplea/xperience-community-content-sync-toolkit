@@ -210,6 +210,25 @@ treated as "target has zero items" — that would make every local item falsely
 report as `MissingOnTarget`. `IContentSyncStatusService` surfaces fetch failure
 as `TargetAvailable = false` and does not run the comparer in that case.
 
+### Status ordering for consumers
+
+The comparer returns items unordered. Features that list them should use one
+shared order, so the same content reads the same way everywhere:
+
+1. By urgency — what Content Sync would add, then update, then what only the
+   target has: `MissingOnTarget`, `OutOfDateOnTarget`, `ExtraOnTarget`,
+   `InSync`.
+2. Within a status, most recently published first (the local publish date, or
+   the target's for `ExtraOnTarget`); never-published items last.
+3. Then by path or name.
+
+The [sync status admin page](sync-status-admin-page.md#sorting) uses this as
+its default sort (`ContentSyncStatusListingSupport.StatusSortRank` and
+`ApplySort`). It lives with the admin page rather than in this foundation
+because ordering is presentation; if
+[content-tree-sync-indicators](content-tree-sync-indicators.md) needs it, move
+it next to the comparer instead of duplicating it.
+
 ## Publication-state scope
 
 Both inventories (local, and the target's via its endpoint) run the content

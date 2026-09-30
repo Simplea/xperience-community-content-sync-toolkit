@@ -1,5 +1,3 @@
-using CMS.ContentEngine;
-using CMS.DataEngine;
 using CMS.Membership;
 
 using Kentico.Xperience.Admin.Base;
@@ -24,14 +22,15 @@ internal sealed class ContentSyncStatusContentHubTab(
     IOptions<ContentSyncToolkitOptions> options,
     IContentSyncStatusService syncStatusService,
     IContentSyncScopeProvider scopeProvider,
-    IInfoProvider<ContentLanguageInfo> contentLanguageInfoProvider,
+    IContentSyncFilterOptionsProvider filterOptionsProvider,
+    IContentSyncItemIdResolver itemIdResolver,
     ContentSyncStatusRefreshRequestStore refreshRequestStore,
     IPageLinkGenerator pageLinkGenerator)
     : ContentSyncStatusTabBase(
         new ContentSyncStatusContentHubFilterModel(),
         "Name",
         options,
-        contentLanguageInfoProvider,
+        filterOptionsProvider,
         refreshRequestStore,
         pageLinkGenerator)
 {
@@ -52,4 +51,17 @@ internal sealed class ContentSyncStatusContentHubTab(
     protected override Task<ContentSyncStatusResult> GetStatusAsync(
         string scopeName, string languageName, bool forceRefresh, CancellationToken cancellationToken) =>
         syncStatusService.GetContentHubSyncStatusAsync(scopeName, languageName, forceRefresh, cancellationToken);
+
+    protected override Task<IReadOnlyDictionary<Guid, int>> GetLocalItemIdsAsync(
+        ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken) =>
+        itemIdResolver.GetContentItemIdsAsync(
+            scope.Name,
+            languageName,
+            [.. items.Select(item => item.Local!.ContentTypeName).Distinct(StringComparer.OrdinalIgnoreCase)],
+            [.. items.Select(item => item.Guid)],
+            cancellationToken);
+
+    // A workspace scope's ID is its WorkspaceID.
+    protected override ContentSyncStatusItemLink GetItemLink(ContentSyncScope scope, string languageName, int itemId) =>
+        ContentSyncStatusItemLinks.ContentItem(scope.Id, languageName, itemId);
 }

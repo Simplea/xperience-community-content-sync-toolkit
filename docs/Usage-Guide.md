@@ -100,14 +100,29 @@ navigation to it is refused.
 The application has two tabs: **Pages** (one website channel at a time) and
 **Content hub** (one workspace at a time).
 
-- **Choose a channel or workspace** with **Filter**. Without a selection, the
-  first one is shown.
+- **Filter** opens the filter panel. All fields are optional and combine:
+  - **Channel** (Pages) or **Workspace** (Content hub). Without a selection,
+    the first one is shown.
+  - **Language**. Without a selection, the instance's default content language
+    is compared.
+  - **Status**. **Needs action** shows what Content Sync still has to push:
+    Missing on target plus Out of date on target.
+  - **Content type**.
+  - **Published from** / **Published to**: whole days, both included, matched
+    against the Last published column.
 - **Search** by path (Pages) or name (Content hub); press Enter to apply.
-- **Sort** by clicking a column header. By default, items needing action come
-  first: Missing on target, then Out of date on target, then Extra on target,
-  then In sync.
+- **Sort** by clicking a column header. The list starts sorted by **Status**,
+  so items needing action come first: Missing on target, then Out of date on
+  target, then Extra on target, then In sync. Within each status, the most
+  recently published items come first. Click **Status** to reverse the order.
+  The page doesn't remember a different sort: it starts sorted by Status again
+  each time you open it or use Refresh.
+- **Click a row** to open the item in its editor, where you can sync it with
+  Xperience's own Content Sync actions. Extra on target rows can't be opened,
+  because the item doesn't exist on this instance.
 - **Refresh** fetches the target's inventory again instead of using the cached
-  copy. The selected filter and search are kept.
+  copy. The applied filters and search are kept.
+- Hover the ⓘ next to **Status** or **Last published** for a short explanation.
 
 | Status | Meaning |
 | --- | --- |
@@ -122,8 +137,10 @@ Other states:
   isn't set on this instance.
 - **A "Target unavailable" row**: the target couldn't be reached, rejected the
   secret, or has `Target:Enabled` set to `false`.
-- **No rows** in a channel or workspace: it has no published content in the
-  compared language.
+- **No rows**: the channel or workspace has no published content in the
+  compared language, or nothing matches the applied filters.
+- **A "Not available" row**: the selected channel, workspace, or language was
+  deleted after the filter was applied. Clear that filter or choose another.
 
 ## What is compared
 
@@ -138,5 +155,5 @@ Other states:
 - **Timestamps, not content.** Status comes from publish timestamps, so large
   clock differences between the two servers can affect **Out of date on
   target**.
-- **One language.** The first content language configured on the instance is
-  compared.
+- **One language at a time.** The default content language unless you choose
+  another with the Language filter.

@@ -8,6 +8,10 @@ namespace XperienceCommunity.ContentSyncToolkit.Tests;
 
 public class ContentSyncStatusListingSupportTests
 {
+    // Unspecified, as the filter's date inputs send them.
+    private static DateTime Day(int year, int month, int day, int hour = 0, int minute = 0) =>
+        new(year, month, day, hour, minute, 0, DateTimeKind.Unspecified);
+
     private static ContentInventoryItem CreateInventoryItem(
         string? treePath = null,
         string name = "",
@@ -48,10 +52,88 @@ public class ContentSyncStatusListingSupportTests
             CreateStatusItem(ContentSyncStatus.MissingOnTarget),
         };
 
-        var result = ContentSyncStatusListingSupport.ApplyStatusFilter(items, ContentSyncStatus.MissingOnTarget);
+        var result = ContentSyncStatusListingSupport.ApplyStatusFilter(items, [ContentSyncStatus.MissingOnTarget]);
 
         Assert.That(result, Has.Count.EqualTo(2));
         Assert.That(result, Has.All.Matches<ContentSyncStatusItem>(item => item.Status == ContentSyncStatus.MissingOnTarget));
+    }
+
+    [Test]
+    public void ParseStatusFilter_NeedsAction_IsMissingPlusOutOfDate()
+    {
+        var statuses = ContentSyncStatusListingSupport.ParseStatusFilter(ContentSyncStatusListingSupport.NeedsActionStatusFilter);
+
+        Assert.That(statuses, Is.EquivalentTo(new[] { ContentSyncStatus.MissingOnTarget, ContentSyncStatus.OutOfDateOnTarget }));
+    }
+
+    [TestCase(nameof(ContentSyncStatus.ExtraOnTarget), ContentSyncStatus.ExtraOnTarget)]
+    [TestCase("inSync", ContentSyncStatus.InSync)]
+    public void ParseStatusFilter_StatusName_IsThatStatusOnly(string value, ContentSyncStatus expected) =>
+        Assert.That(ContentSyncStatusListingSupport.ParseStatusFilter(value), Is.EqualTo(new[] { expected }));
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("not-a-status")]
+    [TestCase("42")]
+    public void ParseStatusFilter_EmptyOrUnknown_IsNoFilter(string? value) =>
+        Assert.That(ContentSyncStatusListingSupport.ParseStatusFilter(value), Is.Null);
+
+    // Every dropdown option must parse, or picking it would silently show everything.
+    [Test]
+    public void StatusFilterOptions_EveryValueParses()
+    {
+        var values = ContentSyncStatusListingSupport.StatusFilterOptions
+            .Split("\r\n")
+            .Select(line => line.Split(';')[0]);
+
+        Assert.That(values, Has.All.Matches<string>(value => ContentSyncStatusListingSupport.ParseStatusFilter(value) is not null));
+        Assert.That(values.Count(), Is.EqualTo(Enum.GetValues<ContentSyncStatus>().Length + 1));
+    }
+
+    [Test]
+    public void ApplyContentTypeFilter_MatchesCodeNameCaseInsensitively()
+    {
+        var items = new[]
+        {
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem(contentTypeName: "DancingGoat.ArticlePage")),
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem(contentTypeName: "DancingGoat.ProductPage")),
+            CreateStatusItem(ContentSyncStatus.ExtraOnTarget, remote: CreateInventoryItem(contentTypeName: "DancingGoat.ArticlePage")),
+        };
+
+        var result = ContentSyncStatusListingSupport.ApplyContentTypeFilter(items, "dancinggoat.articlepage");
+
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(ContentSyncStatusListingSupport.ApplyContentTypeFilter(items, null), Has.Count.EqualTo(3));
+    }
+
+    [Test]
+    public void ApplyPublishedFilter_BoundsAreInclusiveWholeDays()
+    {
+        var items = new[]
+        {
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/before", lastPublishedWhen: Day(2026, 1, 9, 23, 59))),
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/first-day", lastPublishedWhen: Day(2026, 1, 10))),
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/last-day", lastPublishedWhen: Day(2026, 1, 20, 23, 59))),
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/after", lastPublishedWhen: Day(2026, 1, 21))),
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/never")),
+        };
+
+        var result = ContentSyncStatusListingSupport.ApplyPublishedFilter(items, Day(2026, 1, 10), Day(2026, 1, 20));
+
+        Assert.That(result.Select(ContentSyncStatusListingSupport.DisplayName), Is.EqualTo(new[] { "/first-day", "/last-day" }));
+    }
+
+    [Test]
+    public void ApplyPublishedFilter_SingleBound_ExcludesItemsWithoutAPublishDate()
+    {
+        var items = new[]
+        {
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/dated", lastPublishedWhen: Day(2026, 3, 1))),
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/never")),
+        };
+
+        Assert.That(ContentSyncStatusListingSupport.ApplyPublishedFilter(items, null, Day(2026, 12, 31)).Select(ContentSyncStatusListingSupport.DisplayName), Is.EqualTo(new[] { "/dated" }));
+        Assert.That(ContentSyncStatusListingSupport.ApplyPublishedFilter(items, null, null), Has.Count.EqualTo(2));
     }
 
     [TestCase(null)]
@@ -127,6 +209,47 @@ public class ContentSyncStatusListingSupportTests
         var result = ContentSyncStatusListingSupport.ApplySort(items, sortBy: null, descending: false);
 
         Assert.That(result.Select(ContentSyncStatusListingSupport.DisplayName), Is.EqualTo(new[] { "/D", "/E", "/C", "/B", "/A" }));
+    }
+
+    // The Status column is the tabs' default sort, so this is the order editors first see.
+    [TestCase(null)]
+    [TestCase(ContentSyncStatusListingSupport.StatusColumn)]
+    public void ApplySort_ByStatus_PutsTheMostRecentlyPublishedFirstWithinEachStatus(string? sortBy)
+    {
+        var items = new[]
+        {
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/in-sync-new", lastPublishedWhen: Day(2026, 9, 1))),
+            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem("/missing-old", lastPublishedWhen: Day(2025, 1, 1))),
+            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem("/missing-never")),
+            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem("/missing-new-b", lastPublishedWhen: Day(2026, 9, 1))),
+            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem("/missing-new-a", lastPublishedWhen: Day(2026, 9, 1))),
+            CreateStatusItem(ContentSyncStatus.OutOfDateOnTarget, local: CreateInventoryItem("/out-of-date", lastPublishedWhen: Day(2024, 1, 1))),
+        };
+
+        var result = ContentSyncStatusListingSupport.ApplySort(items, sortBy, descending: false);
+
+        Assert.That(result.Select(ContentSyncStatusListingSupport.DisplayName), Is.EqualTo(new[]
+        {
+            "/missing-new-a", "/missing-new-b", "/missing-old", "/missing-never",
+            "/out-of-date",
+            "/in-sync-new",
+        }), "newest first within a status, then by name; never-published last");
+    }
+
+    // Reversing the status order doesn't reverse the tie-break: newest first either way.
+    [Test]
+    public void ApplySort_ByStatusDescending_KeepsNewestFirstWithinEachStatus()
+    {
+        var items = new[]
+        {
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/in-sync-old", lastPublishedWhen: Day(2025, 1, 1))),
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/in-sync-new", lastPublishedWhen: Day(2026, 1, 1))),
+            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem("/missing", lastPublishedWhen: Day(2026, 1, 1))),
+        };
+
+        var result = ContentSyncStatusListingSupport.ApplySort(items, ContentSyncStatusListingSupport.StatusColumn, descending: true);
+
+        Assert.That(result.Select(ContentSyncStatusListingSupport.DisplayName), Is.EqualTo(new[] { "/in-sync-new", "/in-sync-old", "/missing" }));
     }
 
     [Test]

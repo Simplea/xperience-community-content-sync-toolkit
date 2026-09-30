@@ -13,15 +13,24 @@ namespace XperienceCommunity.ContentSyncToolkit.Admin;
 /// </summary>
 internal static class ContentSyncStatusFilterValueExtractor
 {
-    public static string? ExtractStringParameter(IWhereCondition? condition, string parameterName)
+    public static string? ExtractStringParameter(IWhereCondition? condition, string parameterName) =>
+        ExtractParameter(condition, parameterName) as string;
+
+    // Date inputs arrive as DateTime (confirmed live), at midnight of the chosen day.
+    public static DateTime? ExtractDateParameter(IWhereCondition? condition, string parameterName) =>
+        ExtractParameter(condition, parameterName) as DateTime?;
+
+    // A field left empty adds no parameter at all, so a missing parameter means "not filtered".
+    // Parameters is null, not empty, when no field is set.
+    private static object? ExtractParameter(IWhereCondition? condition, string parameterName)
     {
-        if (condition is not WhereCondition concrete || concrete.WhereIsEmpty)
+        if (condition is not WhereCondition concrete || concrete.WhereIsEmpty || concrete.Parameters is null)
         {
             return null;
         }
 
         return concrete.Parameters
             .FirstOrDefault(parameter => parameter.Name.TrimStart('@').Equals(parameterName, StringComparison.OrdinalIgnoreCase))
-            ?.Value as string;
+            ?.Value;
     }
 }

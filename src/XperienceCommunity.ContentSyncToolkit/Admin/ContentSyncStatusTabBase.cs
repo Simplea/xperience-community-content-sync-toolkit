@@ -1,6 +1,4 @@
-using CMS.ContentEngine;
 using CMS.Core;
-using CMS.DataEngine;
 using CMS.Membership;
 
 using Kentico.Xperience.Admin.Base;
@@ -10,21 +8,22 @@ using Microsoft.Extensions.Options;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 using LoadDataSettings = Kentico.Xperience.Admin.Base.LoadDataSettings;
+using RowAction = Kentico.Xperience.Admin.Base.Action;
 
 namespace XperienceCommunity.ContentSyncToolkit.Admin;
 
 /// <summary>
 /// Shared implementation of the Pages and Content hub tabs. Subclasses supply only what differs:
-/// their filter model, how to list scopes, and which status query to run. What to show is
-/// decided by <see cref="ContentSyncStatusViewBuilder"/>; this class maps its result to
-/// Xperience's listing template.
+/// their filter model, how to list scopes, which status query to run, and how to link to an item.
+/// What to show is decided by <see cref="ContentSyncStatusViewBuilder"/>; this class maps its
+/// result to Xperience's listing template.
 /// Subclasses must declare <c>[UIEvaluatePermission(SystemPermissions.VIEW)]</c> themselves.
 /// </summary>
 internal abstract class ContentSyncStatusTabBase(
-    object filterModel,
+    ContentSyncStatusFilterModelBase filterModel,
     string nameColumnCaption,
     IOptions<ContentSyncToolkitOptions> options,
-    IInfoProvider<ContentLanguageInfo> contentLanguageInfoProvider,
+    IContentSyncFilterOptionsProvider filterOptionsProvider,
     ContentSyncStatusRefreshRequestStore refreshRequestStore,
     IPageLinkGenerator pageLinkGenerator)
     : ListingPageBase<ListingConfiguration, ListingTemplateClientProperties>
@@ -34,6 +33,18 @@ internal abstract class ContentSyncStatusTabBase(
         "https://github.com/Simplea/xperience-community-content-sync-toolkit/blob/main/docs/Usage-Guide.md";
 #pragma warning restore S1075
 
+    private const string StatusTooltip =
+        "<strong>Missing on target</strong>: published here, not on the target yet.<br>"
+        + "<strong>Out of date on target</strong>: the target has an older published version.<br>"
+        + "<strong>Extra on target</strong>: on the target, but not published here.<br>"
+        + "<strong>In sync</strong>: the target has the same published version.";
+
+    private const string LastPublishedTooltip =
+        "When the item was last published on this instance. For items extra on target, when it was last published on the target.";
+
+    // Both filter models name their content type field the same; see ContentSyncStatusAdminWiringTests.
+    private const string ContentTypeFilterFieldName = nameof(ContentSyncStatusPagesFilterModel.ContentType);
+
     public override ListingConfiguration PageConfiguration { get; set; } = new()
     {
         FilterFormModel = filterModel,
@@ -41,8 +52,9 @@ internal abstract class ContentSyncStatusTabBase(
         [
             SortableColumn(ContentSyncStatusListingSupport.NameColumn, nameColumnCaption, minWidth: 40, maxWidth: 100, searchable: true),
             SortableColumn(ContentSyncStatusListingSupport.ContentTypeColumn, "Content type", minWidth: 24, maxWidth: 40),
-            SortableColumn(ContentSyncStatusListingSupport.StatusColumn, "Status", minWidth: 20, maxWidth: 28),
-            SortableColumn(ContentSyncStatusListingSupport.LastPublishedColumn, "Last published", minWidth: 20, maxWidth: 28),
+            // The default sort, so the header shows it; see ContentSyncStatusListingSupport.ApplySort.
+            SortableColumn(ContentSyncStatusListingSupport.StatusColumn, "Status", minWidth: 20, maxWidth: 28, tooltip: StatusTooltip, defaultDirection: SortTypeEnum.Asc),
+            SortableColumn(ContentSyncStatusListingSupport.LastPublishedColumn, "Last published", minWidth: 20, maxWidth: 28, tooltip: LastPublishedTooltip),
         ],
         PageSizes = [10, 25, 50],
         HeaderActions =
@@ -71,6 +83,13 @@ internal abstract class ContentSyncStatusTabBase(
 
     protected abstract Task<ContentSyncStatusResult> GetStatusAsync(
         string scopeName, string languageName, bool forceRefresh, CancellationToken cancellationToken);
+
+    /// <summary>Local item IDs for the given items (one listing page), keyed by item GUID.</summary>
+    protected abstract Task<IReadOnlyDictionary<Guid, int>> GetLocalItemIdsAsync(
+        ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken);
+
+    /// <summary>Where an item opens in Xperience's own editor.</summary>
+    protected abstract ContentSyncStatusItemLink GetItemLink(ContentSyncScope scope, string languageName, int itemId);
 
     private bool IsSourceConfigured => options.Value.Source.TargetUrl is not null;
 
@@ -116,24 +135,18 @@ internal abstract class ContentSyncStatusTabBase(
 
     protected override async Task<LoadDataResult> LoadData(LoadDataSettings settings, CancellationToken cancellationToken)
     {
-        var request = new ContentSyncStatusViewRequest(
-            IsSourceConfigured,
-            ContentSyncStatusFilterValueExtractor.ExtractStringParameter(settings.FilterWhereCondition, ScopeFilterFieldName),
-            refreshRequestStore.ConsumeRefreshRequest(TabKey),
-            settings.SearchTerm,
-            settings.SortBy,
-            settings.SortType == SortTypeEnum.Desc,
-            settings.PageSize,
-            settings.SelectedPage);
+        var request = CreateRequest(settings);
 
         ContentSyncStatusView view;
         try
         {
-            string languageName = await GetLanguageNameAsync(cancellationToken);
+            // GetCurrentContentLanguage() on ListingPageBase is private, so the admin's own language
+            // switcher isn't reachable here; the Language filter (default language when unset) is.
             view = await ContentSyncStatusViewBuilder.BuildAsync(
                 request,
                 GetScopesAsync,
-                (scopeName, forceRefresh, ct) => GetStatusAsync(scopeName, languageName, forceRefresh, ct),
+                filterOptionsProvider.GetContentLanguagesAsync,
+                GetStatusAsync,
                 cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -151,7 +164,7 @@ internal abstract class ContentSyncStatusTabBase(
             ContentSyncStatusViewKind.Items => new LoadDataResult
             {
                 TotalCount = view.TotalCount,
-                Rows = [.. view.Items.Select(ToRow)],
+                Rows = await ToRowsAsync(view, cancellationToken),
             },
             ContentSyncStatusViewKind.TargetUnavailable => MessageRow(
                 "The target instance couldn't be reached or rejected the request, so sync status can't be determined.",
@@ -159,6 +172,10 @@ internal abstract class ContentSyncStatusTabBase(
                 nameof(Color.AlertBackgroundHighEmphasis)),
             ContentSyncStatusViewKind.ScopeNotFound => MessageRow(
                 $"The selected {ScopeNoun} no longer exists. Clear the filter or choose another {ScopeNoun}.",
+                "Not available",
+                nameof(Color.BackgroundTagGrey)),
+            ContentSyncStatusViewKind.LanguageNotFound => MessageRow(
+                "The selected language no longer exists. Clear the Language filter or choose another language.",
                 "Not available",
                 nameof(Color.BackgroundTagGrey)),
 
@@ -169,16 +186,60 @@ internal abstract class ContentSyncStatusTabBase(
         };
     }
 
-    // GetCurrentContentLanguage() on ListingPageBase is private, not protected, so the admin's
-    // ambient content-language switcher state isn't reachable here — default to the first
-    // configured content language instead of trying to mirror it.
-    private async Task<string> GetLanguageNameAsync(CancellationToken cancellationToken)
+    // Each filter field is read back by its filter model property name.
+    private ContentSyncStatusViewRequest CreateRequest(LoadDataSettings settings)
     {
-        var languages = await contentLanguageInfoProvider.Get().GetEnumerableTypedResultAsync(cancellationToken: cancellationToken);
-        return languages.FirstOrDefault()?.ContentLanguageName ?? string.Empty;
+        var where = settings.FilterWhereCondition;
+
+        return new ContentSyncStatusViewRequest(
+            IsSourceConfigured,
+            ContentSyncStatusFilterValueExtractor.ExtractStringParameter(where, ScopeFilterFieldName),
+            ContentSyncStatusFilterValueExtractor.ExtractStringParameter(where, nameof(ContentSyncStatusFilterModelBase.Language)),
+            refreshRequestStore.ConsumeRefreshRequest(TabKey),
+            new ContentSyncStatusFilter(
+                ContentSyncStatusFilterValueExtractor.ExtractStringParameter(where, nameof(ContentSyncStatusFilterModelBase.Status)),
+                ContentSyncStatusFilterValueExtractor.ExtractStringParameter(where, ContentTypeFilterFieldName),
+                ContentSyncStatusFilterValueExtractor.ExtractDateParameter(where, nameof(ContentSyncStatusFilterModelBase.PublishedFrom)),
+                ContentSyncStatusFilterValueExtractor.ExtractDateParameter(where, nameof(ContentSyncStatusFilterModelBase.PublishedTo))),
+            settings.SearchTerm,
+            settings.SortBy,
+            settings.SortType == SortTypeEnum.Desc,
+            settings.PageSize,
+            settings.SelectedPage);
     }
 
-    private static ColumnConfiguration SortableColumn(string name, string caption, int minWidth, int maxWidth, bool searchable = false) =>
+    private async Task<IEnumerable<Row>> ToRowsAsync(ContentSyncStatusView view, CancellationToken cancellationToken)
+    {
+        var links = await GetItemLinksAsync(view, cancellationToken);
+
+        return [.. view.Items.Select(item => ToRow(item, links.GetValueOrDefault(item.Guid)))];
+    }
+
+    // Links are a convenience: if the ID lookup fails, rows still render, just without links.
+    private async Task<IReadOnlyDictionary<Guid, string>> GetItemLinksAsync(ContentSyncStatusView view, CancellationToken cancellationToken)
+    {
+        // Extra-on-target items don't exist on this instance, so there's nothing to open.
+        var localItems = view.Items.Where(item => item.Local is not null).ToList();
+        if (view.Scope is null || view.LanguageName is null || localItems.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        try
+        {
+            var ids = await GetLocalItemIdsAsync(view.Scope, view.LanguageName, localItems, cancellationToken);
+
+            return ids.ToDictionary(id => id.Key, id => GetItemLink(view.Scope, view.LanguageName, id.Value).GetPath(pageLinkGenerator));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            EventLogService.LogException(nameof(ContentSyncStatusTabBase), "ITEMLINKS", ex);
+            return new Dictionary<Guid, string>();
+        }
+    }
+
+    private static ColumnConfiguration SortableColumn(
+        string name, string caption, int minWidth, int maxWidth, bool searchable = false, string? tooltip = null, SortTypeEnum? defaultDirection = null) =>
         new()
         {
             Name = name,
@@ -186,13 +247,16 @@ internal abstract class ContentSyncStatusTabBase(
             MinWidth = minWidth,
             MaxWidth = maxWidth,
             Searchable = searchable,
-            Sorting = new SortingConfiguration { Sortable = true },
+            Sorting = new SortingConfiguration { Sortable = true, DefaultDirection = defaultDirection },
+            Tooltip = tooltip,
+            TooltipAsHtml = tooltip is not null,
         };
 
-    private static Row ToRow(ContentSyncStatusItem item) =>
+    private static Row ToRow(ContentSyncStatusItem item, string? link) =>
         new()
         {
             Identifier = item.Guid,
+            Action = link is null ? null : new RowAction(ActionType.Link) { Parameter = link },
             Cells =
             [
                 new StringCell { Value = ContentSyncStatusListingSupport.DisplayName(item) },
