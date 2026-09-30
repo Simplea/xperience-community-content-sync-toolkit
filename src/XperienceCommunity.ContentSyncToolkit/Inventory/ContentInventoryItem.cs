@@ -34,4 +34,12 @@ public sealed record ContentInventoryItem(
     string LanguageName,
     string? TreePath,
     DateTime? LastPublishedWhen,
-    string? VersionStatus);
+    string? VersionStatus)
+{
+    /// <summary>
+    /// The item's display name — <c>WebPageItemName</c> (pages) or <c>ContentItemName</c>
+    /// (content-hub items). Added as an init-only property rather than a positional parameter to
+    /// preserve source/binary compatibility with the existing positional constructor.
+    /// </summary>
+    public string Name { get; init; } = string.Empty;
+}

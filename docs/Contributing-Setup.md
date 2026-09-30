@@ -83,13 +83,11 @@ dotnet run --no-launch-profile
 
 This relies on Program.cs already calling
 `builder.Services.Configure<ContentSyncToolkitOptions>(builder.Configuration.GetSection("ContentSyncToolkit"))`
-so every value binds from configuration instead of being hardcoded. With no
-admin UI yet, the dev-only endpoints under `/dev/content-sync-toolkit/...`
-(mapped only when `IsDevelopment()`) are the only way to inspect results:
-`local/web-pages`, `local/content-hub-items`, `remote/web-pages`,
-`remote/content-hub-items`, `status/web-pages`, `status/content-hub-items` —
-each taking `channelName`/`workspaceName` and `languageName` query parameters.
-Remove these once the sync-status admin page exists.
+so every value binds from configuration instead of being hardcoded. Inspect
+results on the source instance's admin at **Configuration → Content sync
+status** (`/admin/content-sync-status`). That requires
+`builder.Services.AddContentSyncToolkitAdmin()` in Program.cs and a valid
+license key on each instance.
 
 `kentico-xperience-dbmanager` writes the connection string it creates directly
 into `appsettings.json`. Since both instances share one project, capture each

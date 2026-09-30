@@ -12,28 +12,31 @@ internal sealed class ContentSyncStatusService(
     IOptions<ContentSyncToolkitOptions> options) : IContentSyncStatusService
 {
     public Task<ContentSyncStatusResult> GetWebPageSyncStatusAsync(
-        string channelName, string languageName, CancellationToken cancellationToken) =>
+        string channelName, string languageName, bool forceRefresh, CancellationToken cancellationToken) =>
         GetStatusAsync(
             ct => localInventoryService.GetWebPagesAsync(channelName, languageName, ct),
             ct => inventoryClient.GetWebPagesAsync(channelName, languageName, ct),
             CacheKey(ContentInventoryItemKind.WebPage, channelName, languageName),
+            forceRefresh,
             cancellationToken);
 
     public Task<ContentSyncStatusResult> GetContentHubSyncStatusAsync(
-        string workspaceName, string languageName, CancellationToken cancellationToken) =>
+        string workspaceName, string languageName, bool forceRefresh, CancellationToken cancellationToken) =>
         GetStatusAsync(
             ct => localInventoryService.GetContentHubItemsAsync(workspaceName, languageName, ct),
             ct => inventoryClient.GetContentHubItemsAsync(workspaceName, languageName, ct),
             CacheKey(ContentInventoryItemKind.ContentHubItem, workspaceName, languageName),
+            forceRefresh,
             cancellationToken);
 
     private async Task<ContentSyncStatusResult> GetStatusAsync(
         Func<CancellationToken, Task<IReadOnlyList<ContentInventoryItem>>> getLocal,
         Func<CancellationToken, Task<ContentInventoryFetchResult>> getRemote,
         string cacheKey,
+        bool forceRefresh,
         CancellationToken cancellationToken)
     {
-        if (!cache.TryGet(cacheKey, out var remoteItems))
+        if (forceRefresh || !cache.TryGet(cacheKey, out var remoteItems))
         {
             var fetchResult = await getRemote(cancellationToken);
 

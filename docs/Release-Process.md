@@ -34,17 +34,26 @@ The next planned release is `1.0.0-beta.1`.
 ## Publishing a release
 
 1. Ensure the release commit is merged into `main` and CI is successful.
-2. Update public documentation and prepare GitHub release notes.
-3. Create and push an annotated tag:
+2. Run the two-instance check (source and target) on **both** the minimum
+   supported and the latest verified Xperience versions, following
+   [Compatibility](Compatibility.md#development-model). Kentico requires a
+   Content Sync source and target to run the same version, so both instances use
+   the version under test. Compiling against the minimum catches missing APIs,
+   but only a runtime check catches behavior that differs between versions (for
+   example, `Color` enum values shifted between `30.8.0` and `31.x`). Check at
+   least: the admin page loads, each status badge renders in its intended color,
+   Refresh works, and the empty and unavailable states render.
+3. Update public documentation and prepare GitHub release notes.
+4. Create and push an annotated tag:
 
    ```powershell
    git tag -a v1.0.0-beta.1 -m "Release 1.0.0-beta.1"
    git push origin v1.0.0-beta.1
    ```
 
-4. Approve the `nuget-release` environment deployment.
-5. Verify the package metadata and installation instructions on NuGet.org.
-6. Create the matching GitHub release and attach the package artifacts produced by
+5. Approve the `nuget-release` environment deployment.
+6. Verify the package metadata and installation instructions on NuGet.org.
+7. Create the matching GitHub release and attach the package artifacts produced by
    the workflow when desired.
 
 Published NuGet package versions are immutable. Never move or reuse a release tag;

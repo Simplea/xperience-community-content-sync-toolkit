@@ -1,6 +1,6 @@
 # Feature specification: Sync status admin page
 
-Status: Not started
+Status: Implemented and runtime-tested on Xperience by Kentico `31.7.2`; `30.8.0` run pending (release gate)
 Repository: `Simplea/xperience-community-content-sync-toolkit`
 Supported baseline: Xperience by Kentico `30.8.0` or newer (the first version
 where Content Sync covers both content-hub items and website channel pages);
@@ -51,104 +51,192 @@ know Xperience's internal sync mechanics.
 
 Add a new top-level administration application, **Content sync status**, with
 its own icon and a permission-gated menu entry (see Security and privacy). The
-application has two tabs, matching the two scopes the foundation supports:
+application has two sub-pages, matching the two scopes the foundation
+supports, presented as Xperience's native section sub-navigation — a small
+vertical list within the section (confirmed against a live instance: this is
+how Xperience's own built-in Forms application presents its "List of forms"
+and "Featured fields" sub-pages, the real precedent this feature's admin
+integration follows), not horizontal pill-style tabs. The channel/workspace
+selector is Xperience's native listing **filter panel** (a "FILTER" button
+that opens a side panel; an applied selection shows as a removable chip), not
+an always-visible dropdown row — confirmed against a live instance, this is
+how the table's filter form actually renders, and building a custom
+always-visible selector row would mean not using the native filter mechanism
+this design otherwise depends on:
 
 ```text
-Content sync status                                          [Refresh]
+Content sync status
 
-[ Pages ]  [ Content hub ]
+┌────────────────┐  Pages                          [Refresh]  [⚗ FILTER]
+│ Content sync    │
+│ ──────────────  │  Applied filters:  [ Channel: DancingGoatCore ✕ ]
+│ Pages           │
+│ Content hub     │  Search: [                   ]
+│                 │
+└────────────────┘  ┌───────────────────────────┬──────────────┬───────────┬─────┐
+                     │ Path / Name                │ Content type │ Status    │ ... │
+                     ├───────────────────────────┼──────────────┼───────────┼─────┤
+                     │ /Home                      │ Home         │ ✓ In sync │ ... │
+                     │ /Store/Coffee-beans        │ Product      │ ● Missing │ ... │
+                     │ /Store/Brewers/Chemex      │ Product      │ ▲ Out of  │ ... │
+                     │                             │              │   date    │     │
+                     │ /Articles/Coffee-processing│ Article      │ ✓ In sync │ ... │
+                     └───────────────────────────┴──────────────┴───────────┴─────┘
 
-Website channel:  [ DancingGoatCore            ▾ ]   Language: [ en-US ▾ ]
-
-┌─────────────────────────────────────────────────────────────────────┐
-│ Status filter: [ All ▾ ]     Search: [                            ] │
-├───────────────────────────┬──────────────┬───────────┬──────────────┤
-│ Path / Name                │ Content type │ Status    │ Last published│
-├───────────────────────────┼──────────────┼───────────┼──────────────┤
-│ /Home                      │ Home         │ ✓ In sync │ Aug 3, 2026  │
-│ /Store/Coffee-beans        │ Product      │ ● Missing │ Aug 9, 2026  │
-│ /Store/Brewers/Chemex      │ Product      │ ▲ Out of  │ Aug 10, 2026 │
-│                             │              │   date    │              │
-│ /Articles/Coffee-processing│ Article      │ ✓ In sync │ Jul 28, 2026 │
-└───────────────────────────┴──────────────┴───────────┴──────────────┘
-
-Showing 24 of 24 items
+                     Showing 24 of 24 items
 ```
 
-- The **Content hub** tab replaces the **Website channel** selector with a
-  **Workspace** selector and drops the **Path / Name** column's path prefix in
+- The **Content hub** sub-page replaces the **Channel** filter with a
+  **Workspace** filter and drops the **Path / Name** column's path prefix in
   favor of a flat item name (content-hub items have no tree path).
-- **Status filter** offers: All, Missing on target, Out of date on target, In
-  sync, Extra on target.
-- **Search** filters the visible rows by path/name substring, client-side,
-  after the full scope result has loaded — no server-side search in this
-  version (see Out of scope).
-- Selecting a channel/workspace and language triggers a fetch; while it is in
-  flight, show a loading state over the table area, not a full-page spinner,
-  so the selectors remain usable.
+- **Search** uses the listing's own built-in search box (`LoadDataSettings.SearchTerm`,
+  applied server-side in `LoadData` when the editor presses Enter) — not
+  a custom form field, and not purely client-side JavaScript filtering over one
+  fetched payload.
+- No channel/workspace selection yet (first load, filter never applied)
+  defaults to the first channel/workspace the scope provider returns, so the
+  table is never empty-by-default on first visit.
 - **Refresh** forces a fresh remote fetch, bypassing the foundation's inventory
   cache (see Server workflow). It does not affect the local half, which is
   already always fresh.
 - Selecting a row does not perform any action in this version — it is a
   read-only status view (see Out of scope for why this deliberately excludes
   triggering a sync from here).
+- **Deferred to a later iteration** (see Out of scope): a Status filter
+  (All/Missing/Out of date/In sync/Extra) and a Language selector. Language
+  currently defaults to the first content language configured on the
+  instance — see Server workflow for why the admin's own language switcher
+  isn't read.
 
 ### Empty and unavailable states
 
-- **No target configured** (`Source.TargetUrl` is unset): show a persistent
-  banner explaining that content sync toolkit is not configured as a source on
-  this instance, with a link to
-  [Contributing-Setup](../Contributing-Setup.md) or equivalent configuration
-  guidance. The channel/workspace selectors remain visible but the table area
-  shows this message instead of attempting a fetch.
-- **Target unreachable or rejecting requests** (`TargetAvailable = false` from
-  the foundation): show a banner reading "Target status unavailable — showing
-  local content only is not possible without a reachable target," and leave
-  the table empty rather than guessing. Do not fall back to showing local
-  content as if every item were unclassified.
-- **No items in the selected scope**: show a plain "No content in this
-  channel/workspace" message, distinct from the unavailable-target banner.
-- **No channels or workspaces available** (a brand-new instance, or a user
-  without access to any): show a message directing the editor to Xperience's
-  own channel/workspace management, not an empty dropdown with no explanation.
+Each state must look distinct from the others, not just differ in wording.
+Xperience's callout banners (`ListingConfiguration.Callouts`) are part of the
+page configuration, which is built before `LoadData` runs, so only states known
+before the table loads can be banners. On `30.8.0` callouts offer two styles,
+`FriendlyWarning` and `QuickTip`.
+
+| State | Known before the table loads? | Presentation |
+| --- | --- | --- |
+| **Not configured as a source** (`Source.TargetUrl` unset) | Yes | `FriendlyWarning` banner explaining that the toolkit isn't configured as a source, linking to the [Usage Guide](../Usage-Guide.md). The table loads no rows and no fetch is attempted. |
+| **No channels or workspaces** (a brand-new instance, or none the user can access) | Yes | `QuickTip` banner pointing to **Configuration → Channel management** or **Workspaces**, as plain text. Kentico's admin URLs aren't a public API, so the banner doesn't hardcode a link. |
+| **Target unavailable** (`TargetAvailable = false`) | No — depends on the selected scope | A single table row with a red "Target unavailable" status tag and an explanation. The table must not fall back to showing local content as if it were unclassified. |
+| **Selected scope no longer exists** (deleted after the filter was applied) | No | A single table row, "The selected channel/workspace no longer exists", with a grey "Not available" tag. |
+| **Loading failed** (any unexpected exception in `LoadData`) | No | A single table row, "Sync status couldn't be loaded. Try Refresh; details are in the event log.", with a red "Error" tag. The exception is written to the event log, never shown. |
+| **No items in the selected scope** | No | Xperience's native empty state (no rows returned). With a channel/workspace filter applied, Xperience words it as "We couldn't find any matches"; that's accepted for consistency with other admin listings. |
+
+The table stays visible under a banner, so the not-configured state also shows
+the native empty state beneath the warning. That duplication is accepted.
 
 ## Administration integration
 
-Register as a new `[UIApplication]` (not a page extender — there is no
-existing Kentico application this naturally extends), gated by a custom
-permission, e.g. `XperienceCommunity.ContentSyncToolkit.ViewSyncStatus`,
-declared via `[UIPermission(...)]` on the application's root page class,
-following this repository's existing pattern for custom permissions (see
-[content-inventory-foundation](content-inventory-foundation.md#suggested-component-boundaries)).
+Register as a new `[UIApplication]` with two sibling `[UIPage]`s — not a page
+extender (there is no existing Kentico application this naturally extends),
+and not a single page with a client-side tab switcher. This mirrors a real,
+shipped Kentico precedent: `Kentico.Xperience.Admin.DigitalMarketing.UIPages.FormsApplication`
+is a `[UIApplication(..., TemplateNames.SECTION_LAYOUT)]` root with two
+sibling `[UIPage(..., TemplateNames.LISTING)]` children — pure attributes, no
+custom React.
 
-The page's server-side commands call `IContentSyncStatusService` directly
-(`GetWebPageSyncStatusAsync`/`GetContentHubSyncStatusAsync`); this feature adds
-no new server-side business logic beyond marshaling the foundation's result
-into a client-friendly shape (channel/workspace listing for the selectors,
-paging/sorting for the table if the scope is large — see Out of scope).
+Access uses Xperience's standard `SystemPermissions.VIEW`, not a custom
+permission. A custom permission was tried first and can't work: `[UIPermission]`
+only *declares* which permissions Role management can grant for an
+application, it doesn't enforce them, and the listing template itself always
+requires VIEW — so a role granted only a custom permission still gets Access
+Denied (confirmed live). The implementation therefore:
 
-Register the toolkit's administration module through the repository's
-`AddContentSyncToolkit()` startup extension, matching how the sibling
-`AddFormsToolkit()` registers its own admin module.
+- declares `[UIPermission(SystemPermissions.VIEW)]` on the application, so
+  Role management offers **Content sync status → View**;
+- enforces it with `[UIEvaluatePermission(SystemPermissions.VIEW)]` on each
+  tab page, so direct navigation is refused, not just the menu entry hidden;
+- sets `Permission = SystemPermissions.VIEW` on the `Refresh` page command.
+
+Each tab page inherits `ListingPageBase<ListingConfiguration, ListingTemplateClientProperties>`
+— Xperience's native listing template — not `ListingPage<TInfo>`, which is
+specific to Kentico Info-objects; this feature's data is a synthetic list from
+`IContentSyncStatusService`, not a database-backed Info-object type.
+`ListingTemplateClientProperties` is an existing, ready-made class; no new
+client-properties type or custom React component is authored for the default
+table/column/filter/badge rendering.
+
+Register the scope-enumeration service (channel/workspace listing for the
+selectors) through a new `AddContentSyncToolkitAdmin()` startup extension,
+called in addition to `AddContentSyncToolkit()` — kept separate because it is
+admin-UI-only surface, not something every source/target installation needs
+regardless of role the way the foundation's own registration is.
 
 ## Server workflow
 
-1. On tab/selector change, the client issues a page command with the selected
-   channel or workspace name and language.
-2. The command calls `IContentSyncStatusService`, which serves the remote half
-   from cache when available (default 90-second TTL) or fetches fresh.
-3. **Refresh** issues the same command with a flag that bypasses the cache for
-   this one request (does not change the TTL for subsequent requests from other
-   users or tabs).
-4. The command returns the full classified item list to the client; filtering
-   and searching happen client-side over the already-fetched result, not as
-   separate server round-trips.
+Implemented on Xperience's native listing-page data pipeline rather than a
+custom command/client pair: each tab is a `ListingPageBase`-derived page whose
+`LoadData` override runs once per selector, search, sort, or page change —
+there is no separate client-side filtering layer.
+
+### How the channel/workspace selection reaches `LoadData`
+
+This was the highest-risk piece of the design and needed live verification
+against a real instance before committing to it. The two override points that
+would let a page read a filter form's *raw* submitted values directly —
+`ListingPageBase<,>.BuildFilterWhereCondition` and `.GetFilterModel` — are not
+virtual, so they cannot be overridden. `LoadDataSettings.FilterWhereCondition`
+is the only other avenue, but its declared type, the public `IWhereCondition`
+interface, exposes only a compiled SQL fragment as a string (confirmed live:
+selecting a channel produces `WhereCondition == "[Channel] = @Channel"`) with
+no structured accessor for the value — extracting it from that string would
+mean fragile SQL-text parsing.
+
+The value actually *is* available in a structured, public way: the concrete
+object Kentico returns for `FilterWhereCondition` is `CMS.DataEngine.WhereCondition`,
+a public class (unlike the interface it's exposed through) whose public
+`Parameters` collection holds the real parameterized values — confirmed live,
+`Parameters` contained `'@Channel'=DancingGoatPages`. `ContentSyncStatusFilterValueExtractor`
+casts `FilterWhereCondition` to this concrete type and reads the named
+parameter directly; no SQL parsing involved. A dynamic-application-per-channel
+design (mirroring how Kentico's own "Pages" and "Content hub" applications are
+scoped — one menu entry per channel/workspace, no selector at all) was also
+investigated as an alternative, but the APIs that pattern depends on
+(`UIDynamicApplicationAttribute`, `IDynamicApplicationProvider`,
+`DynamicApplicationDescriptor`) are all `internal` to Kentico's assemblies and
+not usable by third-party code — ruled out, not merely deprioritized.
+
+1. On tab/selector/search/sort/page change, the framework invokes the page's
+   `LoadData(LoadDataSettings settings, CancellationToken)`; `settings.FilterWhereCondition`
+   carries the compiled filter (read via `ContentSyncStatusFilterValueExtractor`
+   as above), and `settings.SearchTerm`/`SortBy`/`SortType`/`PageSize`/`SelectedPage`
+   carry the listing's own built-in search/sort/paging state — no custom form
+   fields needed for those.
+2. `LoadData` calls `IContentSyncStatusService`, which serves the remote half
+   from cache when available (default 90-second TTL) or fetches fresh; the
+   local half is always re-queried fresh on every call.
+3. `LoadData` applies search, sort, and paging to the classified result in
+   memory before mapping it to table rows — cheap, because the expensive part
+   (the remote fetch) is already cache-served in the common case, but this is
+   still a server call per interaction, not client-side JavaScript filtering
+   over a single fetched payload.
+4. **Refresh** invokes a `[PageCommand]` that records a "bypass cache on the
+   next load" flag for that tab in a small in-memory `ContentSyncStatusRefreshRequestStore`
+   (keyed per tab, not per channel or per user — a page command has no direct
+   access to `LoadDataSettings`, so it cannot itself call `IContentSyncStatusService`
+   with the currently-selected channel). Header actions don't evaluate a
+   command's result — there is no automatic reload-after-command for them,
+   and `UseCommand("LoadData")` re-invokes `LoadData` without the table's
+   paging/sort/filter state (fails) — so the command returns
+   `NavigateTo(<tab's own path>, refetchAllTemplates: true)`, Kentico's
+   documented way to refresh a listing after a header action (confirmed live).
+   That reload's `LoadData` consumes (reads and clears) the flag and passes
+   `forceRefresh: true` for that one call — confirmed live as a second target
+   fetch within the cache TTL; this does not change the TTL for other users or
+   tabs. The per-tab (rather than per-channel or per-user) scoping is a
+   deliberate low-stakes tradeoff: a concurrent viewer on the same tab could
+   get an unrequested cache bypass in a narrow race window. Confirmed live:
+   after Refresh the applied channel/workspace filter and search term are
+   kept, but a column sort resets to the default (urgency) order.
 
 ## Security and privacy
 
-- Require the `XperienceCommunity.ContentSyncToolkit.ViewSyncStatus` permission
-  for both the application's menu visibility and every server command; do not
-  rely on menu-hiding alone.
+- Require the VIEW permission for the application (see Administration
+  integration) for menu visibility, every tab page, and every server command;
+  do not rely on menu-hiding alone.
 - The page never displays field-level content values — only the metadata
   already defined in the foundation's `ContentInventoryItem` contract (path or
   name, content type, status, publish timestamps).
@@ -166,31 +254,93 @@ component library already provides sortable, filterable client-side tables
 (the sibling Forms Toolkit project did not need to build one from scratch for
 its listings).
 
+Findings from live verification on `31.7.2` that constrain the implementation:
+
+- The toolkit assembly needs `[assembly: AssemblyDiscoverable]`, or Xperience
+  never scans it for `[UIApplication]`/`[UIPage]` registrations.
+- `[UIPermission]` declares, it doesn't enforce, and listing pages always
+  require VIEW, so a custom permission alone can't grant access (see
+  Administration integration). Custom permission names are also capped at 50
+  characters; the application fails to register otherwise.
+- `LoadDataSettings.SelectedPage` is zero-based.
+- Callouts (`ListingConfiguration.Callouts`) must be set in `ConfigurePage()`,
+  which runs before `LoadData`; `CalloutType`, `CalloutPlacement`,
+  `SortTypeEnum`, and `ActionType` have the same values in `30.8.0` and `31.x`.
+- `ListingConfiguration`'s list properties (`PageSizes`, `HeaderActions`,
+  `TableActions`, `MassActions`) must be set explicitly — left `null`, the
+  listing template throws. `ColumnConfiguration.MinWidth`/`MaxWidth` default
+  to `0` (collapsed columns) and are in 8px grid units, not pixels.
+- A header action's command must set both `Name` (used for the permission
+  check) and `Parameter` (sent as the command name), and `[PageCommand]`
+  handlers must be asynchronous.
+- `Kentico.Xperience.Admin.Base.Color`'s numeric values differ between
+  versions (31.x inserted a member, shifting later values by one), and enum
+  constants compile to integers — built against `30.8.0` but run on `31.x`,
+  `Color.SuccessBackgroundHighEmphasis` rendered as `SkeletonContent`. Status
+  badge colors are therefore resolved with `Enum.Parse<Color>(name)` at
+  runtime. Any other Xperience enum used from this assembly carries the same
+  risk if its members aren't at a stable position.
+
 ## Error behavior
 
 - Selected channel or workspace no longer exists (deleted after the selector
-  loaded): safe "no longer available" message; refresh the selector options.
-- Server command failure unrelated to target availability (for example, a
-  transient error in the local query): safe generic error message with a retry
-  action; do not surface raw exception details.
+  loaded): safe "no longer exists" row (see Empty and unavailable states); the
+  selector's options come from `IContentSyncScopeProvider` when the page
+  loads, so reloading the page drops the deleted scope.
+- Failure unrelated to target availability (for example, a transient error in
+  the local query): safe generic error row pointing to Refresh; the exception is
+  logged via `EventLogService.LogException` and raw details are never shown.
+  Cancellation is not treated as an error.
 - Permission denied: the application does not appear in the administration
   menu; a direct navigation attempt receives Xperience's standard forbidden
   administration response.
 
 ## Suggested component boundaries
 
-- `ContentSyncStatusApplication` (or equivalent root `UIPage`): registers the
-  application, permission, and menu entry.
-- `ContentSyncStatusPage` commands: `GetChannels`, `GetWorkspaces`,
-  `GetWebPageSyncStatus`, `GetContentHubSyncStatus` — thin wrappers over
-  `IContentSyncStatusService` plus whatever channel/workspace enumeration is
-  needed for the selectors.
-- React client: tab component (Pages / Content hub), selector controls, status
-  table with client-side filter/search, loading and empty/unavailable states.
+- `ContentSyncStatusApplication`: root page, registers the application,
+  permission, and menu entry (`TemplateNames.SECTION_LAYOUT`).
+- `ContentSyncStatusTabBase`: the shared `ListingPageBase`-derived base for
+  both tabs. It builds the listing configuration and the state callouts,
+  hosts the `Refresh` command, and overrides `LoadData` to extract the selected
+  channel/workspace (via `ContentSyncStatusFilterValueExtractor`), run
+  `ContentSyncStatusViewBuilder`, and map the result to `Row`s. The status
+  column uses Kentico's native tagged-cell mechanism (`NamedComponentCell`
+  with the shared `Tag` component) for the colored status badge, not a
+  custom-rendered one.
+- `ContentSyncStatusPagesTab` / `ContentSyncStatusContentHubTab`: thin
+  subclasses (`TemplateNames.LISTING`), one per scope kind, supplying the
+  filter model, captions, scope list, and the matching
+  `IContentSyncStatusService` call.
+- `ContentSyncStatusViewBuilder`: pure, unit-testable decision of which state
+  to show (not configured, no scopes, scope not found, target unavailable,
+  empty, items) plus search/sort/paging, independent of Xperience's page types.
+- `ContentSyncStatusPagesFilterModel` / `ContentSyncStatusContentHubFilterModel`:
+  each tab's filter-form model, with a single `[DropDownComponent]`-decorated
+  `Channel`/`Workspace` property.
+- `ContentSyncStatusChannelOptionsProvider` / `ContentSyncStatusWorkspaceOptionsProvider`:
+  `IDropDownOptionsProvider` implementations supplying each dropdown's options
+  dynamically from `IContentSyncScopeProvider` (a dropdown's options can't be
+  set from an instance value at compile time via the attribute alone, since
+  attribute arguments are compile-time constants — a `DataProviderType`
+  pointing at one of these is Kentico's supported way to populate options at
+  render time instead).
+- `ContentSyncStatusFilterValueExtractor`: reads the selected channel/workspace
+  back out of `LoadDataSettings.FilterWhereCondition` (see Server workflow).
+- `ContentSyncStatusListingSupport`: pure, unit-testable search/sort/paging and
+  status-presentation helpers shared by both tabs.
+- `ContentSyncStatusRefreshRequestStore`: the small in-memory per-tab
+  cache-bypass flag described under Server workflow.
+- `IContentSyncScopeProvider`: enumerates available website channels
+  (joining `WebsiteChannelInfo`/`ChannelInfo`) and workspaces (`WorkspaceInfo`)
+  for the selectors — new code, since the foundation deliberately excludes a
+  "discover all channels/workspaces" convenience method.
+- One `[PageCommand] Refresh` per tab, calling `IContentSyncStatusService`'s
+  cache-bypassing overload on the next `LoadData`.
 
-Keep all business logic (status classification, caching) in the foundation;
-this feature's C# surface should be limited to command marshaling and
-channel/workspace enumeration for the selectors.
+No React client and no other custom page commands are needed for the default
+design. Keep all business logic (status classification, caching) in the
+foundation; this feature's C# surface is limited to the native listing-page
+plumbing above and channel/workspace enumeration for the selectors.
 
 ## Test strategy
 
@@ -207,7 +357,11 @@ channel/workspace enumeration for the selectors.
 
 Run against both the minimum supported and latest verified Xperience versions,
 using two Dancing Goat instances (source and target) configured with the
-toolkit:
+toolkit. The minimum-version run is a release gate (see
+[Release process](../Release-Process.md#publishing-a-release)), not a
+requirement for every pull request. It exists because the minimum and latest
+versions can behave differently even when both compile — `Color`'s enum values
+shifted between `30.8.0` and `31.x`. Cover:
 
 - selecting a channel with a mix of in-sync, missing, out-of-date, and
   extra-on-target items and verifying each renders with the correct status;
@@ -220,6 +374,16 @@ toolkit:
 - unconfigured source instance shows the not-configured banner;
 - unauthorized user cannot see the menu entry or invoke the commands directly.
 
+Verified live on `31.7.2` (source and target Dancing Goat instances): all four
+statuses on Pages; Missing, Out of date, and In sync on Content hub; search,
+header sorting, and the default urgency order; Refresh bypassing the cache and
+keeping filter and search; the not-configured banner; the target-unavailable
+row; and permission gating (menu hidden, direct URL and commands refused with
+403 without VIEW; everything works once a role is granted VIEW). Not verified
+live: the no-scopes banner (same mechanism as the not-configured banner), the
+scope-not-found and error rows (unit-tested), and the `30.8.0` run (release
+gate).
+
 ## Acceptance criteria
 
 - An authorized editor can select a website channel or content-hub workspace
@@ -228,12 +392,27 @@ toolkit:
   missing on target, out of date on target, extra on target.
 - Target-unavailable and source-not-configured states are visually distinct
   from "no items in this scope" and from each other.
-- Refresh reflects current target state without requiring a full page reload.
+- Refresh reflects current target state without a full browser reload (it
+  re-navigates within the admin to the tab's own path — see Server workflow).
 - The application is inaccessible, both in the menu and via direct navigation,
   to a user without the required permission.
 
 ## Out of scope
 
+- Items that have never been published. The table lists only content with a
+  published version, matching what Content Sync can act on — a newly created
+  or cloned item appears only once published. Unpublished items are a known
+  gap with a proposed resolution; see
+  [Publication-state scope](content-inventory-foundation.md#publication-state-scope).
+- A Status filter (All/Missing/Out of date/In sync/Extra) and a Language
+  selector. `ContentSyncStatusListingSupport.ApplyStatusFilter` already exists
+  and is unit tested, but this iteration doesn't yet wire a UI control to it.
+  Language defaults to the first content language configured on the instance:
+  `ListingPageBase`'s `GetCurrentContentLanguage()` (which would read the
+  admin's own language switcher) is `private`, not `protected`, so it isn't
+  reachable from a derived page — a future iteration could add an explicit
+  Language dropdown using the same `[DropDownComponent]` + `WhereCondition`-extraction
+  mechanism as the channel/workspace selector.
 - Triggering an actual Content Sync operation (push) from this page. The page
   is read-only status visibility; initiating a sync remains Xperience's own
   **Sync this page**/**Sync with all subpages**/Content hub **Sync** actions.
@@ -241,8 +420,8 @@ toolkit:
   the native page tree or Content hub listing so an editor can act from there,
   but that link is not part of this version.
 - Server-side search or pagination for very large scopes; this version loads
-  the full scope result and filters client-side, matching the foundation's
-  "no wire-level pagination" scope.
+  the full scope result and searches, sorts, and pages it in memory on the
+  server, matching the foundation's "no wire-level pagination" scope.
 - A true hierarchical tree visualization for pages; this version uses a flat,
   sortable table with the tree path as a column. A dedicated tree view is a
   candidate for a later iteration, not this one.
