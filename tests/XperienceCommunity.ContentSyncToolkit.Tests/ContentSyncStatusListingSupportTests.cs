@@ -211,6 +211,47 @@ public class ContentSyncStatusListingSupportTests
         Assert.That(result.Select(ContentSyncStatusListingSupport.DisplayName), Is.EqualTo(new[] { "/D", "/E", "/C", "/B", "/A" }));
     }
 
+    // The Status column is the tabs' default sort, so this is the order editors first see.
+    [TestCase(null)]
+    [TestCase(ContentSyncStatusListingSupport.StatusColumn)]
+    public void ApplySort_ByStatus_PutsTheMostRecentlyPublishedFirstWithinEachStatus(string? sortBy)
+    {
+        var items = new[]
+        {
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/in-sync-new", lastPublishedWhen: Day(2026, 9, 1))),
+            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem("/missing-old", lastPublishedWhen: Day(2025, 1, 1))),
+            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem("/missing-never")),
+            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem("/missing-new-b", lastPublishedWhen: Day(2026, 9, 1))),
+            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem("/missing-new-a", lastPublishedWhen: Day(2026, 9, 1))),
+            CreateStatusItem(ContentSyncStatus.OutOfDateOnTarget, local: CreateInventoryItem("/out-of-date", lastPublishedWhen: Day(2024, 1, 1))),
+        };
+
+        var result = ContentSyncStatusListingSupport.ApplySort(items, sortBy, descending: false);
+
+        Assert.That(result.Select(ContentSyncStatusListingSupport.DisplayName), Is.EqualTo(new[]
+        {
+            "/missing-new-a", "/missing-new-b", "/missing-old", "/missing-never",
+            "/out-of-date",
+            "/in-sync-new",
+        }), "newest first within a status, then by name; never-published last");
+    }
+
+    // Reversing the status order doesn't reverse the tie-break: newest first either way.
+    [Test]
+    public void ApplySort_ByStatusDescending_KeepsNewestFirstWithinEachStatus()
+    {
+        var items = new[]
+        {
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/in-sync-old", lastPublishedWhen: Day(2025, 1, 1))),
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/in-sync-new", lastPublishedWhen: Day(2026, 1, 1))),
+            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem("/missing", lastPublishedWhen: Day(2026, 1, 1))),
+        };
+
+        var result = ContentSyncStatusListingSupport.ApplySort(items, ContentSyncStatusListingSupport.StatusColumn, descending: true);
+
+        Assert.That(result.Select(ContentSyncStatusListingSupport.DisplayName), Is.EqualTo(new[] { "/in-sync-new", "/in-sync-old", "/missing" }));
+    }
+
     [Test]
     public void ApplySort_ByStatusDescending_PutsInSyncFirst()
     {

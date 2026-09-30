@@ -150,6 +150,33 @@ unit test and the two-version runtime check. Item IDs aren't in the inventory
 one content query per load, for the rows on the current page only. If the
 lookup fails, the rows render without links and the error is logged.
 
+### Sorting
+
+Every column is sortable from its header. The default is **Status**,
+ascending, set as the Status column's `SortingConfiguration.DefaultDirection`
+so the header shows the sort icon on first load and one click reverses it
+(confirmed live on 31.7.2). Status ascending means urgency, not alphabetical:
+Missing on target, Out of date on target, Extra on target, In sync — the
+foundation's [status ordering convention](content-inventory-foundation.md#status-ordering-for-consumers).
+
+| Sort | Tie-break |
+| --- | --- |
+| Status (either direction) | Most recently published first, then path/name. Never-published items come last within their status. The tie-break doesn't reverse with the sort. |
+| Path / Name, Content type, Last published | Path/name, ascending. Never-published items sort as the earliest date. |
+
+Why Status: the page's main question is "what still needs syncing?", so the
+items needing action belong on page 1. Newest first within a status puts what
+editors are currently working on at the top of each group. The alternatives
+were weaker defaults: Last published (recent In sync items push older Missing
+ones off page 1), Path/Name (search already finds a specific item), and
+Content type (the Content type filter groups better).
+
+The chosen sort isn't remembered. Xperience's listing template keeps only the
+applied filters and search, per browser tab (`kxp.listingState` in session
+storage), and nothing about sorting; leaving the page and coming back, or
+Refresh, returns to the default. Remembering the sort (for example in a
+cookie, applied through `DefaultDirection`) is a possible follow-up.
+
 ### Empty and unavailable states
 
 Each state must look distinct from the others, not just differ in wording.
@@ -272,7 +299,7 @@ not usable by third-party code — ruled out, not merely deprioritized.
    deliberate low-stakes tradeoff: a concurrent viewer on the same tab could
    get an unrequested cache bypass in a narrow race window. Confirmed live:
    after Refresh the applied channel/workspace filter and search term are
-   kept, but a column sort resets to the default (urgency) order.
+   kept, but a column sort resets to the default (Status) order — see Sorting.
 
 ## Security and privacy
 
@@ -427,7 +454,9 @@ scope-not-found and error rows (unit-tested), and the `30.8.0` run (release
 gate).
 
 Filters and item navigation, verified live on `31.7.2`: all six filter fields
-render in order (shared fields inherited from the base filter model); Status
+render in order (shared fields inherited from the base filter model); the
+Status column is the visible default sort, with the newest items first within
+each status, and one click on its header reverses it; Status
 (Needs action, Extra), Content type, and Published from filter correctly,
 alone and combined; an empty result uses the native empty state; Refresh keeps
 applied filters; the header tooltips render; and clicking a row opens the page

@@ -77,8 +77,10 @@ internal static class ContentSyncStatusListingSupport
             ? items
             : [.. items.Where(item => DisplayName(item).Contains(searchTerm, StringComparison.OrdinalIgnoreCase))];
 
-    // No sort column (the listing's initial state) sorts by status, so items needing action come
-    // first. Every sort breaks ties by display name, ascending.
+    // Status is the default sort (the tabs set it as the Status column's default direction, and it's
+    // also the fallback when no column is sent), so items needing action come first. Within a status,
+    // the most recently published come first, since those are what editors are working on; every
+    // other sort breaks ties by display name, ascending. Tie-breaks don't follow the sort direction.
     public static IReadOnlyList<ContentSyncStatusItem> ApplySort(
         IReadOnlyList<ContentSyncStatusItem> items, string? sortBy, bool descending)
     {
@@ -89,12 +91,16 @@ internal static class ContentSyncStatusListingSupport
             _ when IsColumn(sortBy, ContentTypeColumn) =>
                 Order(items, ContentTypeName, StringComparer.OrdinalIgnoreCase, descending),
             _ when IsColumn(sortBy, LastPublishedColumn) =>
-                Order(items, item => LastPublishedWhen(item) ?? DateTime.MinValue, Comparer<DateTime>.Default, descending),
-            _ => Order(items, item => StatusSortRank(item.Status), Comparer<int>.Default, descending),
+                Order(items, PublishedOrEarliest, Comparer<DateTime>.Default, descending),
+            _ => Order(items, item => StatusSortRank(item.Status), Comparer<int>.Default, descending)
+                .ThenByDescending(PublishedOrEarliest),
         };
 
         return [.. ordered.ThenBy(DisplayName, StringComparer.OrdinalIgnoreCase)];
     }
+
+    // Never-published items sort as the earliest possible date.
+    private static DateTime PublishedOrEarliest(ContentSyncStatusItem item) => LastPublishedWhen(item) ?? DateTime.MinValue;
 
     // Most urgent first: what Content Sync would add, then update, then what only the target has.
     public static int StatusSortRank(ContentSyncStatus status) => status switch

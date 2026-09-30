@@ -52,7 +52,8 @@ internal abstract class ContentSyncStatusTabBase(
         [
             SortableColumn(ContentSyncStatusListingSupport.NameColumn, nameColumnCaption, minWidth: 40, maxWidth: 100, searchable: true),
             SortableColumn(ContentSyncStatusListingSupport.ContentTypeColumn, "Content type", minWidth: 24, maxWidth: 40),
-            SortableColumn(ContentSyncStatusListingSupport.StatusColumn, "Status", minWidth: 20, maxWidth: 28, tooltip: StatusTooltip),
+            // The default sort, so the header shows it; see ContentSyncStatusListingSupport.ApplySort.
+            SortableColumn(ContentSyncStatusListingSupport.StatusColumn, "Status", minWidth: 20, maxWidth: 28, tooltip: StatusTooltip, defaultDirection: SortTypeEnum.Asc),
             SortableColumn(ContentSyncStatusListingSupport.LastPublishedColumn, "Last published", minWidth: 20, maxWidth: 28, tooltip: LastPublishedTooltip),
         ],
         PageSizes = [10, 25, 50],
@@ -238,7 +239,7 @@ internal abstract class ContentSyncStatusTabBase(
     }
 
     private static ColumnConfiguration SortableColumn(
-        string name, string caption, int minWidth, int maxWidth, bool searchable = false, string? tooltip = null) =>
+        string name, string caption, int minWidth, int maxWidth, bool searchable = false, string? tooltip = null, SortTypeEnum? defaultDirection = null) =>
         new()
         {
             Name = name,
@@ -246,7 +247,7 @@ internal abstract class ContentSyncStatusTabBase(
             MinWidth = minWidth,
             MaxWidth = maxWidth,
             Searchable = searchable,
-            Sorting = new SortingConfiguration { Sortable = true },
+            Sorting = new SortingConfiguration { Sortable = true, DefaultDirection = defaultDirection },
             Tooltip = tooltip,
             TooltipAsHtml = tooltip is not null,
         };

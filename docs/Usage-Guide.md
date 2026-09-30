@@ -111,9 +111,12 @@ The application has two tabs: **Pages** (one website channel at a time) and
   - **Published from** / **Published to**: whole days, both included, matched
     against the Last published column.
 - **Search** by path (Pages) or name (Content hub); press Enter to apply.
-- **Sort** by clicking a column header. By default, items needing action come
-  first: Missing on target, then Out of date on target, then Extra on target,
-  then In sync.
+- **Sort** by clicking a column header. The list starts sorted by **Status**,
+  so items needing action come first: Missing on target, then Out of date on
+  target, then Extra on target, then In sync. Within each status, the most
+  recently published items come first. Click **Status** to reverse the order.
+  The page doesn't remember a different sort: it starts sorted by Status again
+  each time you open it or use Refresh.
 - **Click a row** to open the item in its editor, where you can sync it with
   Xperience's own Content Sync actions. Extra on target rows can't be opened,
   because the item doesn't exist on this instance.
