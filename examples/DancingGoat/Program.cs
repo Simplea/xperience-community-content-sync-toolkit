@@ -32,9 +32,7 @@ using Microsoft.Extensions.Hosting;
 using Samples.DancingGoat;
 
 using XperienceCommunity.ContentSyncToolkit;
-using XperienceCommunity.ContentSyncToolkit.Http;
-using XperienceCommunity.ContentSyncToolkit.Inventory;
-using XperienceCommunity.ContentSyncToolkit.SyncStatus;
+using XperienceCommunity.ContentSyncToolkit.Admin;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -78,6 +76,7 @@ builder.Services.AddSingleton<IEmailActivityTrackingEvaluator, EmailActivityTrac
 // packaged sample. Every value comes from configuration (environment variables at launch time), so
 // no secret or URL is ever hardcoded here — see docs/specs/content-inventory-foundation.md.
 builder.Services.AddContentSyncToolkit();
+builder.Services.AddContentSyncToolkitAdmin();
 builder.Services.Configure<ContentSyncToolkitOptions>(builder.Configuration.GetSection("ContentSyncToolkit"));
 
 ConfigureEmailBuilder(builder.Services);
@@ -130,36 +129,6 @@ app.MapControllerRoute(
         controller = DancingGoatConstants.CONSTRAINT_FOR_NON_ROUTER_PAGE_CONTROLLERS
     }
 );
-
-// TEMPORARY: manual test rig for the content sync toolkit foundation — there is no admin UI yet
-// (that's a later slice), so these dev-only endpoints are the only way to see the diff result.
-// Remove once the sync-status admin page exists. Never mapped outside Development.
-if (app.Environment.IsDevelopment())
-{
-    app.MapGet("/dev/content-sync-toolkit/local/web-pages",
-        (string channelName, string languageName, ILocalContentInventoryService service, CancellationToken ct) =>
-            service.GetWebPagesAsync(channelName, languageName, ct));
-
-    app.MapGet("/dev/content-sync-toolkit/local/content-hub-items",
-        (string workspaceName, string languageName, ILocalContentInventoryService service, CancellationToken ct) =>
-            service.GetContentHubItemsAsync(workspaceName, languageName, ct));
-
-    app.MapGet("/dev/content-sync-toolkit/remote/web-pages",
-        (string channelName, string languageName, IContentInventoryClient client, CancellationToken ct) =>
-            client.GetWebPagesAsync(channelName, languageName, ct));
-
-    app.MapGet("/dev/content-sync-toolkit/remote/content-hub-items",
-        (string workspaceName, string languageName, IContentInventoryClient client, CancellationToken ct) =>
-            client.GetContentHubItemsAsync(workspaceName, languageName, ct));
-
-    app.MapGet("/dev/content-sync-toolkit/status/web-pages",
-        (string channelName, string languageName, IContentSyncStatusService service, CancellationToken ct) =>
-            service.GetWebPageSyncStatusAsync(channelName, languageName, ct));
-
-    app.MapGet("/dev/content-sync-toolkit/status/content-hub-items",
-        (string workspaceName, string languageName, IContentSyncStatusService service, CancellationToken ct) =>
-            service.GetContentHubSyncStatusAsync(workspaceName, languageName, ct));
-}
 
 app.Run();
 

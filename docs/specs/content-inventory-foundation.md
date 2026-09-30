@@ -210,6 +210,106 @@ treated as "target has zero items" — that would make every local item falsely
 report as `MissingOnTarget`. `IContentSyncStatusService` surfaces fetch failure
 as `TargetAvailable = false` and does not run the comparer in that case.
 
+## Publication-state scope
+
+Both inventories (local, and the target's via its endpoint) run the content
+query with the default `ContentQueryExecutionOptions` (`ForPreview = false`),
+so each contains only items that currently have a **published** version, and
+reports that published version's metadata. This deliberately mirrors what
+Content Sync can act on, per Kentico's
+[Content sync](https://docs.kentico.com/documentation/business-users/content-sync)
+documentation:
+
+| Item state | In the inventory? | Why |
+| --- | --- | --- |
+| Draft (Initial), or a custom workflow step before the first publish | No | Content Sync cannot synchronize never-published items. Listing them as `MissingOnTarget` would ask an editor to do something they can't. |
+| Published | Yes | — |
+| Published, with a pending Draft (New version) or workflow step | Yes, compared by its last **published** version | Content Sync synchronizes the latest published version, not the draft — so a pending draft does not make the item out of date. |
+| Unpublished (published once, then unpublished) | **No — known gap, see below** | — |
+
+In practice: a newly created or cloned item only appears once it's published.
+That's expected, not a bug.
+
+### Known gap: unpublished items
+
+Content Sync *can* act on unpublished items — unpublished pages without
+restriction, and unpublished content-hub items when the target already has
+them in a published state. Because the inventory omits unpublished items, the
+toolkit currently misreports these cases:
+
+- Unpublished on the source, still published on the target → reported as
+  `ExtraOnTarget`. Accurate would be "the target still shows content the
+  source has unpublished" — actionable via Content Sync.
+- Unpublished on the target, published on the source → reported as
+  `MissingOnTarget` rather than as a state difference.
+
+### Proposed resolution
+
+No new `ContentSyncStatus` member and no wire-contract change are needed — the
+fix reuses `OutOfDateOnTarget` and the existing `VersionStatus` field:
+
+1. **Inventory.** Keep the existing published query unchanged, and add a
+   second query with `ForPreview = true` restricted to items whose
+   `ContentItemCommonDataVersionStatus` is *Unpublished*, merged into the same
+   list with `VersionStatus = "Unpublished"`. Two queries rather than one
+   `ForPreview = true` query, because the latter returns a pending draft's row
+   in place of the published version for published-with-draft items, changing
+   what those are compared by.
+2. **Comparison.** Add rules evaluated before the timestamp rule:
+
+   | Local | Remote | Status |
+   | --- | --- | --- |
+   | Unpublished page | absent | `MissingOnTarget` (Content Sync can create it) |
+   | Unpublished content-hub item | absent | omitted — Content Sync makes no change for a new unpublished content item |
+   | Unpublished | Published | `OutOfDateOnTarget` |
+   | Published | Unpublished | `OutOfDateOnTarget` |
+   | Unpublished | Unpublished | existing timestamp rule |
+   | absent | Unpublished | `ExtraOnTarget` (unchanged rule, now also covers unpublished) |
+
+3. **Admin UI.** Use the status tag's `TooltipText` to explain a
+   publication-state mismatch (for example, "Unpublished on source, still
+   published on target"), so `OutOfDateOnTarget` isn't ambiguous between
+   "newer edits" and "different publish state."
+4. **Mixed versions.** A target running an older toolkit version doesn't send
+   unpublished items, so items unpublished on that target keep today's
+   `MissingOnTarget` behavior — no worse than now.
+
+This changes `ContentSyncStatusComparer`'s classification but not any public
+signature — a minor-version change under this repository's release policy.
+
+#### Verification results (live two-instance rig, 31.7.2)
+
+- **Unpublishing keeps the publish timestamp.** Unpublishing a page changes
+  its `ContentItemCommonDataVersionStatus` to `Unpublished` (3) on the same
+  row and leaves `ContentItemCommonDataLastPublishedWhen` unchanged. Timestamps
+  alone can never detect an unpublish, so the state comparison in step 2 is
+  required. The both-unpublished case can still use the timestamp rule.
+- **The query works.** A `Where` on `ContentItemCommonDataVersionStatus =
+  Unpublished` inside `ContentItemQueryBuilder` with `ForPreview = true`
+  returns exactly the unpublished items, with `VersionStatus.ToString()` ==
+  `"Unpublished"`. With the default `ForPreview = false`, it returns nothing,
+  which confirms why these items are missing today.
+- **The gap reproduces.** An unpublished source page that the target still
+  has published shows as `ExtraOnTarget`.
+- **`VersionStatus` naming differs by version.** Values are `InitialDraft=0`,
+  `Draft=1`, `Published=2`, `Unpublished=3` on both 30.8.0 and 31.x, but
+  30.8.0 also declares `Archived = 3`. For a duplicated value, .NET doesn't
+  guarantee which name `ToString()` returns, so an older instance may report
+  an unpublished item as `"Archived"`. The comparer must treat `"Archived"`
+  and `"Unpublished"` as the same state.
+- **Draft (Initial) doesn't always mean never published.** Creating a new
+  version of an *unpublished* page moves that row to `InitialDraft` (0) while
+  keeping its original `LastPublishedWhen`. Such an item matches neither query
+  above; `LastPublishedWhen` is what distinguishes "never published" from
+  "unpublished, then re-drafted". Whether Content Sync can act on such an item
+  is undocumented. Treat it as out of scope for the first iteration; note it
+  in the admin UI's help text if it causes confusion.
+- **Not verified:** that Content Sync of an unpublished page absent on the
+  target creates it there. Kentico documents this ("unpublished pages can be
+  synchronized without limitations"), but testing it requires Kentico's own
+  Content Sync connection, and the target must run on HTTPS with a trusted
+  certificate, which this HTTP rig doesn't provide.
+
 ## Administration integration
 
 This foundation has no administration UI of its own. It is consumed by the two

@@ -112,7 +112,10 @@ internal sealed class LocalContentInventoryService(IContentQueryExecutor content
             languageName,
             container.WebPageItemTreePath,
             container.ContentItemCommonDataLastPublishedWhen,
-            container.ContentItemCommonDataVersionStatus.ToString());
+            container.ContentItemCommonDataVersionStatus.ToString())
+        {
+            Name = container.WebPageItemName,
+        };
 
     private static ContentInventoryItem MapContentHubItem(
         IContentQueryDataContainer container, string workspaceName, string languageName) =>
@@ -124,5 +127,8 @@ internal sealed class LocalContentInventoryService(IContentQueryExecutor content
             languageName,
             null,
             container.ContentItemCommonDataLastPublishedWhen,
-            container.ContentItemCommonDataVersionStatus.ToString());
+            container.ContentItemCommonDataVersionStatus.ToString())
+        {
+            Name = container.ContentItemName,
+        };
 }

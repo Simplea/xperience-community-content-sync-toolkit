@@ -58,9 +58,9 @@ public class ContentSyncStatusServiceTests
         }
     }
 
-    private static ContentSyncStatusService CreateService(
+    private static IContentSyncStatusService CreateService(
         StubLocalContentInventoryService local, StubContentInventoryClient client, ContentInventoryCache cache) =>
-        new(
+        new ContentSyncStatusService(
             local,
             client,
             cache,
@@ -139,5 +139,60 @@ public class ContentSyncStatusServiceTests
 
         Assert.That(result.TargetAvailable, Is.False);
         Assert.That(result.Items, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetWebPageSyncStatusAsync_ForceRefreshTrue_BypassesAWarmCache()
+    {
+        var local = new StubLocalContentInventoryService();
+        var client = new StubContentInventoryClient();
+        var service = CreateService(local, client, new ContentInventoryCache(TimeProvider.System));
+
+        await service.GetWebPageSyncStatusAsync("Channel", "en-US", forceRefresh: false, CancellationToken.None);
+        await service.GetWebPageSyncStatusAsync("Channel", "en-US", forceRefresh: true, CancellationToken.None);
+
+        Assert.That(client.WebPageCallCount, Is.EqualTo(2),
+            "the second call requested forceRefresh, so it must not be served from the cache primed by the first call");
+    }
+
+    [Test]
+    public async Task GetWebPageSyncStatusAsync_ForceRefreshTrue_RePrimesTheCacheForSubsequentCalls()
+    {
+        var local = new StubLocalContentInventoryService();
+        var client = new StubContentInventoryClient();
+        var service = CreateService(local, client, new ContentInventoryCache(TimeProvider.System));
+
+        await service.GetWebPageSyncStatusAsync("Channel", "en-US", forceRefresh: true, CancellationToken.None);
+        await service.GetWebPageSyncStatusAsync("Channel", "en-US", forceRefresh: false, CancellationToken.None);
+
+        Assert.That(client.WebPageCallCount, Is.EqualTo(1),
+            "the forced-refresh result must be cached, so the following non-forced call is served from it");
+    }
+
+    [Test]
+    public async Task GetWebPageSyncStatusAsync_ThreeArgOverload_BehavesAsForceRefreshFalse()
+    {
+        var local = new StubLocalContentInventoryService();
+        var client = new StubContentInventoryClient();
+        var service = CreateService(local, client, new ContentInventoryCache(TimeProvider.System));
+
+        await service.GetWebPageSyncStatusAsync("Channel", "en-US", forceRefresh: true, CancellationToken.None);
+        await service.GetWebPageSyncStatusAsync("Channel", "en-US", CancellationToken.None);
+
+        Assert.That(client.WebPageCallCount, Is.EqualTo(1),
+            "the existing 3-arg overload must behave exactly as forceRefresh: false, reusing the primed cache");
+    }
+
+    [Test]
+    public async Task GetContentHubSyncStatusAsync_ForceRefreshTrue_BypassesAWarmCache()
+    {
+        var local = new StubLocalContentInventoryService();
+        var client = new StubContentInventoryClient();
+        var service = CreateService(local, client, new ContentInventoryCache(TimeProvider.System));
+
+        await service.GetContentHubSyncStatusAsync("Workspace", "en-US", forceRefresh: false, CancellationToken.None);
+        await service.GetContentHubSyncStatusAsync("Workspace", "en-US", forceRefresh: true, CancellationToken.None);
+
+        Assert.That(client.ContentHubCallCount, Is.EqualTo(2));
     }
 }
