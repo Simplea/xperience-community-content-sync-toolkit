@@ -95,6 +95,25 @@ public class ContentInventoryClientTests
         Assert.That(result.Items, Is.Empty);
     }
 
+    // A 200 that isn't an inventory (e.g. a proxy's HTML page, or a JSON null) is an Error, never
+    // an empty inventory, which would report every local item as missing.
+    [TestCase("<html><body>Not an inventory</body></html>", "text/html")]
+    [TestCase("{\"schemaVersion\": ", "application/json")]
+    [TestCase("null", "application/json")]
+    public async Task GetWebPagesAsync_ReturnsError_OnAnUnreadableSuccessResponse(string body, string mediaType)
+    {
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(body, System.Text.Encoding.UTF8, mediaType)
+        });
+        var client = new ContentInventoryClient(CreateHttpClient(handler));
+
+        var result = await client.GetWebPagesAsync("Channel", "en-US", CancellationToken.None);
+
+        Assert.That(result.Status, Is.EqualTo(ContentInventoryFetchStatus.Error));
+        Assert.That(result.Items, Is.Empty);
+    }
+
     [Test]
     public async Task GetWebPagesAsync_ReturnsUnreachable_OnNetworkFailure()
     {

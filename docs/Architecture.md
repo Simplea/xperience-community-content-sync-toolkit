@@ -117,7 +117,7 @@ would duplicate the runtime gate that's already mandatory for the "disabled
 looks identical to wrong secret" security requirement.
 
 **No wire-level pagination.** `ILocalContentInventoryService` pages internally
-(`TopN`/`Offset` looped until a page returns fewer rows than requested) and
+(`Offset` with `OrderBy`, looped until a page returns fewer rows than requested) and
 returns one complete in-memory list. Large sites are an accepted v1 limitation;
 revisit if response sizes become a real problem.
 

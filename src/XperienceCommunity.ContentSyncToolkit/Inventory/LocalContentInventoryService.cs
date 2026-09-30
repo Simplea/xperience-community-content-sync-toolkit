@@ -4,15 +4,25 @@ using CMS.Websites;
 
 namespace XperienceCommunity.ContentSyncToolkit.Inventory;
 
-internal sealed class LocalContentInventoryService(IContentQueryExecutor contentQueryExecutor) : ILocalContentInventoryService
+internal sealed class LocalContentInventoryService(
+    IContentQueryExecutor contentQueryExecutor,
+    IContentScopeLookup scopeLookup) : ILocalContentInventoryService
 {
     // Offset-based paging requires OrderBy for consistent results; TopN cannot be combined with
     // Offset in the same query scope, so this is the only paging mechanism used here.
     private const int PageSize = 500;
 
+    // An unknown channel or language is an empty inventory, not an error: the content query would
+    // throw, and the target endpoint must not confirm or deny that a scope exists.
     public async Task<IReadOnlyList<ContentInventoryItem>> GetWebPagesAsync(
         string websiteChannelName, string languageName, CancellationToken cancellationToken)
     {
+        if (!await scopeLookup.WebsiteChannelExistsAsync(websiteChannelName, cancellationToken)
+            || !await scopeLookup.ContentLanguageExistsAsync(languageName, cancellationToken))
+        {
+            return [];
+        }
+
         var items = new List<ContentInventoryItem>();
         int offset = 0;
 
@@ -46,6 +56,12 @@ internal sealed class LocalContentInventoryService(IContentQueryExecutor content
     public async Task<IReadOnlyList<ContentInventoryItem>> GetContentHubItemsAsync(
         string workspaceName, string languageName, CancellationToken cancellationToken)
     {
+        // An unknown workspace already matches nothing; an unknown language would throw.
+        if (!await scopeLookup.ContentLanguageExistsAsync(languageName, cancellationToken))
+        {
+            return [];
+        }
+
         // ContentItemQueryBuilder requires an explicit content-type list — it does not default to
         // "all types" for an unfiltered multi-type query (confirmed against a live instance: an
         // empty ForContentTypes configuration throws "Cannot generate query without limiting

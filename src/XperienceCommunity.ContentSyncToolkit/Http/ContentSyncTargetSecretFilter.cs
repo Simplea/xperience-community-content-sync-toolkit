@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -16,7 +17,12 @@ internal sealed class ContentSyncTargetSecretFilter(IContentSyncTargetSecretVali
 
         if (!secretValidator.IsValid(providedSecret))
         {
-            context.Result = new NotFoundResult();
+            // A bodiless 404, not NotFoundResult: [ApiController] turns that into a ProblemDetails
+            // body even on this short-circuit, which a URL that doesn't exist never has. Without a
+            // body, the host's own 404 handling (e.g. UseStatusCodePagesWithReExecute) renders it
+            // exactly as for any unknown URL, so a rejection doesn't reveal the endpoint exists.
+            context.HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+            context.Result = new EmptyResult();
         }
     }
 }
