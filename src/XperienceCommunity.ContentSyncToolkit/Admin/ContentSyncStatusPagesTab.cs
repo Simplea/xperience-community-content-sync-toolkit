@@ -1,5 +1,3 @@
-using CMS.ContentEngine;
-using CMS.DataEngine;
 using CMS.Membership;
 
 using Kentico.Xperience.Admin.Base;
@@ -24,14 +22,15 @@ internal sealed class ContentSyncStatusPagesTab(
     IOptions<ContentSyncToolkitOptions> options,
     IContentSyncStatusService syncStatusService,
     IContentSyncScopeProvider scopeProvider,
-    IInfoProvider<ContentLanguageInfo> contentLanguageInfoProvider,
+    IContentSyncFilterOptionsProvider filterOptionsProvider,
+    IContentSyncItemIdResolver itemIdResolver,
     ContentSyncStatusRefreshRequestStore refreshRequestStore,
     IPageLinkGenerator pageLinkGenerator)
     : ContentSyncStatusTabBase(
         new ContentSyncStatusPagesFilterModel(),
         "Path",
         options,
-        contentLanguageInfoProvider,
+        filterOptionsProvider,
         refreshRequestStore,
         pageLinkGenerator)
 {
@@ -52,4 +51,12 @@ internal sealed class ContentSyncStatusPagesTab(
     protected override Task<ContentSyncStatusResult> GetStatusAsync(
         string scopeName, string languageName, bool forceRefresh, CancellationToken cancellationToken) =>
         syncStatusService.GetWebPageSyncStatusAsync(scopeName, languageName, forceRefresh, cancellationToken);
+
+    protected override Task<IReadOnlyDictionary<Guid, int>> GetLocalItemIdsAsync(
+        ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken) =>
+        itemIdResolver.GetWebPageItemIdsAsync(scope.Name, languageName, [.. items.Select(item => item.Guid)], cancellationToken);
+
+    // A website channel scope's ID is its WebsiteChannelID.
+    protected override ContentSyncStatusItemLink GetItemLink(ContentSyncScope scope, string languageName, int itemId) =>
+        ContentSyncStatusItemLinks.WebPage(scope.Id, languageName, itemId);
 }

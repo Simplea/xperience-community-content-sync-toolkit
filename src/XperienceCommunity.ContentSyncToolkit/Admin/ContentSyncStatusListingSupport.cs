@@ -17,9 +17,59 @@ internal static class ContentSyncStatusListingSupport
     public const string StatusColumn = "status";
     public const string LastPublishedColumn = "lastPublished";
 
+    // Status filter values: this one, or a ContentSyncStatus member name.
+    public const string NeedsActionStatusFilter = "needs-action";
+
+    // The Status dropdown's options, in DropDownComponent's "value;text" per-line format.
+    public const string StatusFilterOptions =
+        NeedsActionStatusFilter + ";Needs action\r\n"
+        + nameof(ContentSyncStatus.MissingOnTarget) + ";Missing on target\r\n"
+        + nameof(ContentSyncStatus.OutOfDateOnTarget) + ";Out of date on target\r\n"
+        + nameof(ContentSyncStatus.ExtraOnTarget) + ";Extra on target\r\n"
+        + nameof(ContentSyncStatus.InSync) + ";In sync";
+
+    // "Needs action" is what Content Sync still has to push; Extra is left out because Content
+    // Sync only pushes from source to target. Null means no filter, including for an unknown value.
+    public static IReadOnlyCollection<ContentSyncStatus>? ParseStatusFilter(string? value)
+    {
+        if (string.Equals(value, NeedsActionStatusFilter, StringComparison.OrdinalIgnoreCase))
+        {
+            return [ContentSyncStatus.MissingOnTarget, ContentSyncStatus.OutOfDateOnTarget];
+        }
+
+        return Enum.TryParse(value, ignoreCase: true, out ContentSyncStatus status) && Enum.IsDefined(status)
+            ? [status]
+            : null;
+    }
+
     public static IReadOnlyList<ContentSyncStatusItem> ApplyStatusFilter(
-        IReadOnlyList<ContentSyncStatusItem> items, ContentSyncStatus? statusFilter) =>
-        statusFilter is null ? items : [.. items.Where(item => item.Status == statusFilter)];
+        IReadOnlyList<ContentSyncStatusItem> items, IReadOnlyCollection<ContentSyncStatus>? statuses) =>
+        statuses is null ? items : [.. items.Where(item => statuses.Contains(item.Status))];
+
+    public static IReadOnlyList<ContentSyncStatusItem> ApplyContentTypeFilter(
+        IReadOnlyList<ContentSyncStatusItem> items, string? contentTypeName) =>
+        string.IsNullOrEmpty(contentTypeName)
+            ? items
+            : [.. items.Where(item => string.Equals(ContentTypeName(item), contentTypeName, StringComparison.OrdinalIgnoreCase))];
+
+    // Both bounds are inclusive whole days, compared with the date the Last published column shows.
+    // Items without a publish date can't satisfy a bound, so they drop out while either is set.
+    public static IReadOnlyList<ContentSyncStatusItem> ApplyPublishedFilter(
+        IReadOnlyList<ContentSyncStatusItem> items, DateTime? publishedFrom, DateTime? publishedTo)
+    {
+        if (publishedFrom is null && publishedTo is null)
+        {
+            return items;
+        }
+
+        return [.. items.Where(item =>
+        {
+            var published = LastPublishedWhen(item);
+            return published is not null
+                && (publishedFrom is null || published.Value >= publishedFrom.Value.Date)
+                && (publishedTo is null || published.Value < publishedTo.Value.Date.AddDays(1));
+        })];
+    }
 
     public static IReadOnlyList<ContentSyncStatusItem> ApplySearch(
         IReadOnlyList<ContentSyncStatusItem> items, string? searchTerm) =>

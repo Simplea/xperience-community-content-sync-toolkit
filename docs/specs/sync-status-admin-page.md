@@ -99,14 +99,56 @@ Content sync status
 - **Refresh** forces a fresh remote fetch, bypassing the foundation's inventory
   cache (see Server workflow). It does not affect the local half, which is
   already always fresh.
-- Selecting a row does not perform any action in this version — it is a
-  read-only status view (see Out of scope for why this deliberately excludes
-  triggering a sync from here).
-- **Deferred to a later iteration** (see Out of scope): a Status filter
-  (All/Missing/Out of date/In sync/Extra) and a Language selector. Language
-  currently defaults to the first content language configured on the
-  instance — see Server workflow for why the admin's own language switcher
-  isn't read.
+- Clicking a row opens the item in Xperience's own editor (see Filters and
+  item navigation). The page itself stays read-only — it never triggers a sync
+  (see Out of scope).
+
+### Filters and item navigation
+
+The filter panel holds, besides the channel/workspace, these fields. All are
+optional and combine with AND; an empty field adds no condition (confirmed
+live: Xperience omits it from the compiled filter entirely).
+
+| Filter | Component | Values and behavior |
+| --- | --- | --- |
+| **Language** | Dropdown of the instance's content languages | No selection compares the instance's **default** content language. A language deleted after the filter was applied shows a "no longer exists" row, like a deleted channel/workspace. Each language is compared separately; there is no "all languages" view. |
+| **Status** | Dropdown: *Needs action*, *Missing on target*, *Out of date on target*, *Extra on target*, *In sync* (placeholder *All*) | *Needs action* = Missing plus Out of date — what Content Sync still has to push. Extra is excluded because Content Sync only pushes source → target. A single dropdown was chosen over a multi-select: it covers the main question in one choice, and reading back a multi-select needs a custom condition builder. |
+| **Content type** | Dropdown of website content types (Pages) or reusable content types (Content hub) | Lists every type of that kind, not only the ones present in the selected scope, because an options provider can't see the selected channel/workspace. Options show the type's display name; the value is its code name. |
+| **Published from** / **Published to** | Two date inputs | Filter on the date shown in the Last published column (the local date, or the target's for Extra on target). Both bounds are inclusive whole days. Items without a publish date are excluded while either bound is set. |
+
+Every filter value is read back from `LoadDataSettings.FilterWhereCondition`
+the same way as the channel/workspace (see Server workflow): each field
+compiles to a named parameter, strings as `string` and dates as `DateTime`.
+Filtering, like search, runs in memory on the classified result before sorting
+and paging.
+
+Not included, by decision: a **Section** filter (search already matches the
+page path, and a dropdown can't list sections of the selected channel), and a
+**summary line** of counts per status (banners are built before the data
+loads, so a summary couldn't follow the applied filter; the Status filter
+answers the same question).
+
+**Column tooltips.** The Status and Last published column headers carry
+tooltips (`ColumnConfiguration.Tooltip`) explaining the four statuses and which
+instance the date comes from. Cells have no tooltip support in the listing
+template, so explanations live on the headers.
+
+**Click to open.** Each row with a local item links (`Row.Action`, a link
+action) to that item in Xperience's own editor: the page in its website
+channel application for Pages, the content item's editor for Content hub.
+*Extra on target* rows have no link — the item doesn't exist on this instance.
+Links are generated with `IPageLinkGenerator` against Kentico's public page
+types (`WebPageLayout`, `ContentItemEdit`), not hardcoded admin URLs. Each
+generated path segment is filled from the value's string form: for Content
+hub the workspace ID, language name, the "all content items" folder, and the
+content item ID; for Pages the website channel application's slug, taken from
+Kentico's public `WebPagesApplicationUrlIdentifier`, and the page's
+language-and-ID identifier. The slug is the one place the implementation
+depends on a URL convention (`webpages-{websiteChannelId}`); it's covered by a
+unit test and the two-version runtime check. Item IDs aren't in the inventory
+(the inventory is also the target's wire contract), so they're looked up with
+one content query per load, for the rows on the current page only. If the
+lookup fails, the rows render without links and the error is logged.
 
 ### Empty and unavailable states
 
@@ -384,6 +426,16 @@ live: the no-scopes banner (same mechanism as the not-configured banner), the
 scope-not-found and error rows (unit-tested), and the `30.8.0` run (release
 gate).
 
+Filters and item navigation, verified live on `31.7.2`: all six filter fields
+render in order (shared fields inherited from the base filter model); Status
+(Needs action, Extra), Content type, and Published from filter correctly,
+alone and combined; an empty result uses the native empty state; Refresh keeps
+applied filters; the header tooltips render; and clicking a row opens the page
+or content item in its editor, on both tabs. Not verified live: choosing a
+second language (the rig has only English), the language-not-found row, and
+that Extra on target rows have no link (the rig had no such items at the time;
+the rows are built without an action when there's no local item).
+
 ## Acceptance criteria
 
 - An authorized editor can select a website channel or content-hub workspace
@@ -404,21 +456,15 @@ gate).
   or cloned item appears only once published. Unpublished items are a known
   gap with a proposed resolution; see
   [Publication-state scope](content-inventory-foundation.md#publication-state-scope).
-- A Status filter (All/Missing/Out of date/In sync/Extra) and a Language
-  selector. `ContentSyncStatusListingSupport.ApplyStatusFilter` already exists
-  and is unit tested, but this iteration doesn't yet wire a UI control to it.
-  Language defaults to the first content language configured on the instance:
-  `ListingPageBase`'s `GetCurrentContentLanguage()` (which would read the
-  admin's own language switcher) is `private`, not `protected`, so it isn't
-  reachable from a derived page — a future iteration could add an explicit
-  Language dropdown using the same `[DropDownComponent]` + `WhereCondition`-extraction
-  mechanism as the channel/workspace selector.
+- Following the admin's own language switcher. `ListingPageBase`'s
+  `GetCurrentContentLanguage()` is `private`, not `protected`, so it isn't
+  reachable from a derived page; the Language filter is used instead.
 - Triggering an actual Content Sync operation (push) from this page. The page
   is read-only status visibility; initiating a sync remains Xperience's own
-  **Sync this page**/**Sync with all subpages**/Content hub **Sync** actions.
-  A future iteration may add a deep link from a row to the item's location in
-  the native page tree or Content hub listing so an editor can act from there,
-  but that link is not part of this version.
+  **Sync this page**/**Sync with all subpages**/Content hub **Sync** actions,
+  which a row's link leads to.
+- A Section filter and a per-status summary line (see Filters and item
+  navigation).
 - Server-side search or pagination for very large scopes; this version loads
   the full scope result and searches, sorts, and pages it in memory on the
   server, matching the foundation's "no wire-level pagination" scope.
