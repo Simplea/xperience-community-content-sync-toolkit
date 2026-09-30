@@ -1,4 +1,5 @@
 using CMS.ContentEngine;
+using CMS.DataEngine;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -15,9 +16,11 @@ public class ContentSyncToolkitServiceCollectionExtensionsTests
         var services = new ServiceCollection();
         services.AddLogging();
 
-        // IContentQueryExecutor is provided by Xperience itself in a real application. Only its
-        // registration (not a working implementation) is needed here, so the DI graph validates.
+        // These are provided by Xperience itself in a real application. Only their registration
+        // (not a working implementation) is needed here, so the DI graph validates.
         services.AddSingleton<IContentQueryExecutor>(_ => null!);
+        services.AddSingleton<IInfoProvider<ChannelInfo>>(_ => null!);
+        services.AddSingleton<IInfoProvider<ContentLanguageInfo>>(_ => null!);
 
         return services;
     }

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Routing;
 
 using XperienceCommunity.ContentSyncToolkit.Http;
@@ -34,15 +35,31 @@ public class ContentSyncTargetSecretFilterTests
         return new AuthorizationFilterContext(actionContext, []);
     }
 
+    // A bodiless 404 lets the host render its own not-found response, as for any unknown URL. A
+    // client error result would be given a ProblemDetails body by [ApiController], which an
+    // unknown URL never has.
     [Test]
-    public void OnAuthorization_SetsNotFoundResult_WhenValidatorRejects()
+    public void OnAuthorization_SetsABodilessNotFound_WhenValidatorRejects()
     {
         var filter = new ContentSyncTargetSecretFilter(new StubSecretValidator(isValid: false));
         var context = CreateContext("wrong-secret");
 
         filter.OnAuthorization(context);
 
-        Assert.That(context.Result, Is.InstanceOf<NotFoundResult>());
+        Assert.That(context.Result, Is.InstanceOf<EmptyResult>());
+        Assert.That(context.Result, Is.Not.InstanceOf<IClientErrorActionResult>());
+        Assert.That(context.HttpContext.Response.StatusCode, Is.EqualTo(StatusCodes.Status404NotFound));
+    }
+
+    [Test]
+    public void OnAuthorization_LeavesTheStatusCodeAlone_WhenValidatorAccepts()
+    {
+        var filter = new ContentSyncTargetSecretFilter(new StubSecretValidator(isValid: true));
+        var context = CreateContext("correct-secret");
+
+        filter.OnAuthorization(context);
+
+        Assert.That(context.HttpContext.Response.StatusCode, Is.EqualTo(StatusCodes.Status200OK));
     }
 
     [Test]
@@ -80,7 +97,26 @@ public class ContentSyncTargetSecretFilterTests
         disabledFilter.OnAuthorization(disabledContext);
         wrongSecretFilter.OnAuthorization(wrongSecretContext);
 
-        Assert.That(disabledContext.Result, Is.InstanceOf<NotFoundResult>());
-        Assert.That(wrongSecretContext.Result, Is.InstanceOf<NotFoundResult>());
+        Assert.That(disabledContext.Result, Is.InstanceOf<EmptyResult>());
+        Assert.That(wrongSecretContext.Result, Is.InstanceOf<EmptyResult>());
+        Assert.That(disabledContext.HttpContext.Response.StatusCode, Is.EqualTo(wrongSecretContext.HttpContext.Response.StatusCode));
+    }
+
+    // The filter is applied at class level, so every inventory action is guarded, and no action
+    // opts out with a filter of its own.
+    [Test]
+    public void InventoryController_AppliesTheSecretFilterToEveryAction()
+    {
+        var controllerFilter = typeof(ContentInventoryController).GetCustomAttributes(typeof(TypeFilterAttribute), inherit: true)
+            .Cast<TypeFilterAttribute>()
+            .SingleOrDefault(attribute => attribute.ImplementationType == typeof(ContentSyncTargetSecretFilter));
+
+        var actions = typeof(ContentInventoryController).GetMethods()
+            .Where(method => method.GetCustomAttributes(typeof(HttpGetAttribute), inherit: true).Length > 0)
+            .ToList();
+
+        Assert.That(controllerFilter, Is.Not.Null);
+        Assert.That(actions.Select(action => action.Name), Is.EquivalentTo(new[] { "GetWebPages", "GetContentHubItems" }));
+        Assert.That(actions, Has.None.Matches<System.Reflection.MethodInfo>(action => action.GetCustomAttributes(typeof(IFilterMetadata), inherit: true).Length > 0));
     }
 }

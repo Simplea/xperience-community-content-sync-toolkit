@@ -33,6 +33,7 @@ public static class ContentSyncToolkitServiceCollectionExtensions
         services.AddControllers().AddApplicationPart(typeof(ContentInventoryController).Assembly);
 
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<IContentScopeLookup, ContentScopeLookup>();
         services.TryAddSingleton<ILocalContentInventoryService, LocalContentInventoryService>();
         services.TryAddSingleton<IContentSyncTargetSecretValidator, ContentSyncTargetSecretValidator>();
         services.TryAddSingleton<IContentInventoryCache, ContentInventoryCache>();

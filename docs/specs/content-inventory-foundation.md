@@ -122,8 +122,16 @@ public sealed record ContentInventoryItem(
     string LanguageName,
     string? TreePath,             // web pages only; null for content-hub items
     DateTime? LastPublishedWhen,  // UTC
-    string? VersionStatus);
+    string? VersionStatus)
+{
+    public string Name { get; init; } = string.Empty;  // WebPageItemName / ContentItemName
+}
 ```
+
+`Name` was added after the first version as an init-only property rather than a
+positional parameter, so the positional constructor stays source- and
+binary-compatible. It carries the item's code name for display, which
+content-hub items need because they have no tree path.
 
 `VersionStatus` is a plain string, not Kentico's `VersionStatus` enum, so the
 wire contract does not couple to Kentico's internal type layout across
@@ -138,8 +146,9 @@ potentially different versions running on the source and target.
 - Response body: `{ SchemaVersion: 1, GeneratedAtUtc, Items: ContentInventoryItem[] }`.
   `SchemaVersion` is a forward-compatibility hook for a source and target
   running different toolkit versions.
-- Rejection (missing/wrong secret, or `Target.Enabled == false`): `404`, with no
-  distinguishing body — see Security and privacy.
+- Rejection (missing/wrong secret, or `Target.Enabled == false`): a bodiless
+  `404`, which the host renders exactly as it renders any unknown URL — see
+  Security and privacy.
 
 ## Local inventory behavior
 
@@ -160,8 +169,8 @@ public interface ILocalContentInventoryService
 Both take the channel/workspace name as an explicit parameter rather than
 relying on ambient `IWebsiteChannelContext`, because the implementation must
 answer for whatever scope a remote caller asks about, not "the current
-request's channel." Both page internally (`TopN`/`Offset`, looped until a page
-returns fewer rows than requested) and return one complete in-memory list — see
+request's channel." Both page internally (`Offset` with `OrderBy`, looped until
+a page returns fewer rows than requested) and return one complete in-memory list — see
 Out of scope for why wire-level pagination is not part of this version.
 
 Two things the original specification got wrong, corrected after verification
@@ -180,6 +189,17 @@ rig):
   class implements `CMS.DataEngine.Internal.INotManagedByContainer`, so
   Kentico deliberately excludes it from DI and expects direct construction,
   unlike `IContentQueryExecutor` and most other Info providers.
+- An unknown website channel or language makes the content query **throw**
+  (`ArgumentException` "Unable to find website channel…",
+  `InvalidOperationException` "Language '…' does not exist"); only an unknown
+  workspace quietly matches nothing. Found by a live check after the first
+  release of this spec: the target answered `500` with the exception text, which
+  both broke the "empty inventory" rule below and made the source report
+  "Target unavailable" whenever the target lacked a channel or language the
+  source had. `LocalContentInventoryService` now checks that the channel (of
+  website type) and the language exist, through a small `IContentScopeLookup`,
+  and returns an empty inventory if not. The check isn't a timing-safe
+  operation, but an unknown and an empty scope both return the same body.
 - The controller in [Target endpoint](#target-endpoint) must be declared `public`,
   not `internal`. ASP.NET Core's default `ControllerFeatureProvider` silently
   excludes non-public classes from controller discovery — the route never
@@ -362,7 +382,10 @@ For each source-side status request:
    always fresh — no caching of the local half.
 2. Check the remote-fetch cache (`{kind}|{scopeName}|{languageName}`, default
    90-second TTL from `Source.InventoryCacheDuration`); on a miss, call the
-   target's endpoint.
+   target's endpoint. Each status method also has an overload taking
+   `forceRefresh`: when `true` it skips the cache lookup, fetches fresh, and
+   stores the fresh result for later calls. The admin page's **Refresh** uses
+   it; it doesn't change the TTL.
 3. On any fetch failure, return `ContentSyncStatusResult(TargetAvailable: false, Items: [])`
    without running the comparer.
 4. On success, run `ContentSyncStatusComparer` over the local and (cached or
@@ -386,15 +409,23 @@ its own local state, which is a single cheap database read per request.
   missing provided secret must all produce the identical response (`404`, no
   distinguishing body) — a caller must not be able to distinguish "this
   instance isn't a configured target" from "the secret is wrong" from "the
-  route doesn't exist."
+  route doesn't exist." The rejection is therefore a `404` with **no body**, not
+  `NotFoundResult`: `[ApiController]` gives a client error result a
+  ProblemDetails body even when an authorization filter short-circuits, and an
+  unknown URL never has one. Without a body, the host's own 404 handling (for
+  example `UseStatusCodePagesWithReExecute`) renders it like any unknown URL.
+  Verified live on 31.7.2: a rejection and an unknown URL return the same
+  Dancing Goat 404 page, differing only in per-request form IDs, which also
+  differ between two requests to the same unknown URL.
 - The response body must contain only the fields defined in the data contract:
   GUID, kind, content type name, scope name, language, tree path, publish
   timestamp, version status. No field values, no user information, no other
   content metadata.
-- Treat the requested `channelName`/`workspaceName` as untrusted input; an
-  unknown scope name returns an empty inventory, not an error that could
-  confirm or deny the existence of a channel/workspace by timing or message
-  content.
+- Treat the requested `channelName`/`workspaceName` and `languageName` as
+  untrusted input; an unknown scope or language name returns an empty
+  inventory, not an error that could confirm or deny the existence of a
+  channel/workspace/language by its message content. Verified live on 31.7.2
+  for an unknown channel, workspace, and language on both actions.
 
 ## Compatibility and API gate
 
@@ -433,8 +464,10 @@ continues.
 
 ## Error behavior
 
-- Unknown channel or workspace name (local or remote): empty inventory result,
-  not an error.
+- Unknown channel, workspace, or language name (local or remote): empty
+  inventory result, not an error. On the source this means a channel or
+  language the target doesn't have yet shows every item as `MissingOnTarget`,
+  not "target unavailable."
 - Remote target unreachable, TLS/connection failure, or timeout:
   `ContentInventoryFetchStatus.Unreachable`; surfaced by the orchestrating
   service as `TargetAvailable = false`.
@@ -455,6 +488,9 @@ continues.
   `ContentSyncToolkitTargetOptions`: configuration surface.
 - `ILocalContentInventoryService` / `LocalContentInventoryService`: local
   content querying, present on every installation regardless of role.
+- `IContentScopeLookup` / `ContentScopeLookup`: checks a requested website
+  channel and language exist before querying, so the guard is testable
+  without a database.
 - `ContentInventoryController`: target-side wire endpoint.
 - `ContentSyncTargetSecretValidator`: isolated, independently testable secret
   validation, shared by the controller's authorization filter.
@@ -482,8 +518,12 @@ repository's established convention):
   missing/null/wrong/differing-length provided secret, exact match with
   `Enabled = true`, case sensitivity;
 - controller authorization: missing secret, wrong secret, and disabled target
-  all short-circuit before the local inventory service is touched (assert via
-  a stub that throws if invoked), for both actions;
+  all short-circuit before the local inventory service is touched, for both
+  actions — covered by the filter's own tests (bodiless 404, identical for
+  every rejection) plus a test that the filter is applied at controller level
+  with no action opting out;
+- local inventory guard: an unknown channel or language returns an empty
+  inventory without running a query;
 - comparer: both empty; local-only (`MissingOnTarget`); remote-only
   (`ExtraOnTarget`); equal timestamps; newer local; newer remote; both null;
   local-null/remote-present; local-present/remote-null; duplicate GUIDs within
@@ -498,8 +538,9 @@ repository's established convention):
   target produces `TargetAvailable = false` and is never silently diffed as an
   empty inventory;
 - client: correct route and query string, secret header attached, successful
-  envelope deserialization, non-2xx status maps to `Rejected`/`Error` rather
-  than throwing, simulated network failure maps to `Unreachable`;
+  envelope deserialization, non-2xx status maps to `Rejected` rather than
+  throwing, an unreadable 2xx body (HTML, truncated JSON, JSON `null`) maps to
+  `Error`, simulated network failure maps to `Unreachable`;
 - DI registration: resolves every registered interface without error; calling
   `AddContentSyncToolkit` twice remains idempotent.
 
