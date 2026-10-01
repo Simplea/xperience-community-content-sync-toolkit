@@ -1,5 +1,6 @@
 using Kentico.Xperience.Admin.Base;
 
+using XperienceCommunity.ContentSyncToolkit.Inventory;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 namespace XperienceCommunity.ContentSyncToolkit.Admin;
@@ -145,6 +146,24 @@ internal static class ContentSyncStatusListingSupport
     public static string ContentTypeName(ContentSyncStatusItem item) => (item.Local ?? item.Remote)?.ContentTypeName ?? string.Empty;
 
     public static DateTime? LastPublishedWhen(ContentSyncStatusItem item) => (item.Local ?? item.Remote)?.LastPublishedWhen;
+
+    // Explains a status that involves an unpublished item, so "Out of date on target" isn't
+    // ambiguous between newer edits and a different publish state. Null for the ordinary cases.
+    public static string? StatusTooltip(ContentSyncStatusItem item)
+    {
+        bool localUnpublished = item.Local is not null && ContentInventoryVersionStatus.IsUnpublished(item.Local.VersionStatus);
+        bool remoteUnpublished = item.Remote is not null && ContentInventoryVersionStatus.IsUnpublished(item.Remote.VersionStatus);
+
+        return (item.Local, item.Remote) switch
+        {
+            (not null, not null) when localUnpublished && !remoteUnpublished => "Unpublished here, still published on the target.",
+            (not null, not null) when !localUnpublished && remoteUnpublished => "Published here, unpublished on the target.",
+            (not null, not null) when localUnpublished => "Unpublished on both instances.",
+            (not null, null) when localUnpublished => "Unpublished here, and not on the target yet.",
+            (null, not null) when remoteUnpublished => "Unpublished on the target, and not on this instance.",
+            _ => null,
+        };
+    }
 
     public static string StatusLabel(ContentSyncStatus status) => status switch
     {

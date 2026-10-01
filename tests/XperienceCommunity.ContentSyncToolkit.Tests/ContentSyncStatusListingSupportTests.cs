@@ -28,6 +28,35 @@ public class ContentSyncStatusListingSupportTests
         ContentInventoryItem? remote = null) =>
         new(Guid.NewGuid(), status, local, remote);
 
+    private static ContentInventoryItem Versioned(string versionStatus) =>
+        new(Guid.NewGuid(), ContentInventoryItemKind.WebPage, "T", "S", "en", "/p", null, versionStatus);
+
+    [TestCase("Unpublished", "Published", "Unpublished here, still published on the target.")]
+    [TestCase("Published", "Unpublished", "Published here, unpublished on the target.")]
+    [TestCase("Unpublished", "Unpublished", "Unpublished on both instances.")]
+    [TestCase("Unpublished", null, "Unpublished here, and not on the target yet.")]
+    [TestCase(null, "Unpublished", "Unpublished on the target, and not on this instance.")]
+    public void StatusTooltip_ExplainsAnUnpublishedSide(string? local, string? remote, string expected)
+    {
+        var item = CreateStatusItem(ContentSyncStatus.OutOfDateOnTarget,
+            local: local is null ? null : Versioned(local),
+            remote: remote is null ? null : Versioned(remote));
+
+        Assert.That(ContentSyncStatusListingSupport.StatusTooltip(item), Is.EqualTo(expected));
+    }
+
+    [TestCase("Published", "Published")]
+    [TestCase("Published", null)]
+    [TestCase(null, "Published")]
+    public void StatusTooltip_IsNull_WhenNothingIsUnpublished(string? local, string? remote)
+    {
+        var item = CreateStatusItem(ContentSyncStatus.InSync,
+            local: local is null ? null : Versioned(local),
+            remote: remote is null ? null : Versioned(remote));
+
+        Assert.That(ContentSyncStatusListingSupport.StatusTooltip(item), Is.Null);
+    }
+
     [Test]
     public void ApplyStatusFilter_ReturnsAllItems_WhenFilterIsNull()
     {

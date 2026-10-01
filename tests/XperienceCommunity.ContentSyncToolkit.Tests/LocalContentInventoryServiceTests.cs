@@ -29,6 +29,32 @@ public class LocalContentInventoryServiceTests
         Assert.That(items, Is.Empty);
     }
 
+    private static ContentInventoryItem Item(Guid guid, string versionStatus) =>
+        new(guid, ContentInventoryItemKind.WebPage, "T", "S", "en", "/p", null, versionStatus);
+
+    [Test]
+    public void Merge_AddsUnpublishedItems_AfterThePublishedOnes()
+    {
+        var published = Item(Guid.NewGuid(), "Published");
+        var unpublished = Item(Guid.NewGuid(), "Unpublished");
+
+        var merged = LocalContentInventoryService.Merge([published], [unpublished]);
+
+        Assert.That(merged, Is.EqualTo(new[] { published, unpublished }));
+    }
+
+    // Shouldn't happen (an item has one or the other), but a GUID must never be listed twice.
+    [Test]
+    public void Merge_KeepsThePublishedRow_WhenAGuidIsInBoth()
+    {
+        var guid = Guid.NewGuid();
+        var published = Item(guid, "Published");
+
+        var merged = LocalContentInventoryService.Merge([published], [Item(guid, "Unpublished")]);
+
+        Assert.That(merged, Is.EqualTo(new[] { published }));
+    }
+
     [Test]
     public async Task GetContentHubItemsAsync_UnknownLanguage_IsAnEmptyInventory()
     {

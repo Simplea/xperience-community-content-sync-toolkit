@@ -22,6 +22,10 @@ internal interface IContentSyncItemIdResolver
 
 internal sealed class ContentSyncItemIdResolver(IContentQueryExecutor contentQueryExecutor) : IContentSyncItemIdResolver
 {
+    // Latest versions and secured items, so every item the inventory lists (including unpublished and
+    // secured ones) resolves; an item's ID is the same in every version.
+    private static readonly ContentQueryExecutionOptions options = new() { ForPreview = true, IncludeSecuredItems = true };
+
     public async Task<IReadOnlyDictionary<Guid, int>> GetWebPageItemIdsAsync(
         string websiteChannelName, string languageName, IReadOnlyCollection<Guid> webPageItemGuids, CancellationToken cancellationToken)
     {
@@ -38,7 +42,8 @@ internal sealed class ContentSyncItemIdResolver(IContentQueryExecutor contentQue
         var ids = await contentQueryExecutor.GetWebPageResult(
             builder,
             container => (container.WebPageItemGUID, container.WebPageItemID),
-            cancellationToken: cancellationToken);
+            options,
+            cancellationToken);
 
         return ids.ToDictionary(id => id.WebPageItemGUID, id => id.WebPageItemID);
     }
@@ -62,7 +67,8 @@ internal sealed class ContentSyncItemIdResolver(IContentQueryExecutor contentQue
         var ids = await contentQueryExecutor.GetResult(
             builder,
             container => (container.ContentItemGUID, container.ContentItemID),
-            cancellationToken: cancellationToken);
+            options,
+            cancellationToken);
 
         return ids.ToDictionary(id => id.ContentItemGUID, id => id.ContentItemID);
     }

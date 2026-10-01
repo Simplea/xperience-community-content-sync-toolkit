@@ -25,17 +25,18 @@ public static class ContentSyncStatusComparer
             bool hasLocal = localByGuid.TryGetValue(guid, out var localItem);
             bool hasRemote = remoteByGuid.TryGetValue(guid, out var remoteItem);
 
-            results.Add(new ContentSyncStatusItem(
-                guid,
-                Classify(hasLocal, hasRemote, localItem, remoteItem),
-                localItem,
-                remoteItem));
+            var status = Classify(hasLocal, hasRemote, localItem, remoteItem);
+            if (status is not null)
+            {
+                results.Add(new ContentSyncStatusItem(guid, status.Value, localItem, remoteItem));
+            }
         }
 
         return results;
     }
 
-    private static ContentSyncStatus Classify(
+    // Null means the item is left out: there's nothing Content Sync would do with it.
+    private static ContentSyncStatus? Classify(
         bool hasLocal, bool hasRemote, ContentInventoryItem? local, ContentInventoryItem? remote)
     {
         if (!hasLocal)
@@ -43,12 +44,25 @@ public static class ContentSyncStatusComparer
             return ContentSyncStatus.ExtraOnTarget;
         }
 
+        bool localUnpublished = ContentInventoryVersionStatus.IsUnpublished(local!.VersionStatus);
+
         if (!hasRemote)
         {
-            return ContentSyncStatus.MissingOnTarget;
+            // Content Sync creates an unpublished page on the target, but makes no change for a new
+            // unpublished content-hub item.
+            return localUnpublished && local.Kind == ContentInventoryItemKind.ContentHubItem
+                ? null
+                : ContentSyncStatus.MissingOnTarget;
         }
 
-        var localPublished = local!.LastPublishedWhen;
+        // Unpublishing keeps LastPublishedWhen, so a publish-state difference is invisible to the
+        // timestamp rule below and has to be checked first.
+        if (localUnpublished != ContentInventoryVersionStatus.IsUnpublished(remote!.VersionStatus))
+        {
+            return ContentSyncStatus.OutOfDateOnTarget;
+        }
+
+        var localPublished = local.LastPublishedWhen;
         var remotePublished = remote!.LastPublishedWhen;
 
         if (localPublished is null)

@@ -130,8 +130,12 @@ answers the same question).
 
 **Column tooltips.** The Status and Last published column headers carry
 tooltips (`ColumnConfiguration.Tooltip`) explaining the four statuses and which
-instance the date comes from. Cells have no tooltip support in the listing
-template, so explanations live on the headers.
+instance the date comes from. Plain text cells have no tooltip, but the status
+tag does (`TagTableCellComponentProps.TooltipText`): when either side of an
+item is unpublished, the tag explains the publish-state difference (for
+example, "Unpublished here, still published on the target"), so Out of date
+on target isn't ambiguous. See the foundation's
+[Publication-state scope](content-inventory-foundation.md#publication-state-scope).
 
 **Click to open.** Each row with a local item links (`Row.Action`, a link
 action) to that item in Xperience's own editor: the page in its website
@@ -175,7 +179,8 @@ The chosen sort isn't remembered. Xperience's listing template keeps only the
 applied filters and search, per browser tab (`kxp.listingState` in session
 storage), and nothing about sorting; leaving the page and coming back, or
 Refresh, returns to the default. Remembering the sort (for example in a
-cookie, applied through `DefaultDirection`) is a possible follow-up.
+cookie, applied through `DefaultDirection`) was considered and decided
+against for now: the Status default covers the main use.
 
 ### Empty and unavailable states
 
@@ -480,10 +485,9 @@ the rows are built without an action when there's no local item).
 
 ## Out of scope
 
-- Items that have never been published. The table lists only content with a
-  published version, matching what Content Sync can act on — a newly created
-  or cloned item appears only once published. Unpublished items are a known
-  gap with a proposed resolution; see
+- Items that have never been published. The table lists published and
+  unpublished content, matching what Content Sync can act on — a newly created
+  or cloned item appears only once published. See
   [Publication-state scope](content-inventory-foundation.md#publication-state-scope).
 - Following the admin's own language switcher. `ListingPageBase`'s
   `GetCurrentContentLanguage()` is `private`, not `protected`, so it isn't

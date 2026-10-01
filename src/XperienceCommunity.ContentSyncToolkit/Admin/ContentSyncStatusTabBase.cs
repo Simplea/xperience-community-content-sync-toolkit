@@ -261,7 +261,7 @@ internal abstract class ContentSyncStatusTabBase(
             [
                 new StringCell { Value = ContentSyncStatusListingSupport.DisplayName(item) },
                 new StringCell { Value = ContentSyncStatusListingSupport.ContentTypeName(item) },
-                TagCell(ContentSyncStatusListingSupport.StatusLabel(item.Status), ContentSyncStatusListingSupport.StatusColor(item.Status)),
+                TagCell(ContentSyncStatusListingSupport.StatusLabel(item.Status), ContentSyncStatusListingSupport.StatusColor(item.Status), ContentSyncStatusListingSupport.StatusTooltip(item)),
                 new StringCell { Value = ContentSyncStatusListingSupport.LastPublishedWhen(item)?.ToString("g") ?? string.Empty },
             ],
         };
@@ -288,10 +288,10 @@ internal abstract class ContentSyncStatusTabBase(
             ],
         };
 
-    private static NamedComponentCell TagCell(string label, Color color) =>
+    private static NamedComponentCell TagCell(string label, Color color, string? tooltip = null) =>
         new()
         {
             Name = NamedComponentCellComponentNames.TAG_COMPONENT,
-            ComponentProps = new TagTableCellComponentProps { Label = label, Color = color },
+            ComponentProps = new TagTableCellComponentProps { Label = label, Color = color, TooltipText = tooltip },
         };
 }
