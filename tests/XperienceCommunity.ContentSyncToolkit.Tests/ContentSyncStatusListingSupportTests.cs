@@ -543,6 +543,25 @@ public class ContentSyncStatusListingSupportTests
         Assert.That(ContentSyncStatusListingSupport.StatusTooltip(Reordered(reorder)), Does.EndWith("To fix it, sync all pages on this level."));
     }
 
+    [TestCase(90, "which can be up to 90 seconds old.")]
+    [TestCase(1, "which can be up to 1 second old.")]
+    [TestCase(300, "which can be up to 5 minutes old.")]
+    [TestCase(7200, "which can be up to 2 hours old.")]
+    public void RefreshTooltip_SaysHowLongTheTargetsListIsReused(int seconds, string expected)
+    {
+        string tooltip = ContentSyncStatusListingSupport.RefreshTooltip(TimeSpan.FromSeconds(seconds));
+
+        Assert.That(tooltip, Does.Contain(expected));
+        Assert.That(tooltip, Does.StartWith("Reloads the target's status, "));
+        Assert.That(tooltip, Does.EndWith(" A sync can take about 30 seconds to reach the target."));
+    }
+
+    [Test]
+    public void RefreshTooltip_WithCachingOff_OnlyMentionsTheSyncDelay() =>
+        Assert.That(
+            ContentSyncStatusListingSupport.RefreshTooltip(TimeSpan.Zero),
+            Is.EqualTo("Reloads the target's status. A sync can take about 30 seconds to reach the target."));
+
     [Test]
     public void StatusLabel_SaysOrderDiffers_OnlyForAReorder()
     {

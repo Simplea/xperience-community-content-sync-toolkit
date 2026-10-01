@@ -290,6 +290,39 @@ internal static class ContentSyncStatusListingSupport
         ?? (page.TreePath is { } path ? path[(path.LastIndexOf('/') + 1)..] : null)
         ?? page.Name;
 
+    // Content Sync's restoration task applies a sync on the target every 30 seconds (Kentico's
+    // documentation), so a status checked right after a sync can still show the old state.
+    private const string SyncDelayHint = " A sync can take about 30 seconds to reach the target.";
+
+    /// <summary>
+    /// The Refresh button's tooltip: what it does, how long the target's list is otherwise reused
+    /// (<see cref="ContentSyncToolkitOptions.InventoryCacheDuration"/>), and when to use it.
+    /// </summary>
+    public static string RefreshTooltip(TimeSpan cacheDuration)
+    {
+        if (cacheDuration <= TimeSpan.Zero)
+        {
+            return "Reloads the target's status." + SyncDelayHint;
+        }
+
+        return $"Reloads the target's status, which can be up to {Describe(cacheDuration)} old." + SyncDelayHint;
+    }
+
+    // "90 seconds", "1 second", "5 minutes", "1 hour".
+    private static string Describe(TimeSpan duration)
+    {
+        if (duration.TotalSeconds < 120)
+        {
+            return Plural((int)Math.Round(duration.TotalSeconds), "second");
+        }
+
+        return duration.TotalMinutes < 120
+            ? Plural((int)Math.Round(duration.TotalMinutes), "minute")
+            : Plural((int)Math.Round(duration.TotalHours), "hour");
+    }
+
+    private static string Plural(int count, string unit) => count == 1 ? $"1 {unit}" : $"{count} {unit}s";
+
     /// <summary>
     /// The tag label: the status, except that a page out of date only because its level's order
     /// differs says so, since that's fixed differently (sync the whole level).
