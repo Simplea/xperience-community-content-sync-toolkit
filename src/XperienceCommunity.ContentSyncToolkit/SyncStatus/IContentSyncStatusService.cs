@@ -1,3 +1,5 @@
+using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
+
 namespace XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 /// <summary>
@@ -43,4 +45,14 @@ public interface IContentSyncStatusService
     /// <param name="cancellationToken">Cancellation instruction.</param>
     public Task<ContentSyncStatusResult> GetContentHubSyncStatusAsync(
         string workspaceName, string languageName, bool forceRefresh, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Compares this instance's content types, languages, website channels and workspaces with the
+    /// target's, as Content Sync matches them, and returns the ones the target is missing or has
+    /// differently. The status methods already attach the relevant issues to each item; this is
+    /// for an overview. The target's list is cached like an inventory.
+    /// </summary>
+    /// <param name="forceRefresh">As for the status methods.</param>
+    /// <param name="cancellationToken">Cancellation instruction.</param>
+    public Task<RequiredObjectsCheckResult> CheckRequiredObjectsAsync(bool forceRefresh, CancellationToken cancellationToken);
 }

@@ -3,6 +3,7 @@ using CMS.Membership;
 
 using Kentico.Xperience.Admin.Base;
 
+using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 using LoadDataSettings = Kentico.Xperience.Admin.Base.LoadDataSettings;
@@ -20,7 +21,9 @@ namespace XperienceCommunity.ContentSyncToolkit.Admin;
 internal abstract class ContentSyncStatusTabBase(
     ContentSyncStatusFilterModelBase filterModel,
     string nameColumnCaption,
+    RequiredObjectKind scopeKind,
     IContentSyncToolkitSettings settings,
+    IContentSyncStatusService syncStatusService,
     IContentSyncFilterOptionsProvider filterOptionsProvider,
     ContentSyncStatusRefreshRequestStore refreshRequestStore,
     IPageLinkGenerator pageLinkGenerator)
@@ -39,6 +42,13 @@ internal abstract class ContentSyncStatusTabBase(
 
     private const string LastPublishedTooltip =
         "When the item was last published on this instance, in your time zone. For items only on the target, when it was published there.";
+
+    // How long the page waits for the target's required objects before showing without the banner.
+    // The listing's own fetch reports an unreachable target.
+    private static readonly TimeSpan requiredObjectsBannerTimeout = TimeSpan.FromSeconds(5);
+
+    // The banner lists at most this many objects, then a count of the rest.
+    private const int MaxBannerIssues = 8;
 
     // Both filter models name their content type field the same; see ContentSyncStatusAdminWiringTests.
     private const string ContentTypeFilterFieldName = nameof(ContentSyncStatusPagesFilterModel.ContentType);
@@ -91,6 +101,8 @@ internal abstract class ContentSyncStatusTabBase(
 
     private bool IsSourceConfigured => settings.Source.TargetUrl is not null;
 
+    protected IContentSyncStatusService SyncStatusService => syncStatusService;
+
     // Banners belong to the page configuration, built before LoadData runs, so only states known
     // up front (configuration, available scopes) can be banners. See docs/specs/sync-status-admin-page.md.
     public override async Task ConfigurePage()
@@ -109,18 +121,76 @@ internal abstract class ContentSyncStatusTabBase(
                 ContentAsHtml = true,
             });
         }
-        else if ((await GetScopesAsync(CancellationToken.None)).Count == 0)
+        else
         {
-            PageConfiguration.Callouts.Add(new CalloutConfiguration
+            var scopes = await GetScopesAsync(CancellationToken.None);
+            if (scopes.Count == 0)
             {
-                Type = CalloutType.QuickTip,
-                Placement = CalloutPlacement.OnDesk,
-                Headline = NoScopesHeadline,
-                Content = NoScopesGuidance,
-            });
+                PageConfiguration.Callouts.Add(new CalloutConfiguration
+                {
+                    Type = CalloutType.QuickTip,
+                    Placement = CalloutPlacement.OnDesk,
+                    Headline = NoScopesHeadline,
+                    Content = NoScopesGuidance,
+                });
+            }
+            else if (await GetRequiredObjectsCalloutAsync(scopes) is { } requiredObjectsCallout)
+            {
+                PageConfiguration.Callouts.Add(requiredObjectsCallout);
+            }
         }
 
         await base.ConfigurePage();
+    }
+
+    // Warns before an editor tries a sync that would fail: the objects Content Sync needs that the
+    // target is missing or has differently. Content types and languages apply to both tabs; channels
+    // only to Pages and workspaces only to Content hub, limited to the ones this user can see. Best
+    // effort: if the target can't be asked in time, the page shows without the banner.
+    private async Task<CalloutConfiguration?> GetRequiredObjectsCalloutAsync(IReadOnlyList<ContentSyncScope> visibleScopes)
+    {
+        RequiredObjectsCheckResult check;
+        using var timeout = new CancellationTokenSource(requiredObjectsBannerTimeout);
+        try
+        {
+            check = await syncStatusService.CheckRequiredObjectsAsync(refreshRequestStore.IsRefreshRequested(TabKey), timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            EventLogService.LogException(nameof(ContentSyncStatusTabBase), "REQUIREDOBJECTS", ex);
+            return null;
+        }
+
+        var visibleScopeNames = visibleScopes.Select(scope => scope.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var issues = check.Issues
+            .Where(issue => issue.Object.Kind is RequiredObjectKind.ContentType or RequiredObjectKind.Language
+                || (issue.Object.Kind == scopeKind && visibleScopeNames.Contains(issue.Object.Name)))
+            .OrderBy(issue => issue.Object.Kind)
+            .ThenBy(issue => issue.Object.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (issues.Count == 0)
+        {
+            return null;
+        }
+
+        string more = issues.Count > MaxBannerIssues ? $"<li>and {issues.Count - MaxBannerIssues} more</li>" : string.Empty;
+
+        return new CalloutConfiguration
+        {
+            Type = CalloutType.FriendlyWarning,
+            Placement = CalloutPlacement.OnDesk,
+            Headline = "Some items can't be synced until the target is updated",
+            Content = "Content Sync doesn't transfer these, and fails for items that use them. The target:"
+                + "<ul>" + string.Concat(issues.Take(MaxBannerIssues).Select(ContentSyncStatusListingSupport.IssueHtml)) + more + "</ul>"
+                + "A developer needs to deploy them to the target (CI/CD or a deployment package). "
+                + "The Status tooltip of each affected item says what it needs.",
+            ContentAsHtml = true,
+        };
     }
 
     // Header actions ignore a command's result, so the documented way to refresh the listing is
@@ -259,7 +329,7 @@ internal abstract class ContentSyncStatusTabBase(
             Cells =
             [
                 new StringCell { Value = ContentSyncStatusListingSupport.DisplayName(item) },
-                new StringCell { Value = ContentSyncStatusListingSupport.ContentTypeName(item) },
+                new StringCell { Value = ContentSyncStatusListingSupport.ContentTypeDisplayName(item) },
                 TagCell(ContentSyncStatusListingSupport.StatusLabel(item.Status), ContentSyncStatusListingSupport.StatusColor(item.Status), ContentSyncStatusListingSupport.StatusTooltip(item)),
                 // Kentico's own local date-time cell: the browser shows it in the editor's time zone.
                 LocalDateTimeCell(ContentSyncStatusListingSupport.LastPublishedWhen(item)),

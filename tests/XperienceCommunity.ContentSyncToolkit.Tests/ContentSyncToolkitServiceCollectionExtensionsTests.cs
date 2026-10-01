@@ -1,10 +1,13 @@
 using CMS.ContentEngine;
+using CMS.Core;
 using CMS.DataEngine;
+using CMS.Workspaces;
 
 using Microsoft.Extensions.DependencyInjection;
 
 using XperienceCommunity.ContentSyncToolkit.Http;
 using XperienceCommunity.ContentSyncToolkit.Inventory;
+using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 namespace XperienceCommunity.ContentSyncToolkit.Tests;
@@ -21,6 +24,8 @@ public class ContentSyncToolkitServiceCollectionExtensionsTests
         services.AddSingleton<IContentQueryExecutor>(_ => null!);
         services.AddSingleton<IInfoProvider<ChannelInfo>>(_ => null!);
         services.AddSingleton<IInfoProvider<ContentLanguageInfo>>(_ => null!);
+        services.AddSingleton<IInfoProvider<WorkspaceInfo>>(_ => null!);
+        services.AddSingleton<IEventLogService>(_ => null!);
 
         return services;
     }
@@ -61,6 +66,7 @@ public class ContentSyncToolkitServiceCollectionExtensionsTests
         using var provider = services.BuildServiceProvider();
 
         Assert.That(provider.GetRequiredService<ILocalContentInventoryService>(), Is.Not.Null);
+        Assert.That(provider.GetRequiredService<ILocalRequiredObjectsService>(), Is.Not.Null);
         Assert.That(provider.GetRequiredService<IContentInventoryCache>(), Is.Not.Null);
         Assert.That(provider.GetRequiredService<IContentSyncTargetSecretValidator>(), Is.Not.Null);
         Assert.That(provider.GetRequiredService<IContentInventoryClient>(), Is.Not.Null);

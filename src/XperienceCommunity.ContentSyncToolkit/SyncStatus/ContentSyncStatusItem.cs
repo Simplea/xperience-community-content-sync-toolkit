@@ -1,4 +1,5 @@
 using XperienceCommunity.ContentSyncToolkit.Inventory;
+using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 
 namespace XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
@@ -28,6 +29,14 @@ public sealed record ContentSyncStatusItem(
     /// for every other status.
     /// </summary>
     public ContentSyncStatusReason Reason { get; init; }
+
+    /// <summary>
+    /// For an item Content Sync still has to push (<see cref="ContentSyncStatus.MissingOnTarget"/> or
+    /// <see cref="ContentSyncStatus.OutOfDateOnTarget"/>), the objects it needs that the target is
+    /// missing or has differently, so a sync of it would fail. Empty when there are none, for every
+    /// other status, and when the target couldn't be checked.
+    /// </summary>
+    public IReadOnlyList<RequiredObjectIssue> RequiredObjectIssues { get; init; } = [];
 }
 
 /// <summary>Why an item is <see cref="ContentSyncStatus.OutOfDateOnTarget"/>.</summary>

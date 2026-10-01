@@ -117,7 +117,8 @@ The application has two tabs: **Pages** (one website channel at a time) and
   - **Content type**.
   - **Published from** / **Published to**: whole days, both included, matched
     against the Last published column.
-- **Search** by path (Pages) or name (Content hub); press Enter to apply.
+- **Search** by path (Pages) or name (Content hub, the name the Content hub
+  shows); press Enter to apply.
 - **Sort** by clicking a column header. The list starts sorted by **Status**,
   so items needing action come first: Missing on target, then Out of date on
   target, then Extra on target, then In sync. Within each status, the most
@@ -143,6 +144,14 @@ Other states:
 - **A warning banner saying the application isn't configured**: Content Sync
   isn't configured as a source on this instance (`Source:Enabled` with a
   `Source:TargetUrl`).
+- **A warning banner saying some items can't be synced**: the target is
+  missing a content type, language, channel or workspace this instance has, or
+  has it differently (different fields, or recreated by hand instead of
+  deployed). Content Sync doesn't transfer these and fails for items that use
+  them, so a developer has to deploy them to the target first (CI/CD or a
+  deployment package). The status tooltip of each affected item starts with
+  "Can't sync yet" and says what it needs. Linked items, reusable field
+  schemas, image variants, member roles and project code aren't checked.
 - **A "Target unavailable" row**: the target couldn't be reached, rejected the
   secret, or doesn't have Content Sync's target role enabled.
 - **No rows**: the channel or workspace has no published content in the

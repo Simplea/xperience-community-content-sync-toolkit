@@ -85,6 +85,13 @@ IContentSyncStatusService                            ContentInventoryController
   remote inventory by GUID and classifies each item as in sync, missing on
   target, out of date on target, or extra on target (present on target but not
   locally).
+- **Required objects** (`ILocalRequiredObjectsService`,
+  `RequiredObjectsComparer`) — Content Sync doesn't transfer content types,
+  languages, channels or workspaces, and fails for items whose objects the
+  target lacks or has differently. The target lists its own on a second
+  endpoint, and the source compares them the way Content Sync matches them (by
+  GUID, languages by code name, content types also by a hash of their field
+  definition), so editors are warned before a sync would fail.
 - **`IContentSyncStatusService`** — the orchestrator both editor-facing features
   call. Ties together the local query, the remote client (with a short cache on
   just the remote fetch, not the whole diff), and the comparer.

@@ -88,11 +88,18 @@ Content sync status
 
 - The **Content hub** sub-page replaces the **Channel** filter with a
   **Workspace** filter and drops the **Path / Name** column's path prefix in
-  favor of a flat item name (content-hub items have no tree path).
+  favor of a flat item name (content-hub items have no tree path): the name
+  the Content hub shows ("Guatemala Finca El Injerto"), not the code name
+  (`GuatemalaFincaElInjerto-k3bwkxk3`). See the foundation's
+  [Display names](content-inventory-foundation.md#display-names).
+- The **Content type** column shows the type's display name ("Coffee
+  product"), and sorts by it. Both fall back to code names for items from a
+  target on an older toolkit version.
 - **Search** uses the listing's own built-in search box (`LoadDataSettings.SearchTerm`,
   applied server-side in `LoadData` when the editor presses Enter) — not
   a custom form field, and not purely client-side JavaScript filtering over one
-  fetched payload.
+  fetched payload. It matches what the Path / Name column shows: the path for
+  pages, the display name for content hub items.
 - No channel/workspace selection yet (first load, filter never applied)
   defaults to the first channel/workspace the scope provider returns, so the
   table is never empty-by-default on first visit.
@@ -143,10 +150,12 @@ the comparer's `Reason` and each side's publication state:
 | Published more recently | "Published here after the target's copy." |
 | Only on the target | "Only on the target. Content Sync can't delete content: if it was deleted here, delete it on the target." |
 | Unpublished on both, or only here | "Unpublished on both instances." / "Unpublished here, and not on the target yet." |
+| Can't sync yet (Missing or Out of date, and the target lacks an object the item needs) | "Can't sync yet: the target has no content type Event; has different fields for content type Image. A developer needs to deploy it to the target first." Comes before the item's other tooltip, if any. |
 
 See the foundation's
-[Comparison rules](content-inventory-foundation.md#comparison-rules) and
-[Publication-state scope](content-inventory-foundation.md#publication-state-scope).
+[Comparison rules](content-inventory-foundation.md#comparison-rules),
+[Publication-state scope](content-inventory-foundation.md#publication-state-scope) and
+[Required objects](content-inventory-foundation.md#required-objects).
 
 **Dates.** The Last published column shows each editor's own time zone, like
 the rest of the administration ("All time values in the administration are
@@ -218,6 +227,7 @@ before the table loads can be banners. On `30.8.0` callouts offer two styles,
 | --- | --- | --- |
 | **Not configured as a source** (Content Sync's source role not enabled with a target URL) | Yes | `FriendlyWarning` banner explaining that the toolkit isn't configured as a source, linking to the [Usage Guide](../Usage-Guide.md). The table loads no rows and no fetch is attempted. |
 | **No channels or workspaces** (a brand-new instance, or none the user can access) | Yes | `QuickTip` banner pointing to **Configuration → Channel management** or **Workspaces**, as plain text. Kentico's admin URLs aren't a public API, so the banner doesn't hardcode a link. |
+| **Target is missing objects Content Sync needs** (see the foundation's [Required objects](content-inventory-foundation.md#required-objects)) | Yes — independent of the selected scope | `FriendlyWarning` banner, "Some items can't be synced until the target is updated", listing up to 8 objects (then "and N more"): content types and languages on both tabs, plus website channels on Pages and workspaces on Content hub, limited to the ones the user can see. Each says how the target differs (missing, different fields, or recreated with another GUID). The page waits at most 5 seconds for the target; if it can't answer in time, or runs an older toolkit version, the page shows without the banner. Refresh also refreshes the banner. |
 | **Target unavailable** (`TargetAvailable = false`) | No — depends on the selected scope | A single table row with a red "Target unavailable" status tag and an explanation. The table must not fall back to showing local content as if it were unclassified. |
 | **Selected scope no longer exists** (deleted after the filter was applied) | No | A single table row, "The selected channel/workspace no longer exists", with a grey "Not available" tag. |
 | **Loading failed** (any unexpected exception in `LoadData`) | No | A single table row, "Sync status couldn't be loaded. Try Refresh; details are in the event log.", with a red "Error" tag. The exception is written to the event log, never shown. |

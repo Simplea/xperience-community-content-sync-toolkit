@@ -53,4 +53,17 @@ public sealed record ContentInventoryItem(
     /// <see langword="null"/> for content-hub items, and from a target on schema version 1.
     /// </summary>
     public int? Order { get; init; }
+
+    /// <summary>
+    /// The item's display name in this language (<c>ContentItemLanguageMetadataDisplayName</c>), as
+    /// editors see it in Xperience. <see langword="null"/> from a target on schema version 2 or
+    /// earlier; fall back to <see cref="Name"/>.
+    /// </summary>
+    public string? DisplayName { get; init; }
+
+    /// <summary>
+    /// The content type's display name. <see langword="null"/> from a target on schema version 2 or
+    /// earlier; fall back to <see cref="ContentTypeName"/>.
+    /// </summary>
+    public string? ContentTypeDisplayName { get; init; }
 }

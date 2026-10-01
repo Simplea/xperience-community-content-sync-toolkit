@@ -116,7 +116,7 @@ public class ContentSyncTargetSecretFilterTests
             .ToList();
 
         Assert.That(controllerFilter, Is.Not.Null);
-        Assert.That(actions.Select(action => action.Name), Is.EquivalentTo(new[] { "GetWebPages", "GetContentHubItems" }));
+        Assert.That(actions.Select(action => action.Name), Is.EquivalentTo(new[] { "GetWebPages", "GetContentHubItems", "GetRequiredObjects" }));
         Assert.That(actions, Has.None.Matches<System.Reflection.MethodInfo>(action => action.GetCustomAttributes(typeof(IFilterMetadata), inherit: true).Length > 0));
     }
 

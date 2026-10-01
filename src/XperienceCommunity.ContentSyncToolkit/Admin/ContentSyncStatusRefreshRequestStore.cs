@@ -16,4 +16,7 @@ internal sealed class ContentSyncStatusRefreshRequestStore
     public void RequestRefresh(string tabKey) => pendingRefreshes[tabKey] = true;
 
     public bool ConsumeRefreshRequest(string tabKey) => pendingRefreshes.TryRemove(tabKey, out _);
+
+    /// <summary>Whether a refresh is pending, without consuming it: the page's banners are built before LoadData.</summary>
+    public bool IsRefreshRequested(string tabKey) => pendingRefreshes.ContainsKey(tabKey);
 }

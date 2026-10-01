@@ -1,11 +1,12 @@
 using XperienceCommunity.ContentSyncToolkit.Inventory;
+using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 
 namespace XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 /// <summary>
-/// Short-TTL cache for successfully fetched remote inventories only. Local inventory is never
-/// cached (always re-queried fresh), and failed fetches are never cached either — a briefly
-/// unreachable target should be retried on the very next status check rather than staying
+/// Short-TTL cache for successfully fetched remote inventories and required objects only. Local
+/// data is never cached (always re-queried fresh), and failed fetches are never cached either — a
+/// briefly unreachable target should be retried on the very next status check rather than staying
 /// reported as unavailable for a full TTL after it recovers.
 /// </summary>
 public interface IContentInventoryCache
@@ -18,4 +19,9 @@ public interface IContentInventoryCache
     /// always misses.
     /// </summary>
     public void Set(string key, IReadOnlyList<ContentInventoryItem> items, TimeSpan ttl);
+
+    public bool TryGetRequiredObjects(out IReadOnlyList<RequiredObject> objects);
+
+    /// <summary>As <see cref="Set"/>, for the target's required objects.</summary>
+    public void SetRequiredObjects(IReadOnlyList<RequiredObject> objects, TimeSpan ttl);
 }

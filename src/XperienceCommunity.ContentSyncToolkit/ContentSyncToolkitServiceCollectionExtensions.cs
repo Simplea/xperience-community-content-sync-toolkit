@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using XperienceCommunity.ContentSyncToolkit.Http;
 using XperienceCommunity.ContentSyncToolkit.Inventory;
+using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 namespace XperienceCommunity.ContentSyncToolkit;
@@ -35,6 +36,7 @@ public static class ContentSyncToolkitServiceCollectionExtensions
         services.TryAddSingleton<IContentSyncToolkitSettings, ContentSyncToolkitSettings>();
         services.TryAddSingleton<IContentScopeLookup, ContentScopeLookup>();
         services.TryAddSingleton<ILocalContentInventoryService, LocalContentInventoryService>();
+        services.TryAddSingleton<ILocalRequiredObjectsService, LocalRequiredObjectsService>();
         services.TryAddSingleton<IContentSyncTargetSecretValidator, ContentSyncTargetSecretValidator>();
         services.TryAddSingleton<IContentInventoryCache, ContentInventoryCache>();
         services.TryAddScoped<IContentSyncStatusService, ContentSyncStatusService>();

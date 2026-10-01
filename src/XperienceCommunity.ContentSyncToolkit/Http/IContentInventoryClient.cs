@@ -10,4 +10,7 @@ public interface IContentInventoryClient
     public Task<ContentInventoryFetchResult> GetWebPagesAsync(string channelName, string languageName, CancellationToken cancellationToken);
 
     public Task<ContentInventoryFetchResult> GetContentHubItemsAsync(string workspaceName, string languageName, CancellationToken cancellationToken);
+
+    /// <summary>The target's content types, languages, website channels and workspaces.</summary>
+    public Task<RequiredObjectsFetchResult> GetRequiredObjectsAsync(CancellationToken cancellationToken);
 }
