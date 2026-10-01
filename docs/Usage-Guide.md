@@ -16,7 +16,7 @@ Install the toolkit on **both** instances:
   items' identities and publish timestamps. No field values leave the
   instance.
 - The **source** compares its own content with the target's inventory and
-  shows the result in the **Content sync status** admin application.
+  shows the result in the **Sync status** admin application.
 
 An instance can be a source, a target, or both. Content Sync itself requires
 source and target to run the same Xperience version; run the same toolkit
@@ -35,7 +35,7 @@ builder.Services.Configure<ContentSyncToolkitOptions>(
     builder.Configuration.GetSection("ContentSyncToolkit"));
 
 // Optional: RequestTimeout and InventoryCacheDuration (see below).
-// Source instances only: adds the Content sync status admin application.
+// Source instances only: adds the Sync status admin application.
 builder.Services.AddContentSyncToolkitAdmin();
 ```
 
@@ -84,10 +84,10 @@ Two optional toolkit settings tune the source's requests:
 
 ## Give editors access
 
-The **Content sync status** application (under **Configuration**) uses
+The **Sync status** application (under **Content management**) uses
 Xperience's standard **View** permission. Administrators have it
 automatically. For other users, open **Role management**, edit a role,
-**Add permission set**, and choose **For** *Content sync status* **allow users
+**Add permission set**, and choose **For** *Sync status* **allow users
 to** *View*. Users without it don't see the application, and direct
 navigation to it is refused.
 
@@ -98,11 +98,11 @@ itself:
 - **Content hub** lists only workspaces whose content items they can view.
 
 So a role with access to one workspace sees only that workspace here, even
-with View on Content sync status. Access to individual pages (page-level
+with View on Sync status. Access to individual pages (page-level
 permissions within a channel) isn't checked; anyone who can view a channel
 sees the sync status of all its pages.
 
-## Use the Content sync status application
+## Use the Sync status application
 
 The application has two tabs: **Pages** (one website channel at a time) and
 **Content hub** (one workspace at a time).
