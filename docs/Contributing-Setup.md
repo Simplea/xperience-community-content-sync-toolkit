@@ -89,6 +89,46 @@ status** (`/admin/content-sync-status`). That requires
 `builder.Services.AddContentSyncToolkitAdmin()` in Program.cs and a valid
 license key on each instance.
 
+#### Connecting Xperience's own Content Sync
+
+The steps above are enough to test the toolkit's comparison. To check a real
+sync end to end (for example, that syncing a page moves it from **Missing on
+target** to **In sync**), also connect Xperience's built-in Content Sync
+between the two instances. Kentico requires the target on **HTTPS with a
+certificate the source trusts**, and the same Xperience version on both.
+
+1. Trust the .NET development certificate once per machine (Windows asks for
+   confirmation):
+
+   ```powershell
+   dotnet dev-certs https --trust
+   ```
+
+2. Give the target an HTTPS address as well, and enable Content Sync on both
+   with the same secret of at least 32 characters. Program.cs binds
+   `ContentSynchronizationOptions` from the `ContentSynchronization` section,
+   so these are environment variables too:
+
+   ```powershell
+   # Terminal 1 — target (in addition to the variables above)
+   $env:ASPNETCORE_URLS = "http://localhost:27310;https://localhost:27311"
+   $env:ContentSynchronization__Target__Enabled = "true"
+   $env:ContentSynchronization__Target__Secret = "<content sync secret, 32+ characters>"
+
+   # Terminal 2 — source (in addition to the variables above)
+   $env:ContentSynchronization__Source__Enabled = "true"
+   $env:ContentSynchronization__Source__Secret = "<content sync secret, 32+ characters>"
+   $env:ContentSynchronization__Source__TargetUrl = "https://localhost:27311"
+   ```
+
+   The toolkit can keep using the target's HTTP address; only Content Sync
+   needs HTTPS.
+
+3. On the source, use Xperience's **Sync** actions (for example, **Sync this
+   page** on a page). The target applies synchronized content through its
+   "Content sync restoration" scheduled task, which runs every 30 seconds.
+   Then use **Refresh** on the source's **Content sync status** page.
+
 `kentico-xperience-dbmanager` writes the connection string it creates directly
 into `appsettings.json`. Since both instances share one project, capture each
 generated connection string immediately after creating its database and run
