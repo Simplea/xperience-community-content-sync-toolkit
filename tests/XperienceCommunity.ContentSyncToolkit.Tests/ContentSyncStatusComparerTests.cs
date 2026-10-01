@@ -21,6 +21,110 @@ public class ContentSyncStatusComparerTests
         Guid guid, ContentInventoryItemKind kind, string versionStatus, DateTime? lastPublishedWhen = null) =>
         new(guid, kind, "Test.ContentType", "TestScope", "en-US", kind == ContentInventoryItemKind.WebPage ? "/Test" : null, lastPublishedWhen, versionStatus);
 
+    private static ContentInventoryItem Page(Guid guid, string treePath, int? order, DateTime? lastPublishedWhen = null) =>
+        new(guid, ContentInventoryItemKind.WebPage, "Test.ContentType", "TestScope", "en-US", treePath, lastPublishedWhen ?? earlier, "Published")
+        {
+            Order = order,
+        };
+
+    [Test]
+    public void Compare_SetsTheReason_ForEachOutOfDateCause()
+    {
+        Guid newer = Guid.NewGuid(), state = Guid.NewGuid(), same = Guid.NewGuid();
+
+        var result = ContentSyncStatusComparer.Compare(
+            [CreateItem(newer, later), CreateItem(state, ContentInventoryItemKind.WebPage, "Unpublished", earlier), CreateItem(same, earlier)],
+            [CreateItem(newer, earlier), CreateItem(state, ContentInventoryItemKind.WebPage, "Published", earlier), CreateItem(same, earlier)]);
+
+        var reasons = result.ToDictionary(item => item.Guid, item => item.Reason);
+        Assert.That(reasons[newer], Is.EqualTo(ContentSyncStatusReason.PublishedMoreRecently));
+        Assert.That(reasons[state], Is.EqualTo(ContentSyncStatusReason.PublishStateDiffers));
+        Assert.That(reasons[same], Is.EqualTo(ContentSyncStatusReason.None));
+    }
+
+    // Moving a page changes its path but not its publish date.
+    [Test]
+    public void Compare_PageWithADifferentTreePath_IsOutOfDate_AsMoved()
+    {
+        var guid = Guid.NewGuid();
+
+        var result = ContentSyncStatusComparer.Compare([Page(guid, "/Store/Coffee", 1)], [Page(guid, "/Articles/Coffee", 1)]);
+
+        Assert.That(result.Single().Status, Is.EqualTo(ContentSyncStatus.OutOfDateOnTarget));
+        Assert.That(result.Single().Reason, Is.EqualTo(ContentSyncStatusReason.Moved));
+    }
+
+    [Test]
+    public void Compare_TreePathCase_IsNotAMove()
+    {
+        var guid = Guid.NewGuid();
+
+        var result = ContentSyncStatusComparer.Compare([Page(guid, "/Articles/Coffee", 1)], [Page(guid, "/articles/coffee", 1)]);
+
+        Assert.That(result.Single().Status, Is.EqualTo(ContentSyncStatus.InSync));
+    }
+
+    // Kentico needs every page on the level synced to transfer an order change, so all in-sync
+    // pages on that level are marked.
+    [Test]
+    public void Compare_SiblingsInADifferentOrder_MarksTheWholeLevelAsReordered()
+    {
+        Guid a = Guid.NewGuid(), b = Guid.NewGuid(), c = Guid.NewGuid(), other = Guid.NewGuid();
+
+        var result = ContentSyncStatusComparer.Compare(
+            [Page(a, "/Articles/A", 1), Page(b, "/Articles/B", 2), Page(c, "/Articles/C", 3), Page(other, "/Store/X", 1)],
+            [Page(a, "/Articles/A", 2), Page(b, "/Articles/B", 1), Page(c, "/Articles/C", 3), Page(other, "/Store/X", 1)]);
+
+        var byGuid = result.ToDictionary(item => item.Guid);
+        Assert.That(new[] { a, b, c }.Select(guid => byGuid[guid].Reason), Is.All.EqualTo(ContentSyncStatusReason.Reordered));
+        Assert.That(new[] { a, b, c }.Select(guid => byGuid[guid].Status), Is.All.EqualTo(ContentSyncStatus.OutOfDateOnTarget));
+        Assert.That(byGuid[other].Status, Is.EqualTo(ContentSyncStatus.InSync), "another level is unaffected");
+    }
+
+    // A page that exists on only one side shifts its later siblings' order values; that alone isn't
+    // a reorder, because the relative order of the shared pages is the same.
+    [Test]
+    public void Compare_OrderValuesShiftedByAPageOnOnlyOneSide_IsNotAReorder()
+    {
+        Guid a = Guid.NewGuid(), extra = Guid.NewGuid(), b = Guid.NewGuid(), c = Guid.NewGuid();
+
+        var result = ContentSyncStatusComparer.Compare(
+            [Page(a, "/Articles/A", 1), Page(extra, "/Articles/New", 2), Page(b, "/Articles/B", 3), Page(c, "/Articles/C", 4)],
+            [Page(a, "/Articles/A", 1), Page(b, "/Articles/B", 2), Page(c, "/Articles/C", 3)]);
+
+        var byGuid = result.ToDictionary(item => item.Guid);
+        Assert.That(new[] { a, b, c }.Select(guid => byGuid[guid].Status), Is.All.EqualTo(ContentSyncStatus.InSync));
+        Assert.That(byGuid[extra].Status, Is.EqualTo(ContentSyncStatus.MissingOnTarget));
+    }
+
+    // A level that's reordered keeps a page's more specific reason: it's already out of date.
+    [Test]
+    public void Compare_Reorder_DoesNotOverrideAnotherReason()
+    {
+        Guid a = Guid.NewGuid(), b = Guid.NewGuid();
+
+        var result = ContentSyncStatusComparer.Compare(
+            [Page(a, "/Articles/A", 1, later), Page(b, "/Articles/B", 2)],
+            [Page(a, "/Articles/A", 2), Page(b, "/Articles/B", 1)]);
+
+        var byGuid = result.ToDictionary(item => item.Guid);
+        Assert.That(byGuid[a].Reason, Is.EqualTo(ContentSyncStatusReason.PublishedMoreRecently));
+        Assert.That(byGuid[b].Reason, Is.EqualTo(ContentSyncStatusReason.Reordered));
+    }
+
+    // A target on schema version 1 sends no order, so a level can't be compared.
+    [Test]
+    public void Compare_MissingOrderOnTheTarget_IsNotAReorder()
+    {
+        Guid a = Guid.NewGuid(), b = Guid.NewGuid();
+
+        var result = ContentSyncStatusComparer.Compare(
+            [Page(a, "/Articles/A", 1), Page(b, "/Articles/B", 2)],
+            [Page(a, "/Articles/A", null), Page(b, "/Articles/B", null)]);
+
+        Assert.That(result.Select(item => item.Status), Is.All.EqualTo(ContentSyncStatus.InSync));
+    }
+
     private static ContentSyncStatus? StatusOf(ContentInventoryItem? local, ContentInventoryItem? remote)
     {
         var result = ContentSyncStatusComparer.Compare(local is null ? [] : [local], remote is null ? [] : [remote]);

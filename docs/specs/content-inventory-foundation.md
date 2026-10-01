@@ -121,17 +121,37 @@ public sealed record ContentInventoryItem(
     string ScopeName,             // website channel name or workspace name
     string LanguageName,
     string? TreePath,             // web pages only; null for content-hub items
-    DateTime? LastPublishedWhen,  // UTC
+    DateTime? LastPublishedWhen,  // UTC since schema version 2; see Time zones
     string? VersionStatus)
 {
     public string Name { get; init; } = string.Empty;  // WebPageItemName / ContentItemName
+    public int? Order { get; init; }                   // WebPageItemOrder; pages only, schema 2
 }
 ```
 
-`Name` was added after the first version as an init-only property rather than a
-positional parameter, so the positional constructor stays source- and
-binary-compatible. It carries the item's code name for display, which
-content-hub items need because they have no tree path.
+`Name` and `Order` were added after the first version as init-only properties
+rather than positional parameters, so the positional constructor stays source-
+and binary-compatible. `Name` carries the item's code name for display, which
+content-hub items need because they have no tree path. `Order` is the page's
+position among its siblings, so a reorder can be detected (see Comparison
+rules).
+
+### Time zones
+
+Xperience stores date and time values in the time zone of the **server** the
+application runs on, and the content query returns them with an unspecified
+kind (confirmed live: the database held `20:04` server time, UTC−5, for a
+publish at `01:04` UTC). Schema version 1 of this spec assumed UTC and sent the
+values unchanged, so two instances in different time zones compared wrong
+moments and "out of date" could flip either way; it only worked because both
+rig instances shared a machine.
+
+Since schema version 2, `ContentInventoryTime.ToUtc` converts every
+`LastPublishedWhen` to UTC when the inventory is built, and the endpoint sends
+it with a `Z` suffix. The source normalizes what it receives the same way: a
+value without a time zone, which a target on schema version 1 sends, is taken
+as the source's own local time — exactly how it was compared before, so a mixed
+pair is no worse than it was.
 
 `VersionStatus` is a plain string, not Kentico's `VersionStatus` enum, so the
 wire contract does not couple to Kentico's internal type layout across
@@ -143,9 +163,11 @@ potentially different versions running on the source and target.
 - `GET .../web-pages?channelName={name}&languageName={name}` and
   `GET .../content-hub-items?workspaceName={name}&languageName={name}`.
 - Required header: `X-ContentSyncToolkit-Secret`.
-- Response body: `{ SchemaVersion: 1, GeneratedAtUtc, Items: ContentInventoryItem[] }`.
+- Response body: `{ SchemaVersion: 2, GeneratedAtUtc, Items: ContentInventoryItem[] }`.
   `SchemaVersion` is a forward-compatibility hook for a source and target
-  running different toolkit versions.
+  running different toolkit versions. `1`: publish dates in server-local time
+  without a time zone. `2`: publish dates in UTC, plus `Order` for pages.
+  Readers accept both; an older reader ignores `Order`.
 - Rejection (missing/wrong secret, or `Target.Enabled == false`): a bodiless
   `404`, which the host renders exactly as it renders any unknown URL — see
   Security and privacy.
@@ -219,11 +241,48 @@ inventory by GUID:
 | yes | yes | not null | null | `OutOfDateOnTarget` |
 | yes | yes | not null | not null | `OutOfDateOnTarget` if local > remote, else `InSync` (equal timestamps are `InSync`) |
 
-This is a timestamp comparison across two independently running servers and is
-therefore sensitive to clock skew between instances. No content hash is
-available to compare instead, since Content Sync itself only exposes publish
-timestamps. This is an accepted, documented limitation, not solved by this
-specification.
+Timestamps are compared in UTC (see Time zones). Publication state is checked
+before this table (see Publication-state scope), and two page rules after it,
+because moving or reordering a page changes neither its version nor its publish
+date (position lives on the page record, `WebPageItemTreePath` and
+`WebPageItemOrder`, not on its published version):
+
+- **Moved:** both sides have the page, the table says `InSync`, but
+  the tree paths differ (case-insensitively) → `OutOfDateOnTarget`.
+- **Reordered:** for each parent level, the pages present on both sides are
+  compared by their **relative** order. If it differs, every `InSync` page on
+  that level becomes `OutOfDateOnTarget`. Order values can't be compared
+  directly: a page that exists on only one side shifts every later sibling's
+  value. The whole level is marked because Kentico's
+  [Content sync](https://docs.kentico.com/documentation/business-users/content-sync#sync-moved-or-reordered-pages)
+  documentation says reordered or moved pages need **all** pages on the level
+  synced. Skipped when either side has no `Order` (a schema 1 target).
+
+Verified live on 31.7.2: dragging `(Clone) On Roasts` above `On Roasts` in the
+source's page tree swapped their `WebPageItemOrder` (7/6 → 6/7) and left both
+publish dates unchanged. The status page then showed every page under
+`/Articles` that also exists on the target as `OutOfDateOnTarget`, with "Page
+order on this level changed here. To reorder the target, sync all pages on this
+level."; `/Articles/Clone_Coffee_processing_techniques`, which exists only on
+the source, stayed `MissingOnTarget`. Before the reorder the same level was
+`InSync`, which also confirmed that a page present on only one side doesn't
+cause a false reorder. The move rule isn't verified live (no page was moved to
+another parent); it's covered by unit tests.
+
+Each `ContentSyncStatusItem` carries a `Reason` for `OutOfDateOnTarget`:
+`PublishedMoreRecently`, `PublishStateDiffers`, `Moved`, or `Reordered`
+(`None` otherwise), so consumers can explain the status.
+
+This remains a timestamp comparison across two independently running servers,
+so it's sensitive to clock skew between instances. No content hash is available
+to compare instead: Content Sync only exposes publish timestamps, and Kentico's
+public `HashCalculationHelper` only hashes its own compatibility reports. It
+also can't see edits made directly on the target after a sync (the target's
+copy then has the newer date, so it reads `InSync`); Kentico's
+[documentation](https://docs.kentico.com/documentation/business-users/content-sync#editing-process-when-using-content-sync)
+says to edit only on the source, so this is documented rather than solved.
+A content fingerprint (a hash of field values per item, computed on each side)
+would close it, and is deferred: see Out of scope.
 
 A failed remote fetch (target unreachable, rejected, or erroring) must never be
 treated as "target has zero items" — that would make every local item falsely
@@ -604,7 +663,18 @@ using the Dancing Goat integration host:
 - Any administration UI — covered by
   [sync-status-admin-page](sync-status-admin-page.md) and
   [content-tree-sync-indicators](content-tree-sync-indicators.md).
-- Content-hash-based staleness detection; publish-timestamp comparison only.
+- Content fingerprints (content-hash-based staleness detection); publish
+  timestamps, publication state, tree path, and sibling order only. Deferred,
+  not rejected: Kentico provides no content hash, so the toolkit would compute
+  one per item on each side (sending only the hash, never field values), with
+  the open questions of query cost and of values that legitimately differ
+  between instances (IDs, asset URLs). Lower priority because Kentico says to
+  edit only on the source.
+- Detecting deletions as such. Content Sync can't delete on the target
+  (Kentico's documentation: "Content synchronization cannot be used to delete
+  items on the target instance"), so an item deleted on the source is simply
+  `ExtraOnTarget`; consumers explain that it has to be deleted on the target by
+  hand.
 - Wire-level pagination or continuation tokens; internal looping produces one
   complete in-memory response.
 - Multi-target support; one source diffs against exactly one configured target
@@ -615,7 +685,10 @@ using the Dancing Goat integration host:
 - Triggering an actual Content Sync operation from the diff result — this
   foundation is read-only visibility. Initiating a sync remains Xperience's
   own **Sync this page**/**Sync with all subpages**/Content hub **Sync**
-  actions.
+  actions. Checked against the `30.8.0` API: the services that create a
+  synchronization (`ISynchronizationManager`, `ISynchronizationService`,
+  `ISynchronizationCommandManager`) are all in `.Internal` namespaces, which
+  Compatibility and API gate rules out, so this isn't possible with public APIs.
 
 ## References
 

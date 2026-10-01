@@ -1,5 +1,7 @@
 using System.Net.Http.Json;
 
+using XperienceCommunity.ContentSyncToolkit.Inventory;
+
 namespace XperienceCommunity.ContentSyncToolkit.Http;
 
 internal sealed class ContentInventoryClient(HttpClient httpClient) : IContentInventoryClient
@@ -61,6 +63,11 @@ internal sealed class ContentInventoryClient(HttpClient httpClient) : IContentIn
 
         return body is null
             ? ContentInventoryFetchResult.Failed(ContentInventoryFetchStatus.Error)
-            : ContentInventoryFetchResult.Success(body.Items);
+            : ContentInventoryFetchResult.Success([.. body.Items.Select(NormalizeTime)]);
     }
+
+    // Schema 2 targets send UTC; schema 1 targets send server-local time with no time zone, which is
+    // taken as this server's local time (how they were compared before).
+    private static ContentInventoryItem NormalizeTime(ContentInventoryItem item) =>
+        item with { LastPublishedWhen = ContentInventoryTime.ToUtc(item.LastPublishedWhen) };
 }

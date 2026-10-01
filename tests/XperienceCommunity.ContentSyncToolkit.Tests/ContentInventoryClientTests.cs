@@ -83,6 +83,46 @@ public class ContentInventoryClientTests
         Assert.That(result.Items[0].Guid, Is.EqualTo(itemGuid));
     }
 
+    private static FakeHttpMessageHandler RawJson(string json) =>
+        new(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+        });
+
+    private static string InventoryJson(int schemaVersion, string lastPublishedWhen, string? order = null) =>
+        "{\"schemaVersion\":" + schemaVersion + ",\"generatedAtUtc\":\"2026-03-01T12:00:00+00:00\",\"items\":[{"
+        + "\"guid\":\"6f1f2c1e-0000-0000-0000-000000000001\",\"kind\":0,\"contentTypeName\":\"T\",\"scopeName\":\"S\","
+        + "\"languageName\":\"en\",\"treePath\":\"/a\",\"lastPublishedWhen\":\"" + lastPublishedWhen + "\","
+        + "\"versionStatus\":\"Published\",\"name\":\"a\"" + (order is null ? string.Empty : ",\"order\":" + order) + "}]}";
+
+    // Schema 2 targets send UTC with a Z suffix.
+    [Test]
+    public async Task GetWebPagesAsync_ReadsUtcTimestampsAndOrder_FromASchema2Target()
+    {
+        var client = new ContentInventoryClient(CreateHttpClient(RawJson(InventoryJson(2, "2026-03-01T17:30:00Z", order: "4"))));
+
+        var item = (await client.GetWebPagesAsync("Channel", "en", CancellationToken.None)).Items.Single();
+
+        Assert.That(item.LastPublishedWhen, Is.EqualTo(new DateTime(2026, 3, 1, 17, 30, 0, DateTimeKind.Utc)));
+        Assert.That(item.LastPublishedWhen!.Value.Kind, Is.EqualTo(DateTimeKind.Utc));
+        Assert.That(item.Order, Is.EqualTo(4));
+    }
+
+    // Schema 1 targets send server-local time without a time zone; it's read as this server's local
+    // time, which is how it was compared before.
+    [Test]
+    public async Task GetWebPagesAsync_ReadsATimestampWithoutTimeZone_AsThisServersLocalTime()
+    {
+        var client = new ContentInventoryClient(CreateHttpClient(RawJson(InventoryJson(1, "2026-03-01T12:30:00"))));
+
+        var item = (await client.GetWebPagesAsync("Channel", "en", CancellationToken.None)).Items.Single();
+
+        var expected = new DateTime(2026, 3, 1, 12, 30, 0, DateTimeKind.Local).ToUniversalTime();
+        Assert.That(item.LastPublishedWhen, Is.EqualTo(expected));
+        Assert.That(item.LastPublishedWhen!.Value.Kind, Is.EqualTo(DateTimeKind.Utc));
+        Assert.That(item.Order, Is.Null);
+    }
+
     [Test]
     public async Task GetWebPagesAsync_ReturnsRejected_OnNonSuccessStatusCode()
     {

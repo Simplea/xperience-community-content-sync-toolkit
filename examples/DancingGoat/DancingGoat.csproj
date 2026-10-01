@@ -14,6 +14,9 @@
     <Content Include="assets\**">
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
+    <!-- Content Sync's transfer packages (two-instance rig, see docs/Contributing-Setup.md): not site
+         content, and their .json files would otherwise be included twice, failing the build. -->
+    <Content Remove="assets\synchronizations\**" />
   </ItemGroup>
   <!-- Exclude administration parts from the compilation in live-site only deployment  -->
   <ItemGroup Condition="'$(SeparatedAdmin)' == 'true'">
