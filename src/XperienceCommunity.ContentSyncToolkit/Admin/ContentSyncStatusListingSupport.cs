@@ -1,6 +1,6 @@
-using Kentico.Xperience.Admin.Base;
-
 using System.Net;
+
+using Kentico.Xperience.Admin.Base;
 
 using XperienceCommunity.ContentSyncToolkit.Inventory;
 using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
@@ -200,6 +200,7 @@ internal static class ContentSyncStatusListingSupport
     {
         RequiredObjectProblem.DifferentGuidOnTarget => "has a different " + obj + " with the same code name (recreated rather than deployed)",
         RequiredObjectProblem.DefinitionDiffers => "has different fields for " + obj,
+        RequiredObjectProblem.MissingOnTarget => "has no " + obj,
         _ => "has no " + obj,
     };
 

@@ -204,7 +204,7 @@ internal sealed class LocalContentInventoryService(
         var displayNames = new Dictionary<int, string>();
         try
         {
-            foreach (var batch in keys.ContentItemIds.Values.Distinct().Chunk(DisplayNameBatchSize))
+            foreach (int[] batch in keys.ContentItemIds.Values.Distinct().Chunk(DisplayNameBatchSize))
             {
                 var rows = await new ObjectQuery(LanguageMetadataObjectType)
                     .Columns(MetadataContentItemIdColumn, MetadataDisplayNameColumn)

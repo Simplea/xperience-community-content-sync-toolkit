@@ -128,7 +128,7 @@ public class ContentInventoryClientTests
     [Test]
     public async Task GetContentHubItemsAsync_ReadsDisplayNames_FromASchema3Target()
     {
-        var json = InventoryJson(3, "2026-03-01T17:30:00Z")
+        string json = InventoryJson(3, "2026-03-01T17:30:00Z")
             .Replace("\"name\":\"a\"", "\"name\":\"a\",\"displayName\":\"Coffee beans\",\"contentTypeDisplayName\":\"Coffee\"");
         var client = new ContentInventoryClient(CreateHttpClient(RawJson(json)));
 

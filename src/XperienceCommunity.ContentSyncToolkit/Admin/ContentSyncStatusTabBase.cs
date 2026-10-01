@@ -45,7 +45,7 @@ internal abstract class ContentSyncStatusTabBase(
 
     // How long the page waits for the target's required objects before showing without the banner.
     // The listing's own fetch reports an unreachable target.
-    private static readonly TimeSpan RequiredObjectsBannerTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan requiredObjectsBannerTimeout = TimeSpan.FromSeconds(5);
 
     // The banner lists at most this many objects, then a count of the rest.
     private const int MaxBannerIssues = 8;
@@ -150,7 +150,7 @@ internal abstract class ContentSyncStatusTabBase(
     private async Task<CalloutConfiguration?> GetRequiredObjectsCalloutAsync(IReadOnlyList<ContentSyncScope> visibleScopes)
     {
         RequiredObjectsCheckResult check;
-        using var timeout = new CancellationTokenSource(RequiredObjectsBannerTimeout);
+        using var timeout = new CancellationTokenSource(requiredObjectsBannerTimeout);
         try
         {
             check = await syncStatusService.CheckRequiredObjectsAsync(refreshRequestStore.IsRefreshRequested(TabKey), timeout.Token);
