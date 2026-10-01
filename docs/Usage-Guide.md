@@ -127,7 +127,7 @@ The application has two tabs: **Pages** (one website channel at a time) and
 | Status | Meaning |
 | --- | --- |
 | **Missing on target** | Published on this instance but absent on the target. |
-| **Out of date on target** | Published more recently on this instance than on the target, or published on one and unpublished on the other (hover the status to see which). |
+| **Out of date on target** | Published more recently on this instance than on the target, published on one and unpublished on the other, or moved or reordered (hover the status to see which and what to sync). |
 | **Extra on target** | On the target but not on this instance. |
 | **In sync** | The target has the same published version. |
 
@@ -157,8 +157,26 @@ Other states:
   Content Sync wouldn't create it. See
   [Publication-state scope](specs/content-inventory-foundation.md#publication-state-scope).
 - **Secured pages are included,** like any other page.
-- **Timestamps, not content.** Status comes from publish timestamps, so large
-  clock differences between the two servers can affect **Out of date on
-  target**.
+- **Moved and reordered pages.** Moving or reordering a page doesn't republish it, so the page compares positions too: a page at a different path
+  on the target, or a level whose pages are in a different order, shows as
+  **Out of date on target**. To sync it, Content Sync needs all pages on the
+  affected level (for a move, the old and the new one); the status tooltip
+  says so.
+- **Deleted items.** Content Sync can't delete anything on the target. An item
+  deleted here stays on the target and shows as **Extra on target** until
+  someone deletes it there.
+- **Dates are in your time zone,** in the Last published column, like the rest
+  of the administration. The Published from and Published to filters use the
+  server's time zone, so near midnight a day can differ slightly.
+- **Timestamps, not content.** Status comes from publish dates (compared in
+  UTC, so servers in different time zones are fine) and from publish state and
+  position. Large clock differences between the two servers can still affect
+  **Out of date on target**.
+- **What the page can't see:**
+  - **Edits made directly on the target.** After a sync, the target's copy has
+    the newer date, so later edits there still show as **In sync**. Kentico
+    recommends editing only on the source; a sync overwrites target edits.
+  - **Scheduled publish or unpublish dates.** Content Sync doesn't transfer
+    them, and neither status reflects them.
 - **One language at a time.** The default content language unless you choose
   another with the Language filter.

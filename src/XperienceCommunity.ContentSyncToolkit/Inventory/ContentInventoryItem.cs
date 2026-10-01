@@ -20,7 +20,11 @@ public enum ContentInventoryItemKind
 /// <param name="ScopeName">The website channel name (pages) or workspace name (content-hub items) the item belongs to.</param>
 /// <param name="LanguageName">The language variant this item's data represents.</param>
 /// <param name="TreePath">The page's content tree path. Always <see langword="null"/> for content-hub items.</param>
-/// <param name="LastPublishedWhen">The item's last publish timestamp (UTC), or <see langword="null"/> if it has never been published.</param>
+/// <param name="LastPublishedWhen">
+/// The item's last publish timestamp in UTC (sent with a <c>Z</c> suffix), or <see langword="null"/>
+/// if it has never been published. A target on toolkit schema version 1 sends server-local time
+/// without a time zone instead; the source then treats it as its own local time.
+/// </param>
 /// <param name="VersionStatus">
 /// A plain-string representation of the item's version status. Not Kentico's <c>VersionStatus</c>
 /// enum, so this wire contract does not couple to Kentico's internal type layout across instances
@@ -42,4 +46,11 @@ public sealed record ContentInventoryItem(
     /// preserve source/binary compatibility with the existing positional constructor.
     /// </summary>
     public string Name { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The page's position among its siblings (<c>WebPageItemOrder</c>), so a reorder can be
+    /// detected — moving a page doesn't create a new version or change its publish date.
+    /// <see langword="null"/> for content-hub items, and from a target on schema version 1.
+    /// </summary>
+    public int? Order { get; init; }
 }

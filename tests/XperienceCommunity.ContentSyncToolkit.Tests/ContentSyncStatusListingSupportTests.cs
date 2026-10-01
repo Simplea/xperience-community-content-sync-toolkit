@@ -35,7 +35,6 @@ public class ContentSyncStatusListingSupportTests
     [TestCase("Published", "Unpublished", "Published here, unpublished on the target.")]
     [TestCase("Unpublished", "Unpublished", "Unpublished on both instances.")]
     [TestCase("Unpublished", null, "Unpublished here, and not on the target yet.")]
-    [TestCase(null, "Unpublished", "Unpublished on the target, and not on this instance.")]
     public void StatusTooltip_ExplainsAnUnpublishedSide(string? local, string? remote, string expected)
     {
         var item = CreateStatusItem(ContentSyncStatus.OutOfDateOnTarget,
@@ -45,10 +44,31 @@ public class ContentSyncStatusListingSupportTests
         Assert.That(ContentSyncStatusListingSupport.StatusTooltip(item), Is.EqualTo(expected));
     }
 
+    // Content Sync can't delete, so an item only on the target always says how to remove it.
+    [TestCase("Published", "Only on the target.")]
+    [TestCase("Unpublished", "Unpublished on the target, and not on this instance.")]
+    public void StatusTooltip_ExtraOnTarget_ExplainsThatContentSyncCannotDelete(string remote, string start)
+    {
+        var item = CreateStatusItem(ContentSyncStatus.ExtraOnTarget, remote: Versioned(remote));
+
+        Assert.That(ContentSyncStatusListingSupport.StatusTooltip(item), Does.StartWith(start).And.Contain("delete it on the target"));
+    }
+
+    [TestCase(ContentSyncStatusReason.Moved, "Moved here")]
+    [TestCase(ContentSyncStatusReason.Reordered, "Page order on this level changed here")]
+    [TestCase(ContentSyncStatusReason.PublishedMoreRecently, "Published here after the target's copy")]
+    public void StatusTooltip_ExplainsTheOutOfDateReason(ContentSyncStatusReason reason, string start)
+    {
+        var item = CreateStatusItem(ContentSyncStatus.OutOfDateOnTarget, local: Versioned("Published"), remote: Versioned("Published"))
+            with
+        { Reason = reason };
+
+        Assert.That(ContentSyncStatusListingSupport.StatusTooltip(item), Does.StartWith(start));
+    }
+
     [TestCase("Published", "Published")]
     [TestCase("Published", null)]
-    [TestCase(null, "Published")]
-    public void StatusTooltip_IsNull_WhenNothingIsUnpublished(string? local, string? remote)
+    public void StatusTooltip_IsNull_ForOrdinaryItems(string? local, string? remote)
     {
         var item = CreateStatusItem(ContentSyncStatus.InSync,
             local: local is null ? null : Versioned(local),

@@ -181,10 +181,11 @@ internal sealed class LocalContentInventoryService(
             websiteChannelName,
             languageName,
             container.WebPageItemTreePath,
-            container.ContentItemCommonDataLastPublishedWhen,
+            ContentInventoryTime.ToUtc(container.ContentItemCommonDataLastPublishedWhen),
             VersionStatusOf(container, unpublished))
         {
             Name = container.WebPageItemName,
+            Order = container.WebPageItemOrder,
         };
 
     private static ContentInventoryItem MapContentHubItem(
@@ -196,7 +197,7 @@ internal sealed class LocalContentInventoryService(
             workspaceName,
             languageName,
             null,
-            container.ContentItemCommonDataLastPublishedWhen,
+            ContentInventoryTime.ToUtc(container.ContentItemCommonDataLastPublishedWhen),
             VersionStatusOf(container, unpublished))
         {
             Name = container.ContentItemName,

@@ -114,7 +114,7 @@ live: Xperience omits it from the compiled filter entirely).
 | **Language** | Dropdown of the instance's content languages | No selection compares the instance's **default** content language. A language deleted after the filter was applied shows a "no longer exists" row, like a deleted channel/workspace. Each language is compared separately; there is no "all languages" view. |
 | **Status** | Dropdown: *Needs action*, *Missing on target*, *Out of date on target*, *Extra on target*, *In sync* (placeholder *All*) | *Needs action* = Missing plus Out of date — what Content Sync still has to push. Extra is excluded because Content Sync only pushes source → target. A single dropdown was chosen over a multi-select: it covers the main question in one choice, and reading back a multi-select needs a custom condition builder. |
 | **Content type** | Dropdown of website content types (Pages) or reusable content types (Content hub) | Lists every type of that kind, not only the ones present in the selected scope, because an options provider can't see the selected channel/workspace. Options show the type's display name; the value is its code name. |
-| **Published from** / **Published to** | Two date inputs | Filter on the date shown in the Last published column (the local date, or the target's for Extra on target). Both bounds are inclusive whole days. Items without a publish date are excluded while either bound is set. |
+| **Published from** / **Published to** | Two date inputs | Filter on the date in the Last published column (the local date, or the target's for Extra on target). Both bounds are inclusive whole days, taken in the **server's** time zone: the date inputs carry no time zone and the server can't see the editor's, so near midnight a day boundary can differ from the column, which shows the editor's time zone. Items without a publish date are excluded while either bound is set. |
 
 Every filter value is read back from `LoadDataSettings.FilterWhereCondition`
 the same way as the channel/workspace (see Server workflow): each field
@@ -131,11 +131,35 @@ answers the same question).
 **Column tooltips.** The Status and Last published column headers carry
 tooltips (`ColumnConfiguration.Tooltip`) explaining the four statuses and which
 instance the date comes from. Plain text cells have no tooltip, but the status
-tag does (`TagTableCellComponentProps.TooltipText`): when either side of an
-item is unpublished, the tag explains the publish-state difference (for
-example, "Unpublished here, still published on the target"), so Out of date
-on target isn't ambiguous. See the foundation's
+tag does (`TagTableCellComponentProps.TooltipText`). It says why an item has
+its status, and what to do where Content Sync needs something unusual, using
+the comparer's `Reason` and each side's publication state:
+
+| Case | Tooltip |
+| --- | --- |
+| Unpublished on one side | "Unpublished here, still published on the target." / "Published here, unpublished on the target." |
+| Moved | "Moved here. To move it on the target, sync all pages on its old and new level." |
+| Reordered | "Page order on this level changed here. To reorder the target, sync all pages on this level." |
+| Published more recently | "Published here after the target's copy." |
+| Only on the target | "Only on the target. Content Sync can't delete content: if it was deleted here, delete it on the target." |
+| Unpublished on both, or only here | "Unpublished on both instances." / "Unpublished here, and not on the target yet." |
+
+See the foundation's
+[Comparison rules](content-inventory-foundation.md#comparison-rules) and
 [Publication-state scope](content-inventory-foundation.md#publication-state-scope).
+
+**Dates.** The Last published column shows each editor's own time zone, like
+the rest of the administration ("All time values in the administration are
+displayed in the local time zone of each user"). Kentico's listings do this
+client-side: they send a cell named `@kentico/xperience-admin-base/LocalDateTime`
+with the date and its offset, and the browser formats it. That cell's C# helper
+(`LocalDateTimeCellGenerator`) and props type are internal, so the tabs build
+the same named cell with their own props (`{ value }`) holding the UTC date.
+Like the `webpages-{id}` link segment, the component name is a client-side
+convention rather than a public C# API; it's present in the `30.8.0` and
+`31.7.2` admin assemblies, and the two-version runtime check covers it.
+Verified live on 31.7.2: the column renders in the same format as the Content
+hub's own date column.
 
 **Click to open.** Each row with a local item links (`Row.Action`, a link
 action) to that item in Xperience's own editor: the page in its website

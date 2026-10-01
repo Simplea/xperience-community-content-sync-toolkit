@@ -40,7 +40,7 @@ internal abstract class ContentSyncStatusTabBase(
         + "<strong>In sync</strong>: the target has the same published version.";
 
     private const string LastPublishedTooltip =
-        "When the item was last published on this instance. For items extra on target, when it was last published on the target.";
+        "When the item was last published on this instance, in your time zone. For items only on the target, when it was published there.";
 
     // Both filter models name their content type field the same; see ContentSyncStatusAdminWiringTests.
     private const string ContentTypeFilterFieldName = nameof(ContentSyncStatusPagesFilterModel.ContentType);
@@ -262,7 +262,8 @@ internal abstract class ContentSyncStatusTabBase(
                 new StringCell { Value = ContentSyncStatusListingSupport.DisplayName(item) },
                 new StringCell { Value = ContentSyncStatusListingSupport.ContentTypeName(item) },
                 TagCell(ContentSyncStatusListingSupport.StatusLabel(item.Status), ContentSyncStatusListingSupport.StatusColor(item.Status), ContentSyncStatusListingSupport.StatusTooltip(item)),
-                new StringCell { Value = ContentSyncStatusListingSupport.LastPublishedWhen(item)?.ToString("g") ?? string.Empty },
+                // Kentico's own local date-time cell: the browser shows it in the editor's time zone.
+                LocalDateTimeCell(ContentSyncStatusListingSupport.LastPublishedWhen(item)),
             ],
         };
 
@@ -288,10 +289,28 @@ internal abstract class ContentSyncStatusTabBase(
             ],
         };
 
+    // The cell Kentico's own listings use for dates (its generator class is internal, so the cell is
+    // built here with the same component name). The browser converts the UTC value to the editor's
+    // time zone, as everywhere else in the administration.
+    private const string LocalDateTimeComponentName = "@kentico/xperience-admin-base/LocalDateTime";
+
+    private static NamedComponentCell LocalDateTimeCell(DateTime? value) =>
+        new()
+        {
+            Name = LocalDateTimeComponentName,
+            ComponentProps = new LocalDateTimeCellProps { Value = value },
+        };
+
     private static NamedComponentCell TagCell(string label, Color color, string? tooltip = null) =>
         new()
         {
             Name = NamedComponentCellComponentNames.TAG_COMPONENT,
             ComponentProps = new TagTableCellComponentProps { Label = label, Color = color, TooltipText = tooltip },
         };
+
+    // Same shape as Kentico's internal LocalDateTimeNamedComponentProps: the client reads "value".
+    private sealed class LocalDateTimeCellProps
+    {
+        public DateTime? Value { get; init; }
+    }
 }

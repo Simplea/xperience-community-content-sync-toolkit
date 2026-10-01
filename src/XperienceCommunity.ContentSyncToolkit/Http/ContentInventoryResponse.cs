@@ -7,7 +7,8 @@ namespace XperienceCommunity.ContentSyncToolkit.Http;
 /// </summary>
 /// <param name="SchemaVersion">
 /// Forward-compatibility hook for a source and target running different toolkit versions.
-/// Always <c>1</c> in the initial version.
+/// <c>1</c>: publish dates in server-local time without a time zone. <c>2</c>: publish dates in
+/// UTC, plus each page's <see cref="ContentInventoryItem.Order"/>. Readers accept both.
 /// </param>
 /// <param name="GeneratedAtUtc">When the target instance produced this inventory.</param>
 /// <param name="Items">The requested scope's content inventory.</param>

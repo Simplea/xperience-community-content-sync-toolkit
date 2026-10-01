@@ -53,8 +53,10 @@ internal static class ContentSyncStatusListingSupport
             ? items
             : [.. items.Where(item => string.Equals(ContentTypeName(item), contentTypeName, StringComparison.OrdinalIgnoreCase))];
 
-    // Both bounds are inclusive whole days, compared with the date the Last published column shows.
-    // Items without a publish date can't satisfy a bound, so they drop out while either is set.
+    // Both bounds are inclusive whole days. Publish dates are UTC; the date inputs carry no time
+    // zone, so their days are taken in the server's time zone (the server can't see the editor's,
+    // which the Last published column uses). Items without a publish date can't satisfy a bound, so
+    // they drop out while either is set.
     public static IReadOnlyList<ContentSyncStatusItem> ApplyPublishedFilter(
         IReadOnlyList<ContentSyncStatusItem> items, DateTime? publishedFrom, DateTime? publishedTo)
     {
@@ -63,12 +65,15 @@ internal static class ContentSyncStatusListingSupport
             return items;
         }
 
+        var fromUtc = ContentInventoryTime.ToUtc(publishedFrom?.Date);
+        var toUtc = ContentInventoryTime.ToUtc(publishedTo?.Date.AddDays(1));
+
         return [.. items.Where(item =>
         {
-            var published = LastPublishedWhen(item);
+            var published = ContentInventoryTime.ToUtc(LastPublishedWhen(item));
             return published is not null
-                && (publishedFrom is null || published.Value >= publishedFrom.Value.Date)
-                && (publishedTo is null || published.Value < publishedTo.Value.Date.AddDays(1));
+                && (fromUtc is null || published.Value >= fromUtc.Value)
+                && (toUtc is null || published.Value < toUtc.Value);
         })];
     }
 
@@ -147,8 +152,12 @@ internal static class ContentSyncStatusListingSupport
 
     public static DateTime? LastPublishedWhen(ContentSyncStatusItem item) => (item.Local ?? item.Remote)?.LastPublishedWhen;
 
-    // Explains a status that involves an unpublished item, so "Out of date on target" isn't
-    // ambiguous between newer edits and a different publish state. Null for the ordinary cases.
+    private const string CannotDeleteHint =
+        " Content Sync can't delete content: if it was deleted here, delete it on the target.";
+
+    // Says why an item has its status and, where Content Sync needs something unusual, what to do,
+    // so "Out of date on target" isn't ambiguous between newer edits, a different publish state, and
+    // a moved or reordered page. Null for the ordinary cases.
     public static string? StatusTooltip(ContentSyncStatusItem item)
     {
         bool localUnpublished = item.Local is not null && ContentInventoryVersionStatus.IsUnpublished(item.Local.VersionStatus);
@@ -156,11 +165,18 @@ internal static class ContentSyncStatusListingSupport
 
         return (item.Local, item.Remote) switch
         {
-            (not null, not null) when localUnpublished && !remoteUnpublished => "Unpublished here, still published on the target.",
-            (not null, not null) when !localUnpublished && remoteUnpublished => "Published here, unpublished on the target.",
-            (not null, not null) when localUnpublished => "Unpublished on both instances.",
+            (null, _) when remoteUnpublished => "Unpublished on the target, and not on this instance." + CannotDeleteHint,
+            (null, _) => "Only on the target." + CannotDeleteHint,
             (not null, null) when localUnpublished => "Unpublished here, and not on the target yet.",
-            (null, not null) when remoteUnpublished => "Unpublished on the target, and not on this instance.",
+            (not null, null) => null,
+            _ when localUnpublished && !remoteUnpublished => "Unpublished here, still published on the target.",
+            _ when !localUnpublished && remoteUnpublished => "Published here, unpublished on the target.",
+            _ when item.Reason == ContentSyncStatusReason.Moved =>
+                "Moved here. To move it on the target, sync all pages on its old and new level.",
+            _ when item.Reason == ContentSyncStatusReason.Reordered =>
+                "Page order on this level changed here. To reorder the target, sync all pages on this level.",
+            _ when item.Reason == ContentSyncStatusReason.PublishedMoreRecently => "Published here after the target's copy.",
+            _ when localUnpublished => "Unpublished on both instances.",
             _ => null,
         };
     }

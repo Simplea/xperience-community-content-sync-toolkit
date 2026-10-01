@@ -15,7 +15,8 @@ public sealed class ContentInventoryController(
     ILocalContentInventoryService inventoryService,
     TimeProvider timeProvider) : ControllerBase
 {
-    private const int SchemaVersion = 1;
+    // 2: publish dates in UTC, and page order. See ContentInventoryResponse.
+    private const int SchemaVersion = 2;
 
     [HttpGet("web-pages")]
     public async Task<ActionResult<ContentInventoryResponse>> GetWebPages(
