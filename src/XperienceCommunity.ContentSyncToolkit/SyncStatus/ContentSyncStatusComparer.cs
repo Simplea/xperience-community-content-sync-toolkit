@@ -87,7 +87,13 @@ public static class ContentSyncStatusComparer
     // compared directly: a page that exists on only one side shifts every later sibling's value. So
     // for each parent, the pages present on both sides are compared by their relative order, and if
     // it differs, every in-sync page on that level is marked — Content Sync needs all pages on the
-    // level synced to transfer the order. Order is null from targets on schema version 1.
+    // level synced to transfer the order. Each marked page also says which pages are out of place,
+    // so editors see what changed. Order is null from targets on schema version 1.
+    //
+    // Pages sharing an order value on the target count as out of order: a partial sync leaves such
+    // ties (each synced page brings its own value, the others keep theirs), and Kentico then shows
+    // them in whatever order the database returns them (seen on the rig: two tied pages showed in
+    // the opposite order to the source). A GUID tie-break would hide that.
     private static List<ContentSyncStatusItem> MarkReorderedSiblings(List<ContentSyncStatusItem> results)
     {
         var levels = results
@@ -96,16 +102,32 @@ public static class ContentSyncStatusComparer
                 && item.Reason != ContentSyncStatusReason.Moved)
             .GroupBy(item => ParentPath(item.Local!.TreePath!), StringComparer.OrdinalIgnoreCase);
 
-        var reordered = new HashSet<Guid>();
+        var reordered = new Dictionary<Guid, ContentSyncReorder>();
+
+        // The parent page's name for messages, when it's in the inventory (a folder or an unpublished
+        // parent isn't).
+        var namesByPath = results
+            .Where(item => item.Local?.TreePath is not null)
+            .GroupBy(item => item.Local!.TreePath!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().Local!, StringComparer.OrdinalIgnoreCase);
 
         foreach (var level in levels)
         {
-            var localOrder = level.OrderBy(item => item.Local!.Order).ThenBy(item => item.Guid).Select(item => item.Guid);
-            var remoteOrder = level.OrderBy(item => item.Remote!.Order).ThenBy(item => item.Guid).Select(item => item.Guid);
+            var localOrder = level.OrderBy(item => item.Local!.Order).ThenBy(item => item.Guid).ToList();
+            var misplaced = FindMisplaced(localOrder, item => item.Remote!.Order!.Value);
 
-            if (!localOrder.SequenceEqual(remoteOrder))
+            if (misplaced.Count == 0)
             {
-                reordered.UnionWith(level.Where(item => item.Status == ContentSyncStatus.InSync).Select(item => item.Guid));
+                continue;
+            }
+
+            var reorder = new ContentSyncReorder(level.Key, [.. misplaced.Select(item => item.Local!)])
+            {
+                Parent = namesByPath.GetValueOrDefault(level.Key),
+            };
+            foreach (var item in level.Where(item => item.Status == ContentSyncStatus.InSync))
+            {
+                reordered[item.Guid] = reorder;
             }
         }
 
@@ -114,9 +136,60 @@ public static class ContentSyncStatusComparer
             return results;
         }
 
-        return [.. results.Select(item => reordered.Contains(item.Guid)
-            ? item with { Status = ContentSyncStatus.OutOfDateOnTarget, Reason = ContentSyncStatusReason.Reordered }
+        return [.. results.Select(item => reordered.TryGetValue(item.Guid, out var reorder)
+            ? item with { Status = ContentSyncStatus.OutOfDateOnTarget, Reason = ContentSyncStatusReason.Reordered, Reorder = reorder }
             : item)];
+    }
+
+    // The fewest pages to take out so the rest are in the same order on both sides: the pages
+    // outside a longest strictly increasing run of target order values, taken in local order. Pages
+    // tied on the target can't both be in place, so all but one of a tied group are returned.
+    // Returned in local order; with several equally short answers, the same one every time (the
+    // local order has a GUID tie-break). Empty when the level is in the same order.
+    internal static IReadOnlyList<ContentSyncStatusItem> FindMisplaced(
+        IReadOnlyList<ContentSyncStatusItem> localOrder, Func<ContentSyncStatusItem, int> remoteOrderValue)
+    {
+        int[] positions = [.. localOrder.Select(remoteOrderValue)];
+
+        // Patience sorting: tails[k] is the index (into positions) ending the best run of length k+1.
+        var tails = new List<int>();
+        int[] previous = new int[positions.Length];
+
+        for (int i = 0; i < positions.Length; i++)
+        {
+            int low = 0;
+            int high = tails.Count;
+            while (low < high)
+            {
+                int middle = (low + high) / 2;
+                if (positions[tails[middle]] < positions[i])
+                {
+                    low = middle + 1;
+                }
+                else
+                {
+                    high = middle;
+                }
+            }
+
+            previous[i] = low > 0 ? tails[low - 1] : -1;
+            if (low == tails.Count)
+            {
+                tails.Add(i);
+            }
+            else
+            {
+                tails[low] = i;
+            }
+        }
+
+        var kept = new HashSet<int>();
+        for (int i = tails.Count > 0 ? tails[^1] : -1; i >= 0; i = previous[i])
+        {
+            kept.Add(i);
+        }
+
+        return [.. localOrder.Where((_, index) => !kept.Contains(index))];
     }
 
     private static string ParentPath(string treePath)

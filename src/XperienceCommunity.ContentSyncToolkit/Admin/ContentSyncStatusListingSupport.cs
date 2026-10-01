@@ -228,13 +228,74 @@ internal static class ContentSyncStatusListingSupport
             _ when !localUnpublished && remoteUnpublished => "Published here, unpublished on the target.",
             _ when item.Reason == ContentSyncStatusReason.Moved =>
                 "Moved here. To move it on the target, sync all pages on its old and new level.",
-            _ when item.Reason == ContentSyncStatusReason.Reordered =>
-                "Page order on this level changed here. To reorder the target, sync all pages on this level.",
+            _ when item.Reason == ContentSyncStatusReason.Reordered => ReorderTooltip(item.Reorder),
             _ when item.Reason == ContentSyncStatusReason.PublishedMoreRecently => "Published here after the target's copy.",
             _ when localUnpublished => "Unpublished on both instances.",
             _ => null,
         };
     }
+
+    // How many out-of-place pages a tooltip names before "and N more".
+    private const int MaxNamedPages = 3;
+
+    // Names the pages out of place, says the usual cause, and how to fix it. Positions aren't given
+    // as numbers: the page tree also shows drafts, which aren't compared, so "3rd" could disagree
+    // with what the editor sees.
+    private static string ReorderTooltip(ContentSyncReorder? reorder)
+    {
+        const string cause = " This usually happens when only some pages of a level are synced.";
+
+        if (reorder is null || reorder.MisplacedPages.Count == 0)
+        {
+            return "Page order on this level differs on the target." + cause + " " + ReorderFix(reorder);
+        }
+
+        var names = reorder.MisplacedPages.Take(MaxNamedPages).Select(PageName).ToList();
+        string list = JoinNames(names, reorder.MisplacedPages.Count - names.Count);
+        string verb = reorder.MisplacedPages.Count == 1 ? "is" : "are";
+
+        return $"Page order on this level differs on the target: {list} {verb} in a different position there."
+            + cause + " " + ReorderFix(reorder);
+    }
+
+    // "A", "A and B", "A, B and C", or "A, B, C and 2 more".
+    private static string JoinNames(IReadOnlyList<string> names, int more)
+    {
+        if (more > 0)
+        {
+            return string.Join(", ", names) + $" and {more} more";
+        }
+
+        return names.Count == 1 ? names[0] : string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1];
+    }
+
+    // Kentico's "Sync with all subpages" on the parent syncs the whole level. The top level has no
+    // parent page to sync from.
+    private static string ReorderFix(ContentSyncReorder? reorder)
+    {
+        if (reorder is null || reorder.ParentPath.Length == 0)
+        {
+            return "To fix it, sync all pages on this level.";
+        }
+
+        string parent = reorder.Parent is { } parentPage
+            ? PageName(parentPage)
+            : reorder.ParentPath[(reorder.ParentPath.LastIndexOf('/') + 1)..];
+
+        return $"To fix it, use Sync with all subpages on {parent}.";
+    }
+
+    private static string PageName(ContentInventoryItem page) =>
+        NonEmpty(page.DisplayName)
+        ?? (page.TreePath is { } path ? path[(path.LastIndexOf('/') + 1)..] : null)
+        ?? page.Name;
+
+    /// <summary>
+    /// The tag label: the status, except that a page out of date only because its level's order
+    /// differs says so, since that's fixed differently (sync the whole level).
+    /// </summary>
+    public static string StatusLabel(ContentSyncStatusItem item) =>
+        item.Reason == ContentSyncStatusReason.Reordered ? "Order differs on target" : StatusLabel(item.Status);
 
     public static string StatusLabel(ContentSyncStatus status) => status switch
     {

@@ -37,6 +37,24 @@ public sealed record ContentSyncStatusItem(
     /// other status, and when the target couldn't be checked.
     /// </summary>
     public IReadOnlyList<RequiredObjectIssue> RequiredObjectIssues { get; init; } = [];
+
+    /// <summary>
+    /// For an item that's <see cref="ContentSyncStatusReason.Reordered"/>, its level and the pages on
+    /// it that are out of place on the target; <see langword="null"/> otherwise.
+    /// </summary>
+    public ContentSyncReorder? Reorder { get; init; }
+}
+
+/// <summary>A level of the page tree whose pages are in a different order on the target.</summary>
+/// <param name="ParentPath">The tree path of the level's parent page; empty for the channel's top level.</param>
+/// <param name="MisplacedPages">
+/// The fewest pages (this instance's copies, in this instance's order) whose positions differ: with
+/// them left out, the rest of the level is in the same order on both sides.
+/// </param>
+public sealed record ContentSyncReorder(string ParentPath, IReadOnlyList<ContentInventoryItem> MisplacedPages)
+{
+    /// <summary>The parent page, when it's in this instance's inventory, for its display name.</summary>
+    public ContentInventoryItem? Parent { get; init; }
 }
 
 /// <summary>Why an item is <see cref="ContentSyncStatus.OutOfDateOnTarget"/>.</summary>

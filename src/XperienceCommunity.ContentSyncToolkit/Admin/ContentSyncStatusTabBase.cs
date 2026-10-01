@@ -37,6 +37,7 @@ internal abstract class ContentSyncStatusTabBase(
     private const string StatusTooltip =
         "<strong>Missing on target</strong>: published here, not on the target yet.<br>"
         + "<strong>Out of date on target</strong>: the target has an older published version.<br>"
+        + "<strong>Order differs on target</strong>: the pages on this level are in a different order on the target.<br>"
         + "<strong>Extra on target</strong>: on the target, but not published here.<br>"
         + "<strong>In sync</strong>: the target has the same published version.";
 
@@ -330,7 +331,7 @@ internal abstract class ContentSyncStatusTabBase(
             [
                 new StringCell { Value = ContentSyncStatusListingSupport.DisplayName(item) },
                 new StringCell { Value = ContentSyncStatusListingSupport.ContentTypeDisplayName(item) },
-                TagCell(ContentSyncStatusListingSupport.StatusLabel(item.Status), ContentSyncStatusListingSupport.StatusColor(item.Status), ContentSyncStatusListingSupport.StatusTooltip(item)),
+                TagCell(ContentSyncStatusListingSupport.StatusLabel(item), ContentSyncStatusListingSupport.StatusColor(item.Status), ContentSyncStatusListingSupport.StatusTooltip(item)),
                 // Kentico's own local date-time cell: the browser shows it in the editor's time zone.
                 LocalDateTimeCell(ContentSyncStatusListingSupport.LastPublishedWhen(item)),
             ],

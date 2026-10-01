@@ -56,7 +56,7 @@ public class ContentSyncStatusListingSupportTests
     }
 
     [TestCase(ContentSyncStatusReason.Moved, "Moved here")]
-    [TestCase(ContentSyncStatusReason.Reordered, "Page order on this level changed here")]
+    [TestCase(ContentSyncStatusReason.Reordered, "Page order on this level differs on the target")]
     [TestCase(ContentSyncStatusReason.PublishedMoreRecently, "Published here after the target's copy")]
     public void StatusTooltip_ExplainsTheOutOfDateReason(ContentSyncStatusReason reason, string start)
     {
@@ -484,6 +484,73 @@ public class ContentSyncStatusListingSupportTests
             remote: CreateInventoryItem(treePath: "/OnlyOnTarget"));
 
         Assert.That(ContentSyncStatusListingSupport.DisplayName(item), Is.EqualTo("/OnlyOnTarget"));
+    }
+
+    private static ContentInventoryItem Article(string slug, string? displayName = null) =>
+        new(Guid.NewGuid(), ContentInventoryItemKind.WebPage, "T", "S", "en", "/Articles/" + slug, null, "Published")
+        {
+            DisplayName = displayName,
+        };
+
+    private static ContentSyncStatusItem Reordered(ContentSyncReorder reorder) =>
+        CreateStatusItem(ContentSyncStatus.OutOfDateOnTarget, local: Versioned("Published"), remote: Versioned("Published")) with
+        {
+            Reason = ContentSyncStatusReason.Reordered,
+            Reorder = reorder,
+        };
+
+    [Test]
+    public void StatusTooltip_ForAReorder_NamesThePageAndTheFix()
+    {
+        var reorder = new ContentSyncReorder("/Articles", [Article("Coffee_Beverages_Explained", "Coffee Beverages Explained")])
+        {
+            Parent = new ContentInventoryItem(Guid.NewGuid(), ContentInventoryItemKind.WebPage, "T", "S", "en", "/Articles", null, "Published") { DisplayName = "Articles" },
+        };
+
+        Assert.That(
+            ContentSyncStatusListingSupport.StatusTooltip(Reordered(reorder)),
+            Is.EqualTo("Page order on this level differs on the target: Coffee Beverages Explained is in a different position there. "
+                + "This usually happens when only some pages of a level are synced. To fix it, use Sync with all subpages on Articles."));
+    }
+
+    // Without a display name, a page is named by its path's last segment; without the parent page in
+    // the inventory, so is the parent.
+    [Test]
+    public void StatusTooltip_ForAReorder_NamesUpToThreePages_ThenACount()
+    {
+        var reorder = new ContentSyncReorder("/Articles", [Article("A"), Article("B"), Article("C"), Article("D"), Article("E")]);
+
+        Assert.That(
+            ContentSyncStatusListingSupport.StatusTooltip(Reordered(reorder)),
+            Does.StartWith("Page order on this level differs on the target: A, B, C and 2 more are in a different position there.")
+                .And.EndWith("use Sync with all subpages on Articles."));
+    }
+
+    [Test]
+    public void StatusTooltip_ForAReorderOfTwoPages_JoinsTheirNamesWithAnd()
+    {
+        var reorder = new ContentSyncReorder("/Articles", [Article("A"), Article("B")]);
+
+        Assert.That(ContentSyncStatusListingSupport.StatusTooltip(Reordered(reorder)), Does.Contain(": A and B are in a different position"));
+    }
+
+    // The channel's top level has no parent page to sync from.
+    [Test]
+    public void StatusTooltip_ForAReorderAtTheTopLevel_SaysToSyncTheLevel()
+    {
+        var reorder = new ContentSyncReorder(string.Empty, [Article("A")]);
+
+        Assert.That(ContentSyncStatusListingSupport.StatusTooltip(Reordered(reorder)), Does.EndWith("To fix it, sync all pages on this level."));
+    }
+
+    [Test]
+    public void StatusLabel_SaysOrderDiffers_OnlyForAReorder()
+    {
+        var reordered = Reordered(new ContentSyncReorder("/Articles", []));
+        var newer = reordered with { Reason = ContentSyncStatusReason.PublishedMoreRecently, Reorder = null };
+
+        Assert.That(ContentSyncStatusListingSupport.StatusLabel(reordered), Is.EqualTo("Order differs on target"));
+        Assert.That(ContentSyncStatusListingSupport.StatusLabel(newer), Is.EqualTo("Out of date on target"));
     }
 
     [TestCase(ContentSyncStatus.InSync, "In sync")]

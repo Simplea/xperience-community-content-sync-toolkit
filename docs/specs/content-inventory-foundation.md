@@ -375,6 +375,19 @@ date (position lives on the page record, `WebPageItemTreePath` and
   [Content sync](https://docs.kentico.com/documentation/business-users/content-sync#sync-moved-or-reordered-pages)
   documentation says reordered or moved pages need **all** pages on the level
   synced. Skipped when either side has no `Order` (a schema 1 target).
+  Each marked page also carries a `ContentSyncReorder`: the level's parent path
+  (and the parent page, when it's in the inventory, for its display name) and
+  the **pages out of place**, the fewest pages whose removal leaves the rest of
+  the level in the same order on both sides (the pages outside a longest
+  common subsequence of the two orders, found in O(n log n); ties resolve the
+  same way every time). The usual cause is a partial sync: Content Sync sends
+  each synced page's order value, and pages left out keep their old values on
+  the target, so one page that wasn't synced ends up in another position.
+  Pages that **share an order value on the target** count as out of order:
+  Kentico then shows them in whatever order the database returns, so their
+  order there is undefined. Breaking such ties by GUID (as the first version
+  did) can report a level `InSync` while the target's site shows it in another
+  order.
 
 Verified live on 31.7.2: dragging `(Clone) On Roasts` above `On Roasts` in the
 source's page tree swapped their `WebPageItemOrder` (7/6 → 6/7) and left both
@@ -386,6 +399,29 @@ the source, stayed `MissingOnTarget`. Before the reorder the same level was
 `InSync`, which also confirmed that a page present on only one side doesn't
 cause a false reorder. The move rule isn't verified live (no page was moved to
 another parent); it's covered by unit tests.
+
+Also seen on the rig: syncing only some articles moved them to their source
+positions on the target, but `Coffee Beverages Explained`, not in that sync,
+kept its old order value there and so came first on the target and third on
+the source. The status page marked the level, and the out-of-place page is
+exactly that one; Sync with all subpages on Articles brought the level back to
+`InSync`.
+
+End to end on 31.7.2, with the Playwright CLI:
+
+1. Dragged `Which brewing fits you?` from last to first in the source's page
+   tree. Every article showed **Order differs on target**, and the tooltip
+   named only that page.
+2. Used **Sync this page** on it. Kentico also synced the articles it links to,
+   which brought their source order values, so two pairs of articles ended up
+   sharing a value on the target (3/3 and 8/8), and the target's page tree
+   showed one pair (`On Roasts`, `(Clone) On Roasts`) in the opposite order to
+   the source. The first version of this rule reported the level `InSync` here,
+   because its GUID tie-break happened to match the source; with the tie rule
+   above, the level shows Order differs and the tooltip names one page of each
+   tied pair.
+3. Used **Sync with all subpages** on Articles. The level returned to `InSync`,
+   and the target's page tree matched the source's order.
 
 Each `ContentSyncStatusItem` carries a `Reason` for `OutOfDateOnTarget`:
 `PublishedMoreRecently`, `PublishStateDiffers`, `Moved`, or `Reordered`
