@@ -50,7 +50,13 @@ public class ContentSyncToolkitServiceCollectionExtensionsTests
     {
         var services = CreateBaseServices();
 
-        services.AddContentSyncToolkit(o => o.Source.TargetUrl = new Uri("https://target.example.com"));
+        // Source and target come from Xperience's Content Sync settings, as a host would configure them.
+        services.Configure<CMS.ContentSynchronization.ContentSynchronizationOptions>(o =>
+        {
+            o.Source.Enabled = true;
+            o.Source.TargetUrl = "https://target.example.com";
+        });
+        services.AddContentSyncToolkit();
 
         using var provider = services.BuildServiceProvider();
 
@@ -70,7 +76,7 @@ public class ConfigureInventoryHttpClientTests
     public void ConfigureInventoryHttpClient_SetsBaseAddress_WhenTargetUrlConfigured()
     {
         using var client = new HttpClient();
-        var options = new ContentSyncToolkitSourceOptions { TargetUrl = new Uri("https://target.example.com") };
+        var options = new EffectiveSourceSettings(new Uri("https://target.example.com"), null, TimeSpan.FromSeconds(30));
 
         ContentSyncToolkitServiceCollectionExtensions.ConfigureInventoryHttpClient(client, options);
 
@@ -81,7 +87,7 @@ public class ConfigureInventoryHttpClientTests
     public void ConfigureInventoryHttpClient_LeavesBaseAddressNull_WhenTargetUrlNotConfigured()
     {
         using var client = new HttpClient();
-        var options = new ContentSyncToolkitSourceOptions { TargetUrl = null };
+        var options = new EffectiveSourceSettings(null, null, TimeSpan.FromSeconds(30));
 
         ContentSyncToolkitServiceCollectionExtensions.ConfigureInventoryHttpClient(client, options);
 
@@ -92,7 +98,7 @@ public class ConfigureInventoryHttpClientTests
     public void ConfigureInventoryHttpClient_SetsTimeout()
     {
         using var client = new HttpClient();
-        var options = new ContentSyncToolkitSourceOptions { RequestTimeout = TimeSpan.FromSeconds(45) };
+        var options = new EffectiveSourceSettings(null, null, TimeSpan.FromSeconds(45));
 
         ContentSyncToolkitServiceCollectionExtensions.ConfigureInventoryHttpClient(client, options);
 
@@ -103,7 +109,7 @@ public class ConfigureInventoryHttpClientTests
     public void ConfigureInventoryHttpClient_AttachesSecretHeader_WhenSecretConfigured()
     {
         using var client = new HttpClient();
-        var options = new ContentSyncToolkitSourceOptions { Secret = "my-secret" };
+        var options = new EffectiveSourceSettings(null, "my-secret", TimeSpan.FromSeconds(30));
 
         ContentSyncToolkitServiceCollectionExtensions.ConfigureInventoryHttpClient(client, options);
 
@@ -114,7 +120,7 @@ public class ConfigureInventoryHttpClientTests
     public void ConfigureInventoryHttpClient_DoesNotAttachSecretHeader_WhenSecretNotConfigured()
     {
         using var client = new HttpClient();
-        var options = new ContentSyncToolkitSourceOptions { Secret = null };
+        var options = new EffectiveSourceSettings(null, null, TimeSpan.FromSeconds(30));
 
         ContentSyncToolkitServiceCollectionExtensions.ConfigureInventoryHttpClient(client, options);
 

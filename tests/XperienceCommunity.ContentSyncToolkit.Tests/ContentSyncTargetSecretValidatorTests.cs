@@ -1,3 +1,5 @@
+using CMS.ContentSynchronization;
+
 using Microsoft.Extensions.Options;
 
 using XperienceCommunity.ContentSyncToolkit.Http;
@@ -8,12 +10,13 @@ public class ContentSyncTargetSecretValidatorTests
 {
     private static ContentSyncTargetSecretValidator CreateValidator(bool enabled, string? configuredSecret)
     {
-        var options = new ContentSyncToolkitOptions
-        {
-            Target = new ContentSyncToolkitTargetOptions { Enabled = enabled, Secret = configuredSecret }
-        };
+        // The target role and secret are Xperience's Content Sync target settings.
+        var contentSync = new ContentSynchronizationOptions();
+        contentSync.Target.Enabled = enabled;
+        contentSync.Target.Secret = configuredSecret!;
 
-        return new ContentSyncTargetSecretValidator(Options.Create(options));
+        return new ContentSyncTargetSecretValidator(
+            new ContentSyncToolkitSettings(Options.Create(new ContentSyncToolkitOptions()), Options.Create(contentSync)));
     }
 
     [Test]

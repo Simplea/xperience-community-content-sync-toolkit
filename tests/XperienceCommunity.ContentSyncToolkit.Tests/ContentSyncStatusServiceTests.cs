@@ -64,10 +64,7 @@ public class ContentSyncStatusServiceTests
             local,
             client,
             cache,
-            Options.Create(new ContentSyncToolkitOptions
-            {
-                Source = new ContentSyncToolkitSourceOptions { InventoryCacheDuration = TimeSpan.FromSeconds(90) }
-            }));
+            Options.Create(new ContentSyncToolkitOptions { InventoryCacheDuration = TimeSpan.FromSeconds(90) }));
 
     [Test]
     public async Task GetWebPageSyncStatusAsync_ReusesCachedRemoteResult_ButAlwaysRequeriesLocal()

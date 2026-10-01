@@ -3,8 +3,6 @@ using CMS.Membership;
 
 using Kentico.Xperience.Admin.Base;
 
-using Microsoft.Extensions.Options;
-
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 using LoadDataSettings = Kentico.Xperience.Admin.Base.LoadDataSettings;
@@ -22,7 +20,7 @@ namespace XperienceCommunity.ContentSyncToolkit.Admin;
 internal abstract class ContentSyncStatusTabBase(
     ContentSyncStatusFilterModelBase filterModel,
     string nameColumnCaption,
-    IOptions<ContentSyncToolkitOptions> options,
+    IContentSyncToolkitSettings settings,
     IContentSyncFilterOptionsProvider filterOptionsProvider,
     ContentSyncStatusRefreshRequestStore refreshRequestStore,
     IPageLinkGenerator pageLinkGenerator)
@@ -91,7 +89,7 @@ internal abstract class ContentSyncStatusTabBase(
     /// <summary>Where an item opens in Xperience's own editor.</summary>
     protected abstract ContentSyncStatusItemLink GetItemLink(ContentSyncScope scope, string languageName, int itemId);
 
-    private bool IsSourceConfigured => options.Value.Source.TargetUrl is not null;
+    private bool IsSourceConfigured => settings.Source.TargetUrl is not null;
 
     // Banners belong to the page configuration, built before LoadData runs, so only states known
     // up front (configuration, available scopes) can be banners. See docs/specs/sync-status-admin-page.md.
@@ -104,9 +102,10 @@ internal abstract class ContentSyncStatusTabBase(
                 Type = CalloutType.FriendlyWarning,
                 Placement = CalloutPlacement.OnDesk,
                 Headline = "Content sync status isn't configured on this instance",
-                Content = "Set <code>ContentSyncToolkit:Source:TargetUrl</code> and "
-                    + "<code>ContentSyncToolkit:Source:Secret</code> to compare this instance's content "
-                    + $"with a target instance. See the <a href=\"{UsageGuideUrl}\" target=\"_blank\" rel=\"noopener noreferrer\">Usage Guide</a>.",
+                Content = "This page compares against Xperience's Content Sync target. Configure Content Sync "
+                    + "with this instance as the source (<code>ContentSynchronization:Source</code>: "
+                    + "<code>Enabled</code>, <code>TargetUrl</code>, <code>Secret</code>). "
+                    + $"See the <a href=\"{UsageGuideUrl}\" target=\"_blank\" rel=\"noopener noreferrer\">Usage Guide</a>.",
                 ContentAsHtml = true,
             });
         }

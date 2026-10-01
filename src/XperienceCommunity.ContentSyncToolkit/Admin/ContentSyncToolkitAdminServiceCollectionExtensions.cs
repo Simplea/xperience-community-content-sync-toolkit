@@ -15,7 +15,9 @@ public static class ContentSyncToolkitAdminServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.TryAddSingleton<IContentSyncScopeProvider, ContentSyncScopeProvider>();
+        // Scoped: which channels and workspaces are listed depends on the signed-in user.
+        services.TryAddScoped<IContentSyncScopeAccess, ContentSyncScopeAccess>();
+        services.TryAddScoped<IContentSyncScopeProvider, ContentSyncScopeProvider>();
         services.TryAddSingleton<IContentSyncFilterOptionsProvider, ContentSyncFilterOptionsProvider>();
         services.TryAddTransient<IContentSyncItemIdResolver, ContentSyncItemIdResolver>();
         services.TryAddSingleton<ContentSyncStatusRefreshRequestStore>();

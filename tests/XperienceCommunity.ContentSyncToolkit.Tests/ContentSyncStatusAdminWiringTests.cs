@@ -50,6 +50,31 @@ public class ContentSyncStatusAdminWiringTests
         Assert.That(command!.Permission, Is.EqualTo(SystemPermissions.VIEW));
     }
 
+    // Role management stores a website channel's permissions under this application name (seen in
+    // CMS_ApplicationPermission); a convention rather than a public API, so it's pinned here.
+    [Test]
+    public void WebsiteChannelApplicationIdentifier_MatchesRoleManagementsApplicationName()
+    {
+        var websiteChannelGuid = new Guid("55E3AE4B-3843-46B8-95D5-79611C371D6F");
+
+        Assert.That(ContentSyncScopeAccess.WebsiteChannelApplicationIdentifier(websiteChannelGuid),
+            Is.EqualTo("Kentico.Xperience.Application.WebPages_55e3ae4b-3843-46b8-95d5-79611c371d6f"));
+    }
+
+    // Which channels and workspaces are listed depends on the signed-in user, so these can't be
+    // singletons that outlive a request.
+    [Test]
+    public void ScopeServices_AreRegisteredPerRequest()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddContentSyncToolkitAdmin();
+
+        Assert.That(services.Single(service => service.ServiceType == typeof(IContentSyncScopeProvider)).Lifetime,
+            Is.EqualTo(Microsoft.Extensions.DependencyInjection.ServiceLifetime.Scoped));
+        Assert.That(services.Single(service => service.ServiceType == typeof(IContentSyncScopeAccess)).Lifetime,
+            Is.EqualTo(Microsoft.Extensions.DependencyInjection.ServiceLifetime.Scoped));
+    }
+
     [Test]
     public void RefreshRequest_IsConsumedExactlyOnce()
     {

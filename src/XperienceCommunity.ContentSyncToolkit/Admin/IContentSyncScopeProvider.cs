@@ -8,8 +8,8 @@ namespace XperienceCommunity.ContentSyncToolkit.Admin;
 public sealed record ContentSyncScope(int Id, string Name, string DisplayName);
 
 /// <summary>
-/// Enumerates the website channels and content-hub workspaces available on this instance, for the
-/// sync status admin page's selector controls. The foundation deliberately has no equivalent — see
+/// Enumerates the website channels and content-hub workspaces the signed-in administration user can
+/// access on this instance, for the sync status admin page's selector controls. The foundation deliberately has no equivalent — see
 /// docs/specs/content-inventory-foundation.md's Out of scope — since it always takes an explicit
 /// scope name from its caller; this is admin-UI-only surface.
 /// </summary>

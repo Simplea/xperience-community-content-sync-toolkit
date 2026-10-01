@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 
 using XperienceCommunity.ContentSyncToolkit.Http;
 using XperienceCommunity.ContentSyncToolkit.Inventory;
@@ -33,6 +32,7 @@ public static class ContentSyncToolkitServiceCollectionExtensions
         services.AddControllers().AddApplicationPart(typeof(ContentInventoryController).Assembly);
 
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<IContentSyncToolkitSettings, ContentSyncToolkitSettings>();
         services.TryAddSingleton<IContentScopeLookup, ContentScopeLookup>();
         services.TryAddSingleton<ILocalContentInventoryService, LocalContentInventoryService>();
         services.TryAddSingleton<IContentSyncTargetSecretValidator, ContentSyncTargetSecretValidator>();
@@ -41,19 +41,19 @@ public static class ContentSyncToolkitServiceCollectionExtensions
 
         services.AddHttpClient<IContentInventoryClient, ContentInventoryClient>((serviceProvider, client) =>
         {
-            var sourceOptions = serviceProvider.GetRequiredService<IOptions<ContentSyncToolkitOptions>>().Value.Source;
-            ConfigureInventoryHttpClient(client, sourceOptions);
+            var source = serviceProvider.GetRequiredService<IContentSyncToolkitSettings>().Source;
+            ConfigureInventoryHttpClient(client, source);
         });
 
         return services;
     }
 
     /// <summary>
-    /// Applies <paramref name="sourceOptions"/> to <paramref name="client"/>. Extracted from the
+    /// Applies the effective <paramref name="sourceOptions"/> (see <see cref="IContentSyncToolkitSettings"/>) to <paramref name="client"/>. Extracted from the
     /// <c>AddHttpClient</c> configuration delegate so it can be unit-tested against a plain
     /// <see cref="HttpClient"/> without building a DI container.
     /// </summary>
-    internal static void ConfigureInventoryHttpClient(HttpClient client, ContentSyncToolkitSourceOptions sourceOptions)
+    internal static void ConfigureInventoryHttpClient(HttpClient client, EffectiveSourceSettings sourceOptions)
     {
         if (sourceOptions.TargetUrl is not null)
         {

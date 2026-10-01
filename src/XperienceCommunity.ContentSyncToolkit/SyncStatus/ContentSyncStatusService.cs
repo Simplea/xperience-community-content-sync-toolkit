@@ -48,7 +48,7 @@ internal sealed class ContentSyncStatusService(
             }
 
             remoteItems = fetchResult.Items;
-            cache.Set(cacheKey, remoteItems, options.Value.Source.InventoryCacheDuration);
+            cache.Set(cacheKey, remoteItems, options.Value.InventoryCacheDuration);
         }
 
         // Local is always re-queried fresh, even when the remote half came from cache — an editor

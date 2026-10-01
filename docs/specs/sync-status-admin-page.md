@@ -216,7 +216,7 @@ before the table loads can be banners. On `30.8.0` callouts offer two styles,
 
 | State | Known before the table loads? | Presentation |
 | --- | --- | --- |
-| **Not configured as a source** (`Source.TargetUrl` unset) | Yes | `FriendlyWarning` banner explaining that the toolkit isn't configured as a source, linking to the [Usage Guide](../Usage-Guide.md). The table loads no rows and no fetch is attempted. |
+| **Not configured as a source** (Content Sync's source role not enabled with a target URL) | Yes | `FriendlyWarning` banner explaining that the toolkit isn't configured as a source, linking to the [Usage Guide](../Usage-Guide.md). The table loads no rows and no fetch is attempted. |
 | **No channels or workspaces** (a brand-new instance, or none the user can access) | Yes | `QuickTip` banner pointing to **Configuration → Channel management** or **Workspaces**, as plain text. Kentico's admin URLs aren't a public API, so the banner doesn't hardcode a link. |
 | **Target unavailable** (`TargetAvailable = false`) | No — depends on the selected scope | A single table row with a red "Target unavailable" status tag and an explanation. The table must not fall back to showing local content as if it were unclassified. |
 | **Selected scope no longer exists** (deleted after the filter was applied) | No | A single table row, "The selected channel/workspace no longer exists", with a grey "Not available" tag. |
@@ -335,6 +335,36 @@ not usable by third-party code — ruled out, not merely deprioritized.
 - Require the VIEW permission for the application (see Administration
   integration) for menu visibility, every tab page, and every server command;
   do not rely on menu-hiding alone.
+- List only channels and workspaces the signed-in user can access in
+  Xperience itself. View on Content sync status alone would otherwise show the
+  names and paths of every channel's pages and every workspace's items, leaking
+  past Xperience's own channel and workspace permissions. `IContentSyncScopeAccess`
+  decides, per request:
+  - **Workspaces:** Xperience's public `IWorkspacePermissionEvaluator`, View for
+    the Content hub application (`ContentHubApplication`), the same check the
+    Content hub uses.
+  - **Website channels:** each channel is its own Pages application, and
+    Xperience's evaluator for an arbitrary application isn't public (nor are
+    `ICurrentUserWorkspaceRetriever` and `PermissionConfiguration`; the compiled
+    types are internal even though their XML documentation is shipped). So the
+    check reads what Role management writes: administrators (`UserInfo.IsAdministrator()`)
+    see every channel; anyone else needs a role with View on the application
+    named `Kentico.Xperience.Application.WebPages_<WebsiteChannelGUID>`
+    (`ApplicationPermissionInfo`, `UserRoleInfo`). That name is a convention,
+    like the `webpages-{id}` URL segment, pinned by a unit test.
+
+  A channel or workspace the user can't access is simply absent: not in the
+  filter, not the default, and requesting it shows the "no longer exists" row.
+  Page-level permissions inside a channel (page ACLs) aren't checked: checking
+  them per row was judged too costly for the listing, so anyone who can view a
+  channel sees the status of all its pages.
+
+  Verified live on 31.7.2: the administrator sees all three Dancing Goat
+  workspaces; `sync-status-tester`, whose role has Content hub View on Events
+  and Ltd. only, sees just those two, and the Content hub tab opens on Events.
+  Both see the Dancing Goat Pages channel, which both roles can view. A user
+  whose roles can't view any channel isn't verified live (the rig's roles all
+  can); it would show the existing "No website channels to compare" tip.
 - The page never displays field-level content values — only the metadata
   already defined in the foundation's `ContentInventoryItem` contract (path or
   name, content type, status, publish timestamps).
@@ -428,10 +458,12 @@ Findings from live verification on `31.7.2` that constrain the implementation:
   status-presentation helpers shared by both tabs.
 - `ContentSyncStatusRefreshRequestStore`: the small in-memory per-tab
   cache-bypass flag described under Server workflow.
-- `IContentSyncScopeProvider`: enumerates available website channels
-  (joining `WebsiteChannelInfo`/`ChannelInfo`) and workspaces (`WorkspaceInfo`)
-  for the selectors — new code, since the foundation deliberately excludes a
-  "discover all channels/workspaces" convenience method.
+- `IContentSyncScopeProvider`: enumerates the website channels (joining
+  `WebsiteChannelInfo`/`ChannelInfo`) and workspaces (`WorkspaceInfo`) the
+  signed-in user can access, for the selectors — new code, since the
+  foundation deliberately excludes a "discover all channels/workspaces"
+  convenience method. Scoped per request, with `IContentSyncScopeAccess` (see
+  Security and privacy) deciding access.
 - One `[PageCommand] Refresh` per tab, calling `IContentSyncStatusService`'s
   cache-bypassing overload on the next `LoadData`.
 
