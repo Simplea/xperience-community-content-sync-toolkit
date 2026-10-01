@@ -117,7 +117,14 @@ Sync status
   table is never empty-by-default on first visit.
 - **Refresh** forces a fresh remote fetch, bypassing the foundation's inventory
   cache (see Server workflow). It does not affect the local half, which is
-  already always fresh.
+  already always fresh. Its tooltip (`ActionConfiguration.Title`) explains
+  when to use it: the target's list is otherwise reused for the configured
+  `InventoryCacheDuration` ("up to 90 seconds" by default), and a target
+  applies a sync within about 30 seconds (Kentico's restoration task), so a
+  status checked right after a sync can still show the old state. Clearing the
+  cache when a sync is sent was considered and rejected: there's no public
+  "sync sent" event, and the target applies the sync later anyway, so an
+  immediate refetch would cache the pre-sync list.
 - Clicking a row opens the item in Xperience's own editor (see Filters and
   item navigation). The page itself stays read-only — it never triggers a sync
   (see Out of scope).

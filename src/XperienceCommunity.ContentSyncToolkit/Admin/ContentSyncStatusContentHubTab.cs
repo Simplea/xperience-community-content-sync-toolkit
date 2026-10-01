@@ -2,6 +2,8 @@ using CMS.Membership;
 
 using Kentico.Xperience.Admin.Base;
 
+using Microsoft.Extensions.Options;
+
 using XperienceCommunity.ContentSyncToolkit.Admin;
 using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
@@ -19,6 +21,7 @@ namespace XperienceCommunity.ContentSyncToolkit.Admin;
 [UIEvaluatePermission(SystemPermissions.VIEW)]
 internal sealed class ContentSyncStatusContentHubTab(
     IContentSyncToolkitSettings settings,
+    IOptions<ContentSyncToolkitOptions> options,
     IContentSyncStatusService syncStatusService,
     IContentSyncScopeProvider scopeProvider,
     IContentSyncFilterOptionsProvider filterOptionsProvider,
@@ -30,6 +33,7 @@ internal sealed class ContentSyncStatusContentHubTab(
         "Name",
         RequiredObjectKind.Workspace,
         settings,
+        options,
         syncStatusService,
         filterOptionsProvider,
         refreshRequestStore,

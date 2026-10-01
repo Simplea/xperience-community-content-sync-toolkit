@@ -129,7 +129,11 @@ The application has two tabs: **Pages** (one website channel at a time) and
   Xperience's own Content Sync actions. Extra on target rows can't be opened,
   because the item doesn't exist on this instance.
 - **Refresh** fetches the target's inventory again instead of using the cached
-  copy. The applied filters and search are kept.
+  copy. The applied filters and search are kept. Without it, the target's list
+  is reused for up to 90 seconds (`InventoryCacheDuration`), so a page can
+  still show an item as missing right after you sync it. The target also
+  applies a sync within about 30 seconds of receiving it, so wait that long,
+  then use Refresh. Hover the button for a reminder.
 - Hover the ⓘ next to **Status** or **Last published** for a short explanation.
 
 | Status | Meaning |

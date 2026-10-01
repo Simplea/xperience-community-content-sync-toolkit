@@ -3,6 +3,8 @@ using CMS.Membership;
 
 using Kentico.Xperience.Admin.Base;
 
+using Microsoft.Extensions.Options;
+
 using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
@@ -23,6 +25,7 @@ internal abstract class ContentSyncStatusTabBase(
     string nameColumnCaption,
     RequiredObjectKind scopeKind,
     IContentSyncToolkitSettings settings,
+    IOptions<ContentSyncToolkitOptions> options,
     IContentSyncStatusService syncStatusService,
     IContentSyncFilterOptionsProvider filterOptionsProvider,
     ContentSyncStatusRefreshRequestStore refreshRequestStore,
@@ -108,6 +111,10 @@ internal abstract class ContentSyncStatusTabBase(
     // up front (configuration, available scopes) can be banners. See docs/specs/sync-status-admin-page.md.
     public override async Task ConfigurePage()
     {
+        // The Refresh tooltip says how long the target's list is reused, which is configurable.
+        PageConfiguration.HeaderActions.Single(action => action.Name == nameof(Refresh)).Title =
+            ContentSyncStatusListingSupport.RefreshTooltip(options.Value.InventoryCacheDuration);
+
         if (!IsSourceConfigured)
         {
             PageConfiguration.Callouts.Add(new CalloutConfiguration
