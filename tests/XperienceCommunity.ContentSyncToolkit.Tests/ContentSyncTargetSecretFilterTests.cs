@@ -119,4 +119,17 @@ public class ContentSyncTargetSecretFilterTests
         Assert.That(actions.Select(action => action.Name), Is.EquivalentTo(new[] { "GetWebPages", "GetContentHubItems" }));
         Assert.That(actions, Has.None.Matches<System.Reflection.MethodInfo>(action => action.GetCustomAttributes(typeof(IFilterMetadata), inherit: true).Length > 0));
     }
+
+    // Secret-gated responses must never be served from a shared cache such as the SaaS CDN.
+    [Test]
+    public void InventoryController_MarksResponsesAsNotStorable()
+    {
+        var responseCache = typeof(ContentInventoryController).GetCustomAttributes(typeof(ResponseCacheAttribute), inherit: true)
+            .Cast<ResponseCacheAttribute>()
+            .SingleOrDefault();
+
+        Assert.That(responseCache, Is.Not.Null);
+        Assert.That(responseCache!.NoStore, Is.True);
+        Assert.That(responseCache.Location, Is.EqualTo(ResponseCacheLocation.None));
+    }
 }

@@ -100,7 +100,7 @@ Pages                                                    DancingGoatCore ▾
 ### Unavailable and unconfigured states
 
 - If the current instance is not configured as a sync source
-  (`Source.TargetUrl` unset), show no badges at all — this feature is
+  (Content Sync's source role not enabled with a target URL), show no badges at all — this feature is
   invisible rather than presenting confusing partial state on an instance that
   was never meant to check sync status.
 - If the target is unreachable or rejects requests

@@ -38,9 +38,6 @@ it over HTTPS. There is no read channel back. We considered and rejected:
   internal schema across versions and requires DB network access/credentials
   that most organizations won't grant across environment boundaries (source and
   target are frequently on separate networks, e.g. staging vs. production).
-- **Reusing Kentico's `ContentSynchronizationOptions`.** That type belongs to
-  Kentico's own feature and isn't documented as public, stable API for
-  third-party binding.
 - **`Kentico.Xperience.ManagementApi`.** A real, currently-preview NuGet
   package — but it only covers content-*type*/schema management
   (`ContentTypeController`, `ReusableSchemaController`, etc.), entirely under an
@@ -49,9 +46,10 @@ it over HTTPS. There is no read channel back. We considered and rejected:
 The chosen design: the toolkit NuGet package is installed on **both** instances.
 On the target, it exposes a small authenticated, read-only HTTP endpoint
 returning a content inventory (item GUIDs, types, publish timestamps). On the
-source, it calls that endpoint and diffs the result against local content. This
-mirrors Kentico's own connection model (HTTPS + shared secret) without taking a
-dependency on Kentico's internal option types.
+source, it calls that endpoint and diffs the result against local content. It
+reuses Kentico's own connection (the target URL and shared secret from the
+public `ContentSynchronizationOptions`, populated by hand or, on SaaS, by
+Xperience Portal), so it never needs a connection of its own.
 
 ## Components
 
@@ -76,8 +74,9 @@ IContentSyncStatusService                            ContentInventoryController
   target, or both). Enumerates local web pages (scoped by website channel) and
   content-hub items (scoped by workspace) via `IContentQueryExecutor`.
 - **`ContentInventoryController`** — the target-side endpoint. Present in every
-  installation but only answers requests when `Target.Enabled` is `true` and the
-  caller presents the correct shared secret; otherwise every rejection reason
+  installation but only answers requests when Xperience's Content Sync target
+  role is enabled and the caller presents Content Sync's shared secret;
+  otherwise every rejection reason
   (disabled, wrong secret, missing secret) looks identical (404) from the
   outside.
 - **`IContentInventoryClient`** — the source-side HTTP client that calls a
@@ -107,6 +106,14 @@ locally should see that reflected immediately. The expensive, rate-limited part
 is the cross-instance HTTP call, so only that gets a TTL (default 90 seconds).
 This lets a tree UI that re-checks status per node, per render, cost at most one
 remote call per scope rather than one per node.
+
+**A complement to Content Sync, configured by it.** The toolkit has no source
+or target settings of its own: where the target is, the shared secret, and
+each instance's role come from Xperience's `ContentSynchronizationOptions`. The
+comparison therefore always targets the instance Content Sync pushes to, and
+there's nothing to configure twice. Without Content Sync the toolkit has
+nothing to complement. Only a request timeout and the inventory cache duration
+are toolkit settings.
 
 **Register everything unconditionally; gate behavior at request time.** The
 target controller, secret validator, and HTTP client are all registered by
@@ -145,7 +152,7 @@ for the specific verified API surface.
 ## References
 
 - [Content sync](https://docs.kentico.com/documentation/business-users/content-sync) — editor-facing behavior.
-- [Content sync configuration](https://docs.kentico.com/documentation/developers-and-admins/configuration/content-sync-configuration) — `ContentSynchronizationOptions`, the connection model this design mirrors.
+- [Content sync configuration](https://docs.kentico.com/documentation/developers-and-admins/configuration/content-sync-configuration) — `ContentSynchronizationOptions`, the connection this design reuses.
 - [content-inventory-foundation spec](specs/content-inventory-foundation.md)
 - [sync-status-admin-page spec](specs/sync-status-admin-page.md)
 - [content-tree-sync-indicators spec](specs/content-tree-sync-indicators.md)

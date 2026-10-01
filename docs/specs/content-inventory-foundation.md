@@ -79,35 +79,70 @@ implementation types.
 
 ## Data contract
 
-### Options
+### Configuration: Xperience's Content Sync settings
+
+The toolkit complements Xperience's Content Sync and has no source or target
+configuration of its own. Content Sync already configures everything the
+toolkit needs — the target's URL and a shared secret, in the public
+`CMS.ContentSynchronization.ContentSynchronizationOptions` — so the toolkit
+reads those directly, through `IContentSyncToolkitSettings`:
+
+| Toolkit behavior | Content Sync setting |
+| --- | --- |
+| This instance is a source, comparing against that target | `Source.Enabled` and an absolute `Source.TargetUrl` |
+| Secret sent with inventory requests | `Source.Secret` |
+| This instance answers inventory requests | `Target.Enabled` |
+| Secret required on those requests | `Target.Secret` |
+
+An instance's role therefore follows its Content Sync role exactly; one may be
+both (for example, a staging environment that's a sync target of production
+and a sync source toward a further environment). Every consumer (the HTTP
+client, the secret validator, the admin page's "not configured" check) reads
+the resolved settings.
+
+Why not separate toolkit settings: an earlier version had its own
+`TargetUrl`/`Secret`/`Enabled` settings, later with a fallback to Content
+Sync's. Duplicating them made installers configure a second URL and secret,
+and allowed the comparison to point at a different instance than the one
+Content Sync pushes to. Without Content Sync the toolkit has nothing to
+complement, so its settings were removed. Accepting Content Sync's target
+secret on the inventory endpoint adds no exposure: whoever holds it can
+already push content to the target. Content Sync requires the target on HTTPS
+with a trusted certificate, so the toolkit's requests are HTTPS too.
+
+The toolkit's own options are only what Content Sync has no equivalent for:
 
 ```csharp
 public sealed class ContentSyncToolkitOptions
 {
-    public ContentSyncToolkitSourceOptions Source { get; set; } = new();
-    public ContentSyncToolkitTargetOptions Target { get; set; } = new();
-}
-
-public sealed class ContentSyncToolkitSourceOptions
-{
-    public Uri? TargetUrl { get; set; }
-    public string? Secret { get; set; }
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(30);
     public TimeSpan InventoryCacheDuration { get; set; } = TimeSpan.FromSeconds(90);
 }
-
-public sealed class ContentSyncToolkitTargetOptions
-{
-    public bool Enabled { get; set; } = false;
-    public string? Secret { get; set; }
-}
 ```
 
-An instance's role is inferred, not declared twice: `Target.Enabled` is the
-explicit switch for accepting inbound inventory requests. Being a source is
-inferred from `Source.TargetUrl` being non-null. An instance may be both (for
-example, a staging environment that is a sync target of production and a sync
-source toward a further downstream environment) without two conflicting flags.
+Verified live on 31.7.2 with only `ContentSynchronization__*` environment
+variables on both rig instances: the target answered the Content Sync secret
+with `200` and any other secret with `404`, and the source's status page
+loaded without the "not configured" banner, fetching over
+`https://localhost:27311`.
+
+SaaS: Kentico configures Content Sync automatically for SaaS deployment
+environments, from the connections defined in Xperience Portal. It does so
+through the same options. `AddKenticoCloud(configuration)`, which Kentico's
+SaaS `Program.cs` requires in every cloud environment, calls an internal
+`AddXperienceCloudContentSynchronization` that binds
+`ContentSynchronizationOptions` to the `CMSContentSynchronization`
+configuration section the platform provides (checked by decompiling
+`Kentico.Xperience.Cloud` 31.7.2). A LOCAL development source is configured by
+hand with the Target URL and Connection secret Xperience Portal shows. Still
+not verified on a real SaaS environment: what the platform puts in that
+section, and that the SaaS edge lets the inventory GET requests through. Check
+both before the first release.
+
+Inventory responses carry `Cache-Control: no-store` (`ResponseCache` with
+`NoStore` on the controller). Cloudflare, which fronts SaaS, wouldn't cache an
+extensionless JSON route by default, but secret-gated responses must never
+come from a shared cache.
 
 ### Inventory item
 
@@ -168,7 +203,7 @@ potentially different versions running on the source and target.
   running different toolkit versions. `1`: publish dates in server-local time
   without a time zone. `2`: publish dates in UTC, plus `Order` for pages.
   Readers accept both; an older reader ignores `Order`.
-- Rejection (missing/wrong secret, or `Target.Enabled == false`): a bodiless
+- Rejection (missing/wrong secret, or Content Sync's `Target.Enabled == false`): a bodiless
   `404`, which the host renders exactly as it renders any unknown URL — see
   Security and privacy.
 
@@ -435,15 +470,15 @@ signature — a minor-version change under this repository's release policy.
 This foundation has no administration UI of its own. It is consumed by the two
 editor-facing features, each registered through the same public
 `AddContentSyncToolkit()` startup extension this specification defines.
-Register via:
+Register via `services.AddContentSyncToolkit()`. Source and target come from
+Content Sync's configuration (see Configuration); the only options tune the
+source's requests:
 
 ```csharp
 services.AddContentSyncToolkit(options =>
 {
-    options.Target.Enabled = true;
-    options.Target.Secret = "...";
-    options.Source.TargetUrl = new Uri("https://target-instance.example.com");
-    options.Source.Secret = "...";
+    options.RequestTimeout = TimeSpan.FromSeconds(30);
+    options.InventoryCacheDuration = TimeSpan.FromSeconds(90);
 });
 ```
 
@@ -452,8 +487,8 @@ secret validator, and the typed HTTP client — is registered unconditionally,
 regardless of whether the current instance is configured as a source, a
 target, both, or neither. Runtime behavior is gated entirely by
 `ContentSyncTargetSecretValidator` on the target side and by
-`ContentInventoryClient` failing fast with a clear error when
-`Source.TargetUrl` is unset on the source side.
+`ContentInventoryClient` failing fast with a clear error when no target URL is
+resolved on the source side.
 
 ## Server workflow and consistency
 
@@ -486,7 +521,7 @@ its own local state, which is a single cheap database read per request.
   transmitted over HTTPS, matching Content Sync's own connection model.
 - Secret comparison must use `CryptographicOperations.FixedTimeEquals`, not a
   standard string comparison, to avoid a timing side channel.
-- `Target.Enabled == false`, a missing configured secret, and a wrong or
+- Content Sync's `Target.Enabled == false`, a missing configured secret, and a wrong or
   missing provided secret must all produce the identical response (`404`, no
   distinguishing body) — a caller must not be able to distinguish "this
   instance isn't a configured target" from "the secret is wrong" from "the
@@ -565,8 +600,11 @@ continues.
 
 ## Suggested component boundaries
 
-- `ContentSyncToolkitOptions` / `ContentSyncToolkitSourceOptions` /
-  `ContentSyncToolkitTargetOptions`: configuration surface.
+- `ContentSyncToolkitOptions`: the toolkit's own settings (request timeout,
+  inventory cache duration).
+- `IContentSyncToolkitSettings` / `ContentSyncToolkitSettings`: the source and
+  target settings, read from Xperience's Content Sync configuration (see
+  Configuration).
 - `ILocalContentInventoryService` / `LocalContentInventoryService`: local
   content querying, present on every installation regardless of role.
 - `IContentScopeLookup` / `ContentScopeLookup`: checks a requested website
@@ -634,7 +672,7 @@ using the Dancing Goat integration host:
   secret, and verifying the returned inventory matches Dancing Goat's actual
   published pages/content-hub items for a real channel and workspace;
 - calling the endpoint with a missing or wrong secret, and with
-  `Target.Enabled = false`, verifying an identical `404` response in all three
+  Content Sync's `Target.Enabled = false`, verifying an identical `404` response in all three
   cases;
 - configuring one Dancing Goat instance as source and a second as target,
   publishing/unpublishing content on the source, and verifying the diffed
@@ -645,10 +683,10 @@ using the Dancing Goat integration host:
 - `AddContentSyncToolkit()` registers a working target endpoint and source
   client from a single call, following this repository's established DI
   registration pattern.
-- A target instance with `Target.Enabled = true` and a configured secret
+- A target instance with Content Sync's `Target.Enabled = true` and a configured secret
   answers inventory requests for a given channel or workspace with accurate
   local content data.
-- A target instance with `Target.Enabled = false`, or any caller presenting a
+- A target instance with Content Sync's `Target.Enabled = false`, or any caller presenting a
   missing or incorrect secret, receives an identical rejection response.
 - A source instance correctly classifies local content against a live target's
   inventory into in-sync, missing-on-target, out-of-date-on-target, and

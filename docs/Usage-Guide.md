@@ -34,6 +34,7 @@ builder.Services.AddContentSyncToolkit();
 builder.Services.Configure<ContentSyncToolkitOptions>(
     builder.Configuration.GetSection("ContentSyncToolkit"));
 
+// Optional: RequestTimeout and InventoryCacheDuration (see below).
 // Source instances only: adds the Content sync status admin application.
 builder.Services.AddContentSyncToolkitAdmin();
 ```
@@ -45,46 +46,41 @@ same controller routing Xperience sites already use (`MapControllerRoute` or
 
 ## Configure source and target
 
-Both instances share a secret. Use a long random value, keep it out of source
-control (user secrets, environment variables, or a key vault), and serve the
-target over HTTPS so the secret isn't sent in clear text.
+There's nothing toolkit-specific to configure: the toolkit uses Xperience's
+own Content Sync configuration
+([Content sync configuration](https://docs.kentico.com/documentation/developers-and-admins/configuration/content-sync-configuration)).
 
-**Target** (`appsettings.json` or equivalent):
+| Content Sync setting | What the toolkit does with it |
+| --- | --- |
+| `Source:Enabled` + `Source:TargetUrl` | This instance is a source, and the status page compares against that target. |
+| `Source:Secret` | Sent with the toolkit's inventory requests. |
+| `Target:Enabled` | This instance answers the toolkit's inventory requests. |
+| `Target:Secret` | Required on those requests. |
+
+So the page always compares against the instance Content Sync pushes to, with
+the same secret. That adds no exposure: whoever holds the secret can already
+push content to the target. Content Sync requires the target on HTTPS with a
+trusted certificate, so the toolkit's requests use HTTPS too.
+
+If Content Sync isn't configured as a source, the status page shows a banner
+saying so; if it isn't configured as a target, the target rejects inventory
+requests. The toolkit has no purpose without Content Sync.
+
+Two optional toolkit settings tune the source's requests:
 
 ```json
 {
   "ContentSyncToolkit": {
-    "Target": {
-      "Enabled": true,
-      "Secret": "<shared secret>"
-    }
-  }
-}
-```
-
-**Source**:
-
-```json
-{
-  "ContentSyncToolkit": {
-    "Source": {
-      "TargetUrl": "https://target.example.com",
-      "Secret": "<shared secret>",
-      "RequestTimeout": "00:00:30",
-      "InventoryCacheDuration": "00:01:30"
-    }
+    "RequestTimeout": "00:00:30",
+    "InventoryCacheDuration": "00:01:30"
   }
 }
 ```
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `Target:Enabled` | `false` | Whether this instance answers inventory requests. When `false`, every request is rejected. |
-| `Target:Secret` | — | Secret a source must send. Must match the source's `Source:Secret`. |
-| `Source:TargetUrl` | — | Base URL of the target. This instance acts as a source only when it's set. |
-| `Source:Secret` | — | Secret sent to the target. |
-| `Source:RequestTimeout` | 30 seconds | Timeout for requests to the target. |
-| `Source:InventoryCacheDuration` | 90 seconds | How long the target's inventory is cached on the source. The source's own content is never cached. |
+| `RequestTimeout` | 30 seconds | Timeout for requests to the target. |
+| `InventoryCacheDuration` | 90 seconds | How long the target's inventory is cached on the source. The source's own content is never cached. |
 
 ## Give editors access
 
@@ -94,6 +90,17 @@ automatically. For other users, open **Role management**, edit a role,
 **Add permission set**, and choose **For** *Content sync status* **allow users
 to** *View*. Users without it don't see the application, and direct
 navigation to it is refused.
+
+Within the application, editors only see what they could open in Xperience
+itself:
+
+- **Pages** lists only website channels whose Pages application they can view.
+- **Content hub** lists only workspaces whose content items they can view.
+
+So a role with access to one workspace sees only that workspace here, even
+with View on Content sync status. Access to individual pages (page-level
+permissions within a channel) isn't checked; anyone who can view a channel
+sees the sync status of all its pages.
 
 ## Use the Content sync status application
 
@@ -133,10 +140,11 @@ The application has two tabs: **Pages** (one website channel at a time) and
 
 Other states:
 
-- **A warning banner saying the application isn't configured**: `Source:TargetUrl`
-  isn't set on this instance.
+- **A warning banner saying the application isn't configured**: Content Sync
+  isn't configured as a source on this instance (`Source:Enabled` with a
+  `Source:TargetUrl`).
 - **A "Target unavailable" row**: the target couldn't be reached, rejected the
-  secret, or has `Target:Enabled` set to `false`.
+  secret, or doesn't have Content Sync's target role enabled.
 - **No rows**: the channel or workspace has no published content in the
   compared language, or nothing matches the applied filters.
 - **A "Not available" row**: the selected channel, workspace, or language was

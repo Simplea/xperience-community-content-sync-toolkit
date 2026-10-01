@@ -25,8 +25,8 @@ internal sealed class ContentInventoryClient(HttpClient httpClient) : IContentIn
         if (httpClient.BaseAddress is null)
         {
             throw new InvalidOperationException(
-                $"{nameof(ContentSyncToolkitOptions.Source)}.{nameof(ContentSyncToolkitSourceOptions.TargetUrl)} " +
-                "must be configured before calling a target instance.");
+                "Xperience's Content Sync source settings (ContentSynchronizationOptions.Source: Enabled and " +
+                "TargetUrl) must be configured before calling a target instance.");
         }
 
         HttpResponseMessage response;
