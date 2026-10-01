@@ -359,11 +359,17 @@ signature — a minor-version change under this repository's release policy.
   above; `LastPublishedWhen` is what distinguishes "never published" from
   "unpublished, then re-drafted". Whether Content Sync can act on such an item
   is undocumented, so it's left out.
-- **Not verified:** that Content Sync of an unpublished page absent on the
-  target creates it there. Kentico documents this ("unpublished pages can be
-  synchronized without limitations"), but testing it requires Kentico's own
-  Content Sync connection, and the target must run on HTTPS with a trusted
-  certificate, which this HTTP rig doesn't provide.
+- **Content Sync of an unpublished page absent on the target creates it
+  there, unpublished.** Verified with Xperience's own Content Sync between the
+  two rig instances (target on HTTPS with a trusted development certificate;
+  see [Contributing-Setup](../Contributing-Setup.md#connecting-xperiences-own-content-sync)).
+  `/Articles/Clone_On_Roasts`, unpublished on the source and absent on the
+  target, showed as `MissingOnTarget` ("Unpublished here, and not on the
+  target yet"); **Sync this page** created it on the target as `Unpublished`
+  within about 10 seconds, after which it showed as `InSync` ("Unpublished on
+  both instances"). Publishing it on the source then showed `OutOfDateOnTarget`
+  ("Published here, unpublished on the target"), and syncing again made it
+  published on the target and `InSync`.
 
 ## Administration integration
 

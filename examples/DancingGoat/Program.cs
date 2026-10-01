@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using CMS.Base;
+using CMS.ContentSynchronization;
 
 using DancingGoat;
 using DancingGoat.EmailComponents;
@@ -78,6 +79,11 @@ builder.Services.AddSingleton<IEmailActivityTrackingEvaluator, EmailActivityTrac
 builder.Services.AddContentSyncToolkit();
 builder.Services.AddContentSyncToolkitAdmin();
 builder.Services.Configure<ContentSyncToolkitOptions>(builder.Configuration.GetSection("ContentSyncToolkit"));
+
+// Xperience's own Content Sync between the two rig instances, so a sync can be checked end to end.
+// Off unless ContentSynchronization__Source__* / __Target__* are set at launch; see
+// docs/Contributing-Setup.md.
+builder.Services.Configure<ContentSynchronizationOptions>(builder.Configuration.GetSection("ContentSynchronization"));
 
 ConfigureEmailBuilder(builder.Services);
 ConfigureMembershipServices(builder.Services);
