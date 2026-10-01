@@ -1,6 +1,9 @@
 using Kentico.Xperience.Admin.Base;
 
+using System.Net;
+
 using XperienceCommunity.ContentSyncToolkit.Inventory;
+using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 namespace XperienceCommunity.ContentSyncToolkit.Admin;
@@ -95,7 +98,7 @@ internal static class ContentSyncStatusListingSupport
             _ when IsColumn(sortBy, NameColumn) =>
                 Order(items, DisplayName, StringComparer.OrdinalIgnoreCase, descending),
             _ when IsColumn(sortBy, ContentTypeColumn) =>
-                Order(items, ContentTypeName, StringComparer.OrdinalIgnoreCase, descending),
+                Order(items, ContentTypeDisplayName, StringComparer.OrdinalIgnoreCase, descending),
             _ when IsColumn(sortBy, LastPublishedColumn) =>
                 Order(items, PublishedOrEarliest, Comparer<DateTime>.Default, descending),
             _ => Order(items, item => StatusSortRank(item.Status), Comparer<int>.Default, descending)
@@ -142,13 +145,24 @@ internal static class ContentSyncStatusListingSupport
         return [.. items.Skip(pageSize * pageIndex).Take(pageSize)];
     }
 
+    // Pages show their tree path, which also says where they are; content hub items show the display
+    // name editors see in the Content hub, falling back to the code name from an older target.
     public static string DisplayName(ContentSyncStatusItem item)
     {
         var source = item.Local ?? item.Remote;
-        return source?.TreePath ?? source?.Name ?? string.Empty;
+        return source?.TreePath ?? NonEmpty(source?.DisplayName) ?? source?.Name ?? string.Empty;
     }
 
+    /// <summary>The content type code name, which the Content type filter matches.</summary>
     public static string ContentTypeName(ContentSyncStatusItem item) => (item.Local ?? item.Remote)?.ContentTypeName ?? string.Empty;
+
+    public static string ContentTypeDisplayName(ContentSyncStatusItem item)
+    {
+        var source = item.Local ?? item.Remote;
+        return NonEmpty(source?.ContentTypeDisplayName) ?? source?.ContentTypeName ?? string.Empty;
+    }
+
+    private static string? NonEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
     public static DateTime? LastPublishedWhen(ContentSyncStatusItem item) => (item.Local ?? item.Remote)?.LastPublishedWhen;
 
@@ -157,8 +171,48 @@ internal static class ContentSyncStatusListingSupport
 
     // Says why an item has its status and, where Content Sync needs something unusual, what to do,
     // so "Out of date on target" isn't ambiguous between newer edits, a different publish state, and
-    // a moved or reordered page. Null for the ordinary cases.
+    // a moved or reordered page. Null for the ordinary cases. A sync that would fail comes first.
     public static string? StatusTooltip(ContentSyncStatusItem item)
+    {
+        string? reason = StatusReasonTooltip(item);
+
+        if (item.RequiredObjectIssues.Count == 0)
+        {
+            return reason;
+        }
+
+        string blocked = "Can't sync yet: the target "
+            + string.Join("; ", item.RequiredObjectIssues.Select(IssuePhrase))
+            + ". A developer needs to deploy it to the target first.";
+
+        return reason is null ? blocked : blocked + " " + reason;
+    }
+
+    // "has no content type Event", for the row tooltip, which isn't HTML.
+    public static string IssuePhrase(RequiredObjectIssue issue) =>
+        IssuePhrase(issue, ObjectNoun(issue.Object.Kind) + " " + issue.Object.DisplayName);
+
+    // The same, as an HTML list item for the banner, with the name encoded and emphasized.
+    public static string IssueHtml(RequiredObjectIssue issue) =>
+        "<li>" + IssuePhrase(issue, ObjectNoun(issue.Object.Kind) + " <strong>" + WebUtility.HtmlEncode(issue.Object.DisplayName) + "</strong>") + "</li>";
+
+    private static string IssuePhrase(RequiredObjectIssue issue, string obj) => issue.Problem switch
+    {
+        RequiredObjectProblem.DifferentGuidOnTarget => "has a different " + obj + " with the same code name (recreated rather than deployed)",
+        RequiredObjectProblem.DefinitionDiffers => "has different fields for " + obj,
+        _ => "has no " + obj,
+    };
+
+    private static string ObjectNoun(RequiredObjectKind kind) => kind switch
+    {
+        RequiredObjectKind.ContentType => "content type",
+        RequiredObjectKind.Language => "language",
+        RequiredObjectKind.WebsiteChannel => "website channel",
+        RequiredObjectKind.Workspace => "workspace",
+        _ => "object",
+    };
+
+    private static string? StatusReasonTooltip(ContentSyncStatusItem item)
     {
         bool localUnpublished = item.Local is not null && ContentInventoryVersionStatus.IsUnpublished(item.Local.VersionStatus);
         bool remoteUnpublished = item.Remote is not null && ContentInventoryVersionStatus.IsUnpublished(item.Remote.VersionStatus);

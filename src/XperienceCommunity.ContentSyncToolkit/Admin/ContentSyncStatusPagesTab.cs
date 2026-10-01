@@ -3,6 +3,7 @@ using CMS.Membership;
 using Kentico.Xperience.Admin.Base;
 
 using XperienceCommunity.ContentSyncToolkit.Admin;
+using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 [assembly: UIPage(
@@ -27,7 +28,9 @@ internal sealed class ContentSyncStatusPagesTab(
     : ContentSyncStatusTabBase(
         new ContentSyncStatusPagesFilterModel(),
         "Path",
+        RequiredObjectKind.WebsiteChannel,
         settings,
+        syncStatusService,
         filterOptionsProvider,
         refreshRequestStore,
         pageLinkGenerator)
@@ -48,7 +51,7 @@ internal sealed class ContentSyncStatusPagesTab(
 
     protected override Task<ContentSyncStatusResult> GetStatusAsync(
         string scopeName, string languageName, bool forceRefresh, CancellationToken cancellationToken) =>
-        syncStatusService.GetWebPageSyncStatusAsync(scopeName, languageName, forceRefresh, cancellationToken);
+        SyncStatusService.GetWebPageSyncStatusAsync(scopeName, languageName, forceRefresh, cancellationToken);
 
     protected override Task<IReadOnlyDictionary<Guid, int>> GetLocalItemIdsAsync(
         ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken) =>

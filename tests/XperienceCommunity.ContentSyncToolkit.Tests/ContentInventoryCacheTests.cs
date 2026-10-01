@@ -1,4 +1,5 @@
 using XperienceCommunity.ContentSyncToolkit.Inventory;
+using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 namespace XperienceCommunity.ContentSyncToolkit.Tests;
@@ -18,6 +19,23 @@ public class ContentInventoryCacheTests
     [
         new(Guid.NewGuid(), ContentInventoryItemKind.WebPage, "Test.Type", "Scope", "en-US", "/Test", null, "Published")
     ];
+
+    [Test]
+    public void RequiredObjects_AreCachedSeparately_AndExpire()
+    {
+        var time = new ManualTimeProvider();
+        var cache = new ContentInventoryCache(time);
+        IReadOnlyList<RequiredObject> objects = [new(RequiredObjectKind.Language, Guid.NewGuid(), "en", "English")];
+
+        cache.SetRequiredObjects(objects, TimeSpan.FromSeconds(90));
+
+        Assert.That(cache.TryGetRequiredObjects(out var cached), Is.True);
+        Assert.That(cached, Is.EqualTo(objects));
+        Assert.That(cache.TryGet("required-objects", out _), Is.False, "an inventory lookup must never return the required objects");
+
+        time.Advance(TimeSpan.FromSeconds(91));
+        Assert.That(cache.TryGetRequiredObjects(out _), Is.False);
+    }
 
     [Test]
     public void TryGet_ReturnsFalse_WhenKeyWasNeverSet()

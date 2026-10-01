@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 
 using XperienceCommunity.ContentSyncToolkit.Http;
 using XperienceCommunity.ContentSyncToolkit.Inventory;
+using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 
 namespace XperienceCommunity.ContentSyncToolkit.Tests;
 
@@ -121,6 +122,59 @@ public class ContentInventoryClientTests
         Assert.That(item.LastPublishedWhen, Is.EqualTo(expected));
         Assert.That(item.LastPublishedWhen!.Value.Kind, Is.EqualTo(DateTimeKind.Utc));
         Assert.That(item.Order, Is.Null);
+    }
+
+    // Schema 3 adds display names; older targets send none, and readers fall back to code names.
+    [Test]
+    public async Task GetContentHubItemsAsync_ReadsDisplayNames_FromASchema3Target()
+    {
+        var json = InventoryJson(3, "2026-03-01T17:30:00Z")
+            .Replace("\"name\":\"a\"", "\"name\":\"a\",\"displayName\":\"Coffee beans\",\"contentTypeDisplayName\":\"Coffee\"");
+        var client = new ContentInventoryClient(CreateHttpClient(RawJson(json)));
+
+        var item = (await client.GetContentHubItemsAsync("Workspace", "en", CancellationToken.None)).Items.Single();
+
+        Assert.That(item.DisplayName, Is.EqualTo("Coffee beans"));
+        Assert.That(item.ContentTypeDisplayName, Is.EqualTo("Coffee"));
+    }
+
+    [Test]
+    public async Task GetRequiredObjectsAsync_RequestsTheRoute_AndReadsTheObjects()
+    {
+        var type = new RequiredObject(RequiredObjectKind.ContentType, Guid.NewGuid(), "DG.Article", "Article") { DefinitionHash = "ABC" };
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new RequiredObjectsResponse(3, DateTimeOffset.UtcNow, [type])),
+        });
+        var client = new ContentInventoryClient(CreateHttpClient(handler));
+
+        var result = await client.GetRequiredObjectsAsync(CancellationToken.None);
+
+        Assert.That(handler.LastRequest!.RequestUri!.AbsolutePath, Is.EqualTo("/xperience-community/content-sync-toolkit/inventory/required-objects"));
+        Assert.That(result.Status, Is.EqualTo(ContentInventoryFetchStatus.Success));
+        Assert.That(result.Objects, Is.EqualTo(new[] { type }));
+    }
+
+    // A target on schema 2 or earlier has no such route.
+    [Test]
+    public async Task GetRequiredObjectsAsync_ReturnsRejected_WhenTheTargetHasNoSuchRoute()
+    {
+        var client = new ContentInventoryClient(CreateHttpClient(new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound))));
+
+        var result = await client.GetRequiredObjectsAsync(CancellationToken.None);
+
+        Assert.That(result.Status, Is.EqualTo(ContentInventoryFetchStatus.Rejected));
+        Assert.That(result.Objects, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetRequiredObjectsAsync_ReturnsError_OnAJsonNull()
+    {
+        var client = new ContentInventoryClient(CreateHttpClient(RawJson("null")));
+
+        var result = await client.GetRequiredObjectsAsync(CancellationToken.None);
+
+        Assert.That(result.Status, Is.EqualTo(ContentInventoryFetchStatus.Error));
     }
 
     [Test]

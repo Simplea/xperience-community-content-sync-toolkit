@@ -2,6 +2,7 @@ using Kentico.Xperience.Admin.Base;
 
 using XperienceCommunity.ContentSyncToolkit.Admin;
 using XperienceCommunity.ContentSyncToolkit.Inventory;
+using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 namespace XperienceCommunity.ContentSyncToolkit.Tests;
@@ -395,6 +396,83 @@ public class ContentSyncStatusListingSupportTests
         var item = CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem(treePath: null, name: "Coffee article"));
 
         Assert.That(ContentSyncStatusListingSupport.DisplayName(item), Is.EqualTo("Coffee article"));
+    }
+
+    // Content hub items show the name editors see in the Content hub.
+    [Test]
+    public void DisplayName_PrefersTheItemsDisplayName_OverItsCodeName()
+    {
+        var item = CreateStatusItem(
+            ContentSyncStatus.InSync,
+            local: CreateInventoryItem(treePath: null, name: "CoffeeBeans-x7k2") with { DisplayName = "Coffee beans" });
+
+        Assert.That(ContentSyncStatusListingSupport.DisplayName(item), Is.EqualTo("Coffee beans"));
+    }
+
+    [Test]
+    public void ApplySearch_MatchesTheDisplayName_NotTheCodeName()
+    {
+        var item = CreateStatusItem(
+            ContentSyncStatus.InSync,
+            local: CreateInventoryItem(treePath: null, name: "CoffeeBeans-x7k2") with { DisplayName = "Coffee beans" });
+
+        Assert.That(ContentSyncStatusListingSupport.ApplySearch([item], "coffee b"), Has.Count.EqualTo(1));
+    }
+
+    [TestCase("Coffee product", "Coffee product")]
+    [TestCase(null, "DG.Coffee")]
+    public void ContentTypeDisplayName_FallsBackToTheCodeName(string? displayName, string expected)
+    {
+        var item = CreateStatusItem(
+            ContentSyncStatus.InSync,
+            local: CreateInventoryItem(contentTypeName: "DG.Coffee") with { ContentTypeDisplayName = displayName });
+
+        Assert.That(ContentSyncStatusListingSupport.ContentTypeDisplayName(item), Is.EqualTo(expected));
+        Assert.That(ContentSyncStatusListingSupport.ContentTypeName(item), Is.EqualTo("DG.Coffee"));
+    }
+
+    // Sorted by what the column shows, not the code name.
+    [Test]
+    public void ApplySort_ByContentType_UsesTheDisplayName()
+    {
+        var zebra = CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/a", contentTypeName: "A.Type") with { ContentTypeDisplayName = "Zebra" });
+        var apple = CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/b", contentTypeName: "Z.Type") with { ContentTypeDisplayName = "Apple" });
+
+        var result = ContentSyncStatusListingSupport.ApplySort([zebra, apple], ContentSyncStatusListingSupport.ContentTypeColumn, descending: false);
+
+        Assert.That(result, Is.EqualTo(new[] { apple, zebra }));
+    }
+
+    [Test]
+    public void StatusTooltip_SaysWhyAnItemCantSyncYet_BeforeItsReason()
+    {
+        var type = new RequiredObject(RequiredObjectKind.ContentType, Guid.NewGuid(), "DG.Article", "Article");
+        var language = new RequiredObject(RequiredObjectKind.Language, Guid.NewGuid(), "es", "Spanish");
+        var item = CreateStatusItem(ContentSyncStatus.OutOfDateOnTarget, local: Versioned("Published"), remote: Versioned("Published")) with
+        {
+            Reason = ContentSyncStatusReason.PublishedMoreRecently,
+            RequiredObjectIssues =
+            [
+                new RequiredObjectIssue(type, RequiredObjectProblem.DefinitionDiffers),
+                new RequiredObjectIssue(language, RequiredObjectProblem.MissingOnTarget),
+            ],
+        };
+
+        Assert.That(
+            ContentSyncStatusListingSupport.StatusTooltip(item),
+            Is.EqualTo("Can't sync yet: the target has different fields for content type Article; has no language Spanish. "
+                + "A developer needs to deploy it to the target first. Published here after the target's copy."));
+    }
+
+    // The banner is HTML, so names are encoded.
+    [Test]
+    public void IssueHtml_EncodesTheName()
+    {
+        var workspace = new RequiredObject(RequiredObjectKind.Workspace, Guid.NewGuid(), "W", "<R&D>");
+
+        Assert.That(
+            ContentSyncStatusListingSupport.IssueHtml(new RequiredObjectIssue(workspace, RequiredObjectProblem.DifferentGuidOnTarget)),
+            Is.EqualTo("<li>has a different workspace <strong>&lt;R&amp;D&gt;</strong> with the same code name (recreated rather than deployed)</li>"));
     }
 
     [Test]

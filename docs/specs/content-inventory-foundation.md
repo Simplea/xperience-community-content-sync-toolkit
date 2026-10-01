@@ -161,15 +161,42 @@ public sealed record ContentInventoryItem(
 {
     public string Name { get; init; } = string.Empty;  // WebPageItemName / ContentItemName
     public int? Order { get; init; }                   // WebPageItemOrder; pages only, schema 2
+    public string? DisplayName { get; init; }          // the name editors see; schema 3
+    public string? ContentTypeDisplayName { get; init; } // schema 3
 }
 ```
 
-`Name` and `Order` were added after the first version as init-only properties
-rather than positional parameters, so the positional constructor stays source-
-and binary-compatible. `Name` carries the item's code name for display, which
-content-hub items need because they have no tree path. `Order` is the page's
-position among its siblings, so a reorder can be detected (see Comparison
-rules).
+`Name`, `Order` and the display names were added after the first version as
+init-only properties rather than positional parameters, so the positional
+constructor stays source- and binary-compatible. `Name` is the item's code
+name. `Order` is the page's position among its siblings, so a reorder can be
+detected (see Comparison rules). `DisplayName` and `ContentTypeDisplayName` are
+what editors see in Xperience; readers fall back to `Name` and
+`ContentTypeName` when they're missing, as from a target on schema version 2.
+
+### Display names
+
+Editors know content hub items by the name the Content hub shows ("Guatemala
+Finca El Injerto"), not by the code name (`GuatemalaFincaElInjerto-k3bwkxk3`),
+so the admin page shows, searches and sorts by display names.
+
+- **Content types:** `ClassDisplayName`, from the content type list the
+  inventory already loads.
+- **Items:** the display name is stored per language in the item's language
+  metadata (`ContentItemLanguageMetadataDisplayName`). Verified live and in the
+  generated SQL: the content query doesn't join that table, so it can't return
+  the column, and the metadata's Info class is in an `.Internal` namespace. The
+  public `IContentItemManager.GetContentItemLanguageMetadata` returns one item
+  per call. The inventory therefore reads the names in one extra query, batched
+  by 1,000 content item IDs, through Kentico's public generic `ObjectQuery`,
+  naming the object type (`cms.contentitemlanguagemetadata`) and its columns as
+  strings. Both exist in 30.8.0 and 31.7.2. This ties the toolkit to an object
+  type Kentico treats as internal, so it's a convenience with a fallback: if
+  the query fails, the inventory keeps code names and the error goes to the
+  event log. The two-version release check covers a rename.
+
+Pages show their tree path in the admin page, which also says where they are;
+their display name is on the wire too, for the content tree indicators.
 
 ### Time zones
 
@@ -198,14 +225,70 @@ potentially different versions running on the source and target.
 - `GET .../web-pages?channelName={name}&languageName={name}` and
   `GET .../content-hub-items?workspaceName={name}&languageName={name}`.
 - Required header: `X-ContentSyncToolkit-Secret`.
-- Response body: `{ SchemaVersion: 2, GeneratedAtUtc, Items: ContentInventoryItem[] }`.
+- Response body: `{ SchemaVersion: 3, GeneratedAtUtc, Items: ContentInventoryItem[] }`.
   `SchemaVersion` is a forward-compatibility hook for a source and target
   running different toolkit versions. `1`: publish dates in server-local time
-  without a time zone. `2`: publish dates in UTC, plus `Order` for pages.
-  Readers accept both; an older reader ignores `Order`.
+  without a time zone. `2`: publish dates in UTC, plus `Order` for pages. `3`:
+  plus display names, and the required-objects route below. Readers accept all
+  three; an older reader ignores the fields it doesn't know.
+- `GET .../required-objects` (schema 3): `{ SchemaVersion, GeneratedAtUtc,
+  Objects: RequiredObject[] }`, the target's content types, languages, website
+  channels and workspaces. See Required objects. A target on schema 2 or
+  earlier answers `404`, which the source treats as "not checked".
 - Rejection (missing/wrong secret, or Content Sync's `Target.Enabled == false`): a bodiless
   `404`, which the host renders exactly as it renders any unknown URL — see
   Security and privacy.
+
+### Required objects
+
+Content Sync doesn't transfer content types, languages, channels or
+workspaces, and a sync fails for an item whose objects the target doesn't have
+exactly. Kentico's documentation: objects are matched "based on their GUID
+identifiers and all available data. It is not sufficient to manually recreate
+objects with the same code name (with the exception of languages, which are
+only validated by their code name)." The toolkit warns before an editor tries
+such a sync.
+
+```csharp
+public enum RequiredObjectKind { ContentType, Language, WebsiteChannel, Workspace }
+
+public sealed record RequiredObject(RequiredObjectKind Kind, Guid Guid, string Name, string DisplayName)
+{
+    public string? DefinitionHash { get; init; }  // content types: SHA-256 of ClassFormDefinition
+}
+```
+
+- `ILocalRequiredObjectsService` lists an instance's website and reusable
+  content types (email and headless content isn't synced), languages, website
+  channels (`ChannelGUID`) and workspaces. The target serves its list; the
+  source compares its own against it.
+- `RequiredObjectsComparer` (pure) reports, for each local object: **missing
+  on target** (no GUID match, and no code-name match); **different GUID on
+  target** (same code name, different GUID: recreated by hand rather than
+  deployed); or, for content types, **definition differs** (same GUID,
+  different field definition hash). Languages are matched by code name only.
+- The definition hash stands in for "all available data": a type deployed with
+  CI/CD or a deployment package has a byte-identical `ClassFormDefinition` on
+  both instances (verified on the rig: all 29 content types match), so a
+  difference means fields were changed on one side only. The definition itself
+  isn't sent.
+- `IContentSyncStatusService.CheckRequiredObjectsAsync` fetches the target's
+  list (cached like an inventory) and compares. The status methods attach the
+  relevant issues (`RequiredObjectIssues`) to each item Content Sync still has
+  to push (Missing or Out of date): its content type, its language, and its
+  channel (pages) or workspace (content hub items). They only ask the target
+  when some item needs a push. A failed or unsupported check never fails the
+  status: items are compared as before, without issues.
+- Not checked: linked items and their types (they're synced along with an
+  item), reusable field schemas, image variant definitions, member roles, the
+  channels a reusable item is used in, and project code (Page Builder
+  components, routing). Kentico's documentation lists these too.
+
+Verified live on the rig (31.7.2): with the target's Image content type
+definition changed and its Events workspace given another GUID, the Content
+hub tab showed both in the banner, and the Image item missing on the target
+said in its Status tooltip that it can't sync yet; restoring the values
+cleared both.
 
 ## Local inventory behavior
 
@@ -618,6 +701,10 @@ continues.
 - `IContentInventoryCache` / `ContentInventoryCache`: short-TTL cache scoped to
   the remote fetch only.
 - `ContentSyncStatusComparer`: pure diff logic, no dependencies.
+- `ILocalRequiredObjectsService` / `LocalRequiredObjectsService`: an
+  instance's content types, languages, website channels and workspaces, served
+  by the target and compared on the source.
+- `RequiredObjectsComparer`: pure required-objects comparison, no dependencies.
 - `IContentSyncStatusService` / `ContentSyncStatusService`: orchestrates the
   above; the only component the two editor-facing features depend on directly.
 
@@ -659,7 +746,14 @@ repository's established convention):
 - client: correct route and query string, secret header attached, successful
   envelope deserialization, non-2xx status maps to `Rejected` rather than
   throwing, an unreadable 2xx body (HTML, truncated JSON, JSON `null`) maps to
-  `Error`, simulated network failure maps to `Unreachable`;
+  `Error`, simulated network failure maps to `Unreachable`; schema 3 display
+  names; the required-objects route, and a target without it as `Rejected`;
+- required objects: missing, different GUID and different definition per kind;
+  languages by code name; no hash on either side skips the definition; objects
+  of another kind don't match; an item's issues are its type, language and
+  scope only; the definition hash is stable; the orchestrating service attaches
+  issues only to items that need a push, never asks the target when nothing
+  does, keeps comparing when the check fails, and caches the target's list;
 - DI registration: resolves every registered interface without error; calling
   `AddContentSyncToolkit` twice remains idempotent.
 
@@ -720,6 +814,9 @@ using the Dancing Goat integration host:
 - Secret rotation tooling beyond a configuration change and restart.
 - A "discover all channels/workspaces" convenience method; callers always pass
   an explicit scope name.
+- Checking everything Content Sync needs on the target: linked items' types,
+  reusable field schemas, image variants, member roles and project code aren't
+  checked (see Required objects).
 - Triggering an actual Content Sync operation from the diff result — this
   foundation is read-only visibility. Initiating a sync remains Xperience's
   own **Sync this page**/**Sync with all subpages**/Content hub **Sync**

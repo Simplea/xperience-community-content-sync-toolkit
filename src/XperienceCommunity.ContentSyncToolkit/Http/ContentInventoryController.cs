@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 
 using XperienceCommunity.ContentSyncToolkit.Inventory;
+using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 
 namespace XperienceCommunity.ContentSyncToolkit.Http;
 
@@ -16,10 +17,10 @@ namespace XperienceCommunity.ContentSyncToolkit.Http;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class ContentInventoryController(
     ILocalContentInventoryService inventoryService,
+    ILocalRequiredObjectsService requiredObjectsService,
     TimeProvider timeProvider) : ControllerBase
 {
-    // 2: publish dates in UTC, and page order. See ContentInventoryResponse.
-    private const int SchemaVersion = 2;
+    private const int SchemaVersion = ContentSyncToolkitConstants.SchemaVersion;
 
     [HttpGet("web-pages")]
     public async Task<ActionResult<ContentInventoryResponse>> GetWebPages(
@@ -35,5 +36,15 @@ public sealed class ContentInventoryController(
     {
         var items = await inventoryService.GetContentHubItemsAsync(workspaceName, languageName, cancellationToken);
         return new ContentInventoryResponse(SchemaVersion, timeProvider.GetUtcNow(), items);
+    }
+
+    // What Content Sync needs on this instance but doesn't transfer, so the source can warn before a
+    // sync fails. Only a caller holding Content Sync's secret, who can already push content here,
+    // gets the list.
+    [HttpGet("required-objects")]
+    public async Task<ActionResult<RequiredObjectsResponse>> GetRequiredObjects(CancellationToken cancellationToken)
+    {
+        var objects = await requiredObjectsService.GetRequiredObjectsAsync(cancellationToken);
+        return new RequiredObjectsResponse(SchemaVersion, timeProvider.GetUtcNow(), objects);
     }
 }

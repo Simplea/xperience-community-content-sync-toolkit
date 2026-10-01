@@ -16,7 +16,7 @@ public class LocalContentInventoryServiceTests
     }
 
     private static LocalContentInventoryService CreateService(bool channelExists, bool languageExists) =>
-        new(null!, new StubScopeLookup(channelExists, languageExists));
+        new(null!, new StubScopeLookup(channelExists, languageExists), null!);
 
     [TestCase(false, true)]
     [TestCase(true, false)]
