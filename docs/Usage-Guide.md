@@ -135,7 +135,8 @@ The application has two tabs: **Pages** (one website channel at a time) and
 | Status | Meaning |
 | --- | --- |
 | **Missing on target** | Published on this instance but absent on the target. |
-| **Out of date on target** | Published more recently on this instance than on the target, published on one and unpublished on the other, or moved or reordered (hover the status to see which and what to sync). |
+| **Out of date on target** | Published more recently on this instance than on the target, published on one and unpublished on the other, or moved (hover the status to see which and what to sync). |
+| **Order differs on target** | The pages on this level are in a different order on the target. See below. |
 | **Extra on target** | On the target but not on this instance. |
 | **In sync** | The target has the same published version. |
 
@@ -159,6 +160,21 @@ Other states:
 - **A "Not available" row**: the selected channel, workspace, or language was
   deleted after the filter was applied. Clear that filter or choose another.
 
+### Why does a whole level show "Order differs on target"?
+
+Content Sync sends each synced page's position with it, but pages you don't
+include keep their old positions on the target. So syncing only some pages of a
+level can leave the level in a different order there, for example after
+reordering pages here, or after syncing a single new page. The status page then
+marks every page on the level, because Content Sync only transfers an order
+change when the whole level is synced.
+
+- Hover the tag: it names the page or pages that are out of place.
+- To fix it, open the page tree, and on the level's parent page use **Sync with
+  all subpages**.
+- If your site never shows pages in page tree order (for example, a listing
+  sorted by date), the difference has no visible effect and you can ignore it.
+
 ## What is compared
 
 - **Published and unpublished content, not drafts.** An item appears once
@@ -175,10 +191,10 @@ Other states:
   [Publication-state scope](specs/content-inventory-foundation.md#publication-state-scope).
 - **Secured pages are included,** like any other page.
 - **Moved and reordered pages.** Moving or reordering a page doesn't republish it, so the page compares positions too: a page at a different path
-  on the target, or a level whose pages are in a different order, shows as
-  **Out of date on target**. To sync it, Content Sync needs all pages on the
-  affected level (for a move, the old and the new one); the status tooltip
-  says so.
+  on the target shows as **Out of date on target**, and a level whose pages
+  are in a different order shows as **Order differs on target**. To sync
+  either, Content Sync needs all pages on the affected level (for a move, the
+  old and the new one); the status tooltip says so.
 - **Deleted items.** Content Sync can't delete anything on the target. An item
   deleted here stays on the target and shows as **Extra on target** until
   someone deletes it there.

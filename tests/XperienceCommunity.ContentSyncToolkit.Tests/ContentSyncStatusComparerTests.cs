@@ -112,6 +112,82 @@ public class ContentSyncStatusComparerTests
         Assert.That(byGuid[b].Reason, Is.EqualTo(ContentSyncStatusReason.Reordered));
     }
 
+    // The case seen on the rig: a partial sync left one page at its old position on the target. Only
+    // that page is out of place; the rest are in the same order on both sides.
+    [Test]
+    public void Compare_Reorder_NamesOnlyThePageOutOfPlace()
+    {
+        Guid parent = Guid.NewGuid(), processing = Guid.NewGuid(), clone = Guid.NewGuid(), beverages = Guid.NewGuid(), donate = Guid.NewGuid();
+        var articles = Page(parent, "/Articles", 1) with { DisplayName = "Articles" };
+
+        var result = ContentSyncStatusComparer.Compare(
+            [articles, Page(processing, "/Articles/Processing", 2), Page(clone, "/Articles/Clone", 3), Page(beverages, "/Articles/Beverages", 4), Page(donate, "/Articles/Donate", 5)],
+            [articles, Page(beverages, "/Articles/Beverages", 1), Page(processing, "/Articles/Processing", 2), Page(clone, "/Articles/Clone", 3), Page(donate, "/Articles/Donate", 4)]);
+
+        var reorder = result.Single(item => item.Guid == donate).Reorder!;
+        Assert.That(reorder.MisplacedPages.Select(page => page.Guid), Is.EqualTo(new[] { beverages }));
+        Assert.That(reorder.ParentPath, Is.EqualTo("/Articles"));
+        Assert.That(reorder.Parent!.Guid, Is.EqualTo(parent));
+        Assert.That(result.Where(item => item.Reason == ContentSyncStatusReason.Reordered).Select(item => item.Reorder), Is.All.SameAs(reorder));
+        Assert.That(result.Single(item => item.Guid == parent).Reorder, Is.Null, "the parent's own level is in order");
+    }
+
+    // Two swapped pages: either one could be called out of place; the choice is always the same.
+    [Test]
+    public void Compare_Reorder_OfTwoSwappedPages_NamesOnePage_Deterministically()
+    {
+        Guid a = Guid.NewGuid(), b = Guid.NewGuid(), c = Guid.NewGuid();
+        ContentInventoryItem[] local = [Page(a, "/L/A", 1), Page(b, "/L/B", 2), Page(c, "/L/C", 3)];
+        ContentInventoryItem[] remote = [Page(a, "/L/A", 2), Page(b, "/L/B", 1), Page(c, "/L/C", 3)];
+
+        var first = ContentSyncStatusComparer.Compare(local, remote)[0].Reorder!.MisplacedPages;
+        var second = ContentSyncStatusComparer.Compare(local, remote)[0].Reorder!.MisplacedPages;
+
+        Assert.That(first, Has.Count.EqualTo(1));
+        Assert.That(first.Single().Guid, Is.EqualTo(second.Single().Guid));
+    }
+
+    [Test]
+    public void Compare_Reorder_NamesEveryPageOutOfPlace_InThisInstancesOrder()
+    {
+        Guid a = Guid.NewGuid(), b = Guid.NewGuid(), c = Guid.NewGuid(), d = Guid.NewGuid(), e = Guid.NewGuid();
+
+        // Here: A B C D E. Target: D A E B C — keeping A B C in order leaves D and E out of place.
+        var result = ContentSyncStatusComparer.Compare(
+            [Page(a, "/L/A", 1), Page(b, "/L/B", 2), Page(c, "/L/C", 3), Page(d, "/L/D", 4), Page(e, "/L/E", 5)],
+            [Page(d, "/L/D", 1), Page(a, "/L/A", 2), Page(e, "/L/E", 3), Page(b, "/L/B", 4), Page(c, "/L/C", 5)]);
+
+        Assert.That(result[0].Reorder!.MisplacedPages.Select(page => page.Guid), Is.EqualTo(new[] { d, e }));
+    }
+
+    [Test]
+    public void FindMisplaced_ReturnsNothing_WhenTheOrderIsTheSame()
+    {
+        var items = new[] { Guid.NewGuid(), Guid.NewGuid() }
+            .Select(guid => new ContentSyncStatusItem(guid, ContentSyncStatus.InSync, null, null))
+            .ToList();
+        var values = new Dictionary<Guid, int> { [items[0].Guid] = 5, [items[1].Guid] = 9 };
+
+        Assert.That(ContentSyncStatusComparer.FindMisplaced(items, item => values[item.Guid]), Is.Empty);
+    }
+
+    // Seen on the rig after syncing one page: Kentico also synced linked pages, which brought their
+    // source order values, so two pairs of pages ended up sharing a value on the target and Kentico
+    // showed one pair in the opposite order. Tied pages are out of order, whatever their GUIDs.
+    [Test]
+    public void Compare_PagesSharingAnOrderValueOnTheTarget_AreAReorder()
+    {
+        Guid which = Guid.NewGuid(), processing = Guid.NewGuid(), clone = Guid.NewGuid(), donate = Guid.NewGuid();
+
+        var result = ContentSyncStatusComparer.Compare(
+            [Page(which, "/Articles/Which", 2), Page(processing, "/Articles/Processing", 3), Page(clone, "/Articles/Clone", 4), Page(donate, "/Articles/Donate", 6)],
+            [Page(which, "/Articles/Which", 2), Page(processing, "/Articles/Processing", 3), Page(clone, "/Articles/Clone", 3), Page(donate, "/Articles/Donate", 5)]);
+
+        Assert.That(result.Select(item => item.Reason), Is.All.EqualTo(ContentSyncStatusReason.Reordered));
+        Assert.That(result[0].Reorder!.MisplacedPages, Has.Count.EqualTo(1), "one page of the tied pair");
+        Assert.That(result[0].Reorder!.MisplacedPages.Single().Guid, Is.AnyOf(processing, clone));
+    }
+
     // A target on schema version 1 sends no order, so a level can't be compared.
     [Test]
     public void Compare_MissingOrderOnTheTarget_IsNotAReorder()

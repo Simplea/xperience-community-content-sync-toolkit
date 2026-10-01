@@ -146,7 +146,7 @@ the comparer's `Reason` and each side's publication state:
 | --- | --- |
 | Unpublished on one side | "Unpublished here, still published on the target." / "Published here, unpublished on the target." |
 | Moved | "Moved here. To move it on the target, sync all pages on its old and new level." |
-| Reordered | "Page order on this level changed here. To reorder the target, sync all pages on this level." |
+| Reordered | The tag reads **Order differs on target** (the status is still Out of date, so sorting and filters are unchanged). Tooltip: "Page order on this level differs on the target: Coffee Beverages Explained is in a different position there. This usually happens when only some pages of a level are synced. To fix it, use Sync with all subpages on Articles." It names up to 3 out-of-place pages, then "and N more", by display name; on the channel's top level it says to sync all pages on the level. Positions aren't given as numbers, because the page tree also shows drafts, which aren't compared. |
 | Published more recently | "Published here after the target's copy." |
 | Only on the target | "Only on the target. Content Sync can't delete content: if it was deleted here, delete it on the target." |
 | Unpublished on both, or only here | "Unpublished on both instances." / "Unpublished here, and not on the target yet." |
