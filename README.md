@@ -43,7 +43,7 @@ package is released — see the [Release Process](./docs/Release-Process.md).
 ## Full Instructions
 
 View the [Usage Guide](./docs/Usage-Guide.md) for setup, configuration, and
-how to use the Content sync status admin application.
+how to use the Sync status admin application.
 
 ## Contributing
 

@@ -49,8 +49,20 @@ know Xperience's internal sync mechanics.
 
 ## Entry point and interaction
 
-Add a new top-level administration application, **Content sync status**, with
-its own icon and a permission-gated menu entry (see Security and privacy). The
+Add a new top-level administration application, **Sync status**, in the
+**Content management** category, with its own icon and a permission-gated menu
+entry (see Security and privacy).
+
+Name and place: an earlier version was **Content sync status** under
+**Configuration**, next to Kentico's own **Content synchronization**
+application, which lists the syncs a *target* has received. Similar names side
+by side suggested the two were related. This application answers a different
+question for editors on the *source* ("what still needs syncing?"), and covers
+pages and content hub items alike, so it's **Sync status** and sits with the
+other content tools. Its identifier and the `content-sync-status` URL segment
+didn't change, so bookmarks and granted permissions keep working. Its icon is
+`Icons.ClipboardChecklist`: a constant, because an icon name that doesn't exist
+(the first version used `xp-refresh`) renders nothing, without an error. The
 application has two sub-pages, matching the two scopes the foundation
 supports, presented as Xperience's native section sub-navigation — a small
 vertical list within the section (confirmed against a live instance: this is
@@ -65,7 +77,7 @@ always-visible selector row would mean not using the native filter mechanism
 this design otherwise depends on:
 
 ```text
-Content sync status
+Sync status
 
 ┌────────────────┐  Pages                          [Refresh]  [⚗ FILTER]
 │ Content sync    │
@@ -254,7 +266,7 @@ requires VIEW — so a role granted only a custom permission still gets Access
 Denied (confirmed live). The implementation therefore:
 
 - declares `[UIPermission(SystemPermissions.VIEW)]` on the application, so
-  Role management offers **Content sync status → View**;
+  Role management offers **Sync status → View**;
 - enforces it with `[UIEvaluatePermission(SystemPermissions.VIEW)]` on each
   tab page, so direct navigation is refused, not just the menu entry hidden;
 - sets `Permission = SystemPermissions.VIEW` on the `Refresh` page command.
@@ -346,7 +358,7 @@ not usable by third-party code — ruled out, not merely deprioritized.
   integration) for menu visibility, every tab page, and every server command;
   do not rely on menu-hiding alone.
 - List only channels and workspaces the signed-in user can access in
-  Xperience itself. View on Content sync status alone would otherwise show the
+  Xperience itself. View on Sync status alone would otherwise show the
   names and paths of every channel's pages and every workspace's items, leaking
   past Xperience's own channel and workspace permissions. `IContentSyncScopeAccess`
   decides, per request:

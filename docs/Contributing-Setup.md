@@ -99,8 +99,8 @@ Xperience version on both.
    `ContentSynchronization` section, so every value comes from configuration
    instead of being hardcoded.
 
-3. Inspect results on the source instance's admin at **Configuration →
-   Content sync status** (`/admin/content-sync-status`). That requires
+3. Inspect results on the source instance's admin at **Content management →
+   Sync status** (`/admin/content-sync-status`). That requires
    `builder.Services.AddContentSyncToolkitAdmin()` in Program.cs and a valid
    license key on each instance.
 
@@ -109,7 +109,7 @@ Xperience version on both.
    on the source (for example, **Sync this page** on a page). The target
    applies synchronized content through its "Content sync restoration"
    scheduled task, which runs every 30 seconds. Then use **Refresh** on the
-   source's **Content sync status** page.
+   source's **Sync status** page.
 
 `kentico-xperience-dbmanager` writes the connection string it creates directly
 into `appsettings.json`. Since both instances share one project, capture each

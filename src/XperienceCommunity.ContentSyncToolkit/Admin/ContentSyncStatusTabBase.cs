@@ -114,7 +114,7 @@ internal abstract class ContentSyncStatusTabBase(
             {
                 Type = CalloutType.FriendlyWarning,
                 Placement = CalloutPlacement.OnDesk,
-                Headline = "Content sync status isn't configured on this instance",
+                Headline = "Sync status isn't configured on this instance",
                 Content = "This page compares against Xperience's Content Sync target. Configure Content Sync "
                     + "with this instance as the source (<code>ContentSynchronization:Source</code>: "
                     + "<code>Enabled</code>, <code>TargetUrl</code>, <code>Secret</code>). "
