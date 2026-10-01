@@ -127,8 +127,8 @@ The application has two tabs: **Pages** (one website channel at a time) and
 | Status | Meaning |
 | --- | --- |
 | **Missing on target** | Published on this instance but absent on the target. |
-| **Out of date on target** | Published more recently on this instance than on the target. |
-| **Extra on target** | On the target but not published on this instance. |
+| **Out of date on target** | Published more recently on this instance than on the target, or published on one and unpublished on the other (hover the status to see which). |
+| **Extra on target** | On the target but not on this instance. |
 | **In sync** | The target has the same published version. |
 
 Other states:
@@ -144,14 +144,19 @@ Other states:
 
 ## What is compared
 
-- **Only published content.** An item appears once it's published, because
-  Content Sync can't transfer never-published items. A newly created or cloned
-  item shows up only after publishing it. An item with a pending draft is
-  compared by its last published version, which is what Content Sync would
-  push.
-- **Unpublished items aren't listed yet.** An item unpublished on the source
-  but still published on the target currently shows as **Extra on target**.
-  See the [known gap](specs/content-inventory-foundation.md#known-gap-unpublished-items).
+- **Published and unpublished content, not drafts.** An item appears once
+  it's been published, because Content Sync can't transfer never-published
+  items. A newly created or cloned item shows up only after publishing it. An
+  item with a pending draft is compared by its last published version, which
+  is what Content Sync would push.
+- **Unpublished items are compared by publish state.** An item unpublished on
+  one instance and published on the other shows as **Out of date on target**,
+  whichever side unpublished it, and the status tooltip says which. An
+  unpublished page the target doesn't have shows as **Missing on target**. An
+  unpublished content hub item the target doesn't have isn't listed, because
+  Content Sync wouldn't create it. See
+  [Publication-state scope](specs/content-inventory-foundation.md#publication-state-scope).
+- **Secured pages are included,** like any other page.
 - **Timestamps, not content.** Status comes from publish timestamps, so large
   clock differences between the two servers can affect **Out of date on
   target**.
