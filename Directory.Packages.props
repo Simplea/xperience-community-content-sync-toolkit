@@ -8,7 +8,7 @@
          May 2025 Refresh) and website channel pages (added 30.8.0, July 2025 Refresh). This toolkit
          is meaningless on a version where the underlying Content Sync feature can't sync both. -->
     <XperienceMinimumVersion>30.8.0</XperienceMinimumVersion>
-    <XperienceLatestVersion>31.7.2</XperienceLatestVersion>
+    <XperienceLatestVersion>31.9.1</XperienceLatestVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Kentico.Xperience.Admin" Version="$(XperienceMinimumVersion)" />

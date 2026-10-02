@@ -143,7 +143,7 @@ is the floor — an earlier version's Content Sync can't sync pages at all, so
 supporting it would mean claiming compatibility with a feature this toolkit
 has nothing to show for half its scope. All query APIs the foundation depends
 on were verified present at `30.8.0` as well as the latest build-verified
-version (`31.7.2`), so this floor doesn't trade away any needed capability.
+version (`31.9.1`), so this floor doesn't trade away any needed capability.
 See [content-inventory-foundation](specs/content-inventory-foundation.md#compatibility-and-api-gate)
 for the specific verified API surface.
 

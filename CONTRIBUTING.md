@@ -6,7 +6,7 @@ Thank you for helping improve Content Sync Toolkit for Xperience by Kentico.
 
 - The .NET SDK version specified by `global.json`
 - SQL Server 2019 or newer for the Dancing Goat integration host
-- An Xperience by Kentico 31.7.2 database for runtime verification (the latest
+- An Xperience by Kentico 31.9.1 database for runtime verification (the latest
   build-verified version; see [Compatibility](./docs/Compatibility.md) for the
   full supported range)
 
