@@ -55,6 +55,12 @@ public sealed record ContentSyncReorder(string ParentPath, IReadOnlyList<Content
 {
     /// <summary>The parent page, when it's in this instance's inventory, for its display name.</summary>
     public ContentInventoryItem? Parent { get; init; }
+
+    /// <summary>
+    /// Pages out of place that aren't in <see cref="MisplacedPages"/> because the signed-in user
+    /// can't see them; counted so the message stays true without naming them.
+    /// </summary>
+    public int HiddenMisplacedCount { get; init; }
 }
 
 /// <summary>Why an item is <see cref="ContentSyncStatus.OutOfDateOnTarget"/>.</summary>

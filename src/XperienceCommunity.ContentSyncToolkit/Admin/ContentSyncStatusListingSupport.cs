@@ -245,14 +245,21 @@ internal static class ContentSyncStatusListingSupport
     {
         const string cause = " This usually happens when only some pages of a level are synced.";
 
-        if (reorder is null || reorder.MisplacedPages.Count == 0)
+        if (reorder is null || reorder.MisplacedPages.Count + reorder.HiddenMisplacedCount == 0)
         {
             return "Page order on this level differs on the target." + cause + " " + ReorderFix(reorder);
         }
 
+        // Pages the user can't see are counted, never named.
         var names = reorder.MisplacedPages.Take(MaxNamedPages).Select(PageName).ToList();
-        string list = JoinNames(names, reorder.MisplacedPages.Count - names.Count);
-        string verb = reorder.MisplacedPages.Count == 1 ? "is" : "are";
+        int more = reorder.MisplacedPages.Count - names.Count;
+        if (reorder.HiddenMisplacedCount > 0)
+        {
+            names.Add(reorder.HiddenMisplacedCount == 1 ? "a page you can't see" : $"{reorder.HiddenMisplacedCount} pages you can't see");
+        }
+
+        string list = JoinNames(names, more);
+        string verb = reorder.MisplacedPages.Count + reorder.HiddenMisplacedCount == 1 ? "is" : "are";
 
         return $"Page order on this level differs on the target: {list} {verb} in a different position there."
             + cause + " " + ReorderFix(reorder);

@@ -379,14 +379,49 @@ not usable by third-party code — ruled out, not merely deprioritized.
     check reads what Role management writes: administrators (`UserInfo.IsAdministrator()`)
     see every channel; anyone else needs a role with View on the application
     named `Kentico.Xperience.Application.WebPages_<WebsiteChannelGUID>`
-    (`ApplicationPermissionInfo`, `UserRoleInfo`). That name is a convention,
-    like the `webpages-{id}` URL segment, pinned by a unit test.
+    (`ApplicationPermissionInfo`, `UserRoleInfo`). Role management shows that
+    permission as **Access channel**. That name is a convention, like the
+    `webpages-{id}` URL segment, pinned by a unit test.
 
   A channel or workspace the user can't access is simply absent: not in the
   filter, not the default, and requesting it shows the "no longer exists" row.
-  Page-level permissions inside a channel (page ACLs) aren't checked: checking
-  them per row was judged too costly for the listing, so anyone who can view a
-  channel sees the status of all its pages.
+
+- List only the pages the user can see in Xperience's own page tree. Within a
+  channel, Kentico's page permissions (an access-control list per page, set on
+  the channel root and inherited until a page breaks inheritance) decide which
+  pages each role sees: the tree shows a page to users whose roles have
+  **Display** on it. Administrators and roles with **Manage permissions** on the
+  channel bypass page permissions (Kentico's page permission management).
+  `IContentSyncScopeAccess.GetPageVisibilityAsync` applies the same rules, and
+  the Pages tab filters each comparison with `ContentSyncPageVisibility` before
+  it's counted, sorted or paged, so counts don't reveal hidden pages either:
+  - A page on this instance follows its own list.
+  - A page only on the target follows its nearest ancestor that exists here
+    (as it would once synced), or the channel root's list.
+  - A reorder tooltip never names a page the user can't see ("a page you can't
+    see"), nor a hidden parent.
+
+  Kentico's public `IWebPageAclManager.GetPermissions` reads one page's list in
+  about three queries and doesn't cache (identical in 30.8.0 and 31.7.2), too
+  slow for every page of a large channel. So the page-to-list mapping is read in
+  one batched query by object type name (`cms.webpageaclmapping`; its Info class
+  is internal, as for display names), and the public API is called once per
+  distinct list. If the mapping query fails, the public API is called for every
+  page instead (slower, never wrong). If permissions can't be read at all, the
+  load fails with the generic error row: a failure hides pages, it never shows
+  them.
+
+  Verified live on 31.7.2 with `sync-status-tester` (role Article reviewer, with
+  Access channel on Dancing Goat Pages), each state compared with what Kentico's
+  own page tree shows the same user:
+  1. With Manage permissions on the channel: every page (65 rows), as in the
+     page tree.
+  2. Without it, and with no role on the channel's page permissions: no pages,
+     and the page tree shows only the channel root.
+  3. With Display and Read on the channel root and broken inheritance on
+     Articles without the role: 56 rows, everything except the 9 under
+     Articles, which the page tree also hides. The administrator still sees 65.
+  The rig's permissions were restored afterwards.
 
   Verified live on 31.7.2: the administrator sees all three Dancing Goat
   workspaces; `sync-status-tester`, whose role has Content hub View on Events

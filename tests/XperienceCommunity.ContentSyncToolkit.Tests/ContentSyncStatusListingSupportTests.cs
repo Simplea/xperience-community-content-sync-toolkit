@@ -526,6 +526,26 @@ public class ContentSyncStatusListingSupportTests
                 .And.EndWith("use Sync with all subpages on Articles."));
     }
 
+    // Pages the user can't see are counted, never named.
+    [TestCase(1, "Page order on this level differs on the target: A and a page you can't see are in a different position there.")]
+    [TestCase(2, "Page order on this level differs on the target: A and 2 pages you can't see are in a different position there.")]
+    public void StatusTooltip_ForAReorder_CountsPagesTheUserCantSee(int hidden, string start)
+    {
+        var reorder = new ContentSyncReorder("/Articles", [Article("A")]) { HiddenMisplacedCount = hidden };
+
+        Assert.That(ContentSyncStatusListingSupport.StatusTooltip(Reordered(reorder)), Does.StartWith(start));
+    }
+
+    [Test]
+    public void StatusTooltip_ForAReorderOfOnlyHiddenPages_SaysSoWithoutNames()
+    {
+        var reorder = new ContentSyncReorder("/Articles", []) { HiddenMisplacedCount = 1 };
+
+        Assert.That(
+            ContentSyncStatusListingSupport.StatusTooltip(Reordered(reorder)),
+            Does.StartWith("Page order on this level differs on the target: a page you can't see is in a different position there."));
+    }
+
     [Test]
     public void StatusTooltip_ForAReorderOfTwoPages_JoinsTheirNamesWithAnd()
     {
