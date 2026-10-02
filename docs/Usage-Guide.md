@@ -4,9 +4,8 @@ Content Sync Toolkit shows which content on one Xperience by Kentico instance
 (the **source**) is missing from or out of date on another (the **target**),
 so editors can see what Xperience's Content Sync still needs to push.
 
-The toolkit is under initial development and not yet published to NuGet. See
-the [README](../README.md) for status and the [compatibility policy](Compatibility.md)
-for supported Xperience versions.
+The toolkit is in beta. See the [README](../README.md) for status and the
+[compatibility policy](Compatibility.md) for supported Xperience versions.
 
 ## How it works
 
@@ -21,6 +20,14 @@ Install the toolkit on **both** instances:
 An instance can be a source, a target, or both. Content Sync itself requires
 source and target to run the same Xperience version; run the same toolkit
 version on both as well.
+
+## Install the package
+
+On each instance:
+
+```powershell
+dotnet add package XperienceCommunity.ContentSyncToolkit --prerelease
+```
 
 ## Register the toolkit
 
