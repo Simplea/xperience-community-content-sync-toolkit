@@ -73,7 +73,7 @@ tree shows the same editor:
 
 | Role's channel permissions | `31.9.1` | `30.8.0` |
 | --- | --- | --- |
-| Access channel + Manage permissions | every page | every page (63), as in the tree |
+| Access channel + Manage permissions | every page (65), as in the tree | every page (63), as in the tree |
 | Access channel only, no page permissions | no pages, tree shows only the root | no pages, tree shows only the root |
 | Display on the root, inheritance broken on Articles without the role | (checked on `31.7.2`: all but Articles) | 56 pages, all but the 7 under Articles, as in the tree |
 
