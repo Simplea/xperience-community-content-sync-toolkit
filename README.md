@@ -5,18 +5,27 @@
 ## Description
 
 Xperience Community Content Sync Toolkit is an open-source toolkit that helps
-content editors work with Xperience by Kentico's content sync feature. Content
-sync lets editors push pages and content hub items to a target instance, but it
+content editors work with Xperience by Kentico's Content Sync feature. Content
+Sync lets editors push pages and content hub items to a target instance, but it
 gives no visibility into what is still missing there. This toolkit adds that
-visibility, starting with:
+visibility with a **Sync status** application (under **Content management**)
+that compares this instance with its Content Sync target:
 
-- An administration page for exploring the page and content hub trees and
-  identifying which items are missing from the sync target.
-- In-context indicators in the existing content tree and content hub UIs that
-  flag items missing from the target.
+- **Pages** and **Content hub** tabs listing each item's status: missing on
+  the target, out of date, in a different order, only on the target, or in
+  sync, with filters, search and a link to each item's editor.
+- Explanations of why an item is out of date and what to sync, including pages
+  moved or reordered without being republished.
+- Warnings before a sync would fail because the target is missing a content
+  type, language, channel or workspace this instance has.
+- Kentico's own permissions: editors only see the channels, workspaces and
+  pages they can see in Xperience.
 
-The project is under initial development. No packages have been published yet;
-APIs and behavior may change before the first release.
+It's configured entirely by Xperience's own Content Sync settings, so there's
+nothing extra to set up. Inline indicators in Xperience's page tree and Content
+hub are planned.
+
+This is a **beta**: APIs and behavior may change before `1.0.0`.
 
 The project is developed and maintained by Andres Villenas at SimpleA.
 
@@ -26,9 +35,11 @@ The project is developed and maintained by Andres Villenas at SimpleA.
 
 | Xperience Version | Library Version |
 | ----------------- | --------------- |
-| 30.8.0 or newer   | Unreleased      |
+| 30.8.0 or newer   | 1.0.0-beta.1    |
 
-See the [compatibility policy](./docs/Compatibility.md) for the supported range.
+Runtime-verified on 30.8.0 and 31.9.1.
+
+See the [compatibility policy](https://github.com/Simplea/xperience-community-content-sync-toolkit/blob/main/docs/Compatibility.md) for the supported range.
 
 ### Dependencies
 
@@ -37,26 +48,44 @@ See the [compatibility policy](./docs/Compatibility.md) for the supported range.
 
 ## Package Installation
 
-Not yet published. Installation instructions will be added here once the first
-package is released — see the [Release Process](./docs/Release-Process.md).
+Add the package to the Xperience application on **both** instances, the
+Content Sync source and target:
+
+```powershell
+dotnet add package XperienceCommunity.ContentSyncToolkit --prerelease
+```
+
+Then register it in `Program.cs`:
+
+```csharp
+using XperienceCommunity.ContentSyncToolkit;
+using XperienceCommunity.ContentSyncToolkit.Admin;
+
+builder.Services.AddContentSyncToolkit();
+// On the source instance: adds the Sync status application.
+builder.Services.AddContentSyncToolkitAdmin();
+```
+
+Both instances must run the same Xperience version (a Content Sync
+requirement) and the same toolkit version.
 
 ## Full Instructions
 
-View the [Usage Guide](./docs/Usage-Guide.md) for setup, configuration, and
+View the [Usage Guide](https://github.com/Simplea/xperience-community-content-sync-toolkit/blob/main/docs/Usage-Guide.md) for setup, configuration, and
 how to use the Sync status admin application.
 
 ## Contributing
 
 Instructions for contributing to this project are available in
-[CONTRIBUTING.md](./CONTRIBUTING.md).
+[CONTRIBUTING.md](https://github.com/Simplea/xperience-community-content-sync-toolkit/blob/main/CONTRIBUTING.md).
 
 Maintainers can find the versioning and publishing procedure in the
-[Release Process](./docs/Release-Process.md).
+[Release Process](https://github.com/Simplea/xperience-community-content-sync-toolkit/blob/main/docs/Release-Process.md).
 
 ## License
 
-Distributed under the MIT License. See [`LICENSE.md`](./LICENSE.md) and
-[`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md) for more information.
+Distributed under the MIT License. See [`LICENSE.md`](https://github.com/Simplea/xperience-community-content-sync-toolkit/blob/main/LICENSE.md) and
+[`THIRD-PARTY-NOTICES.md`](https://github.com/Simplea/xperience-community-content-sync-toolkit/blob/main/THIRD-PARTY-NOTICES.md) for more information.
 
 ## Support
 
