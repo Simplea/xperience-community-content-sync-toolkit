@@ -118,9 +118,10 @@ during implementation — see Compatibility and API gate), following this
 repository's established extension pattern rather than replacing either
 listing outright.
 
-Gated by the same
-`XperienceCommunity.ContentSyncToolkit.ViewSyncStatus` permission used by
-[sync-status-admin-page](sync-status-admin-page.md#administration-integration),
+Gated by the same permission as
+[sync-status-admin-page](sync-status-admin-page.md#administration-integration):
+View on the Sync status application (a custom permission was tried first and
+can't work, see that spec),
 so a user without visibility into sync status in the dedicated admin page does
 not see it leaking into the tree/listing either. A user without the permission
 sees the tree/listing exactly as it behaves today, with no toolkit-added
@@ -147,8 +148,12 @@ elements.
 
 - Same permission requirement as
   [sync-status-admin-page](sync-status-admin-page.md#security-and-privacy):
-  `XperienceCommunity.ContentSyncToolkit.ViewSyncStatus`, enforced on the
-  server command, not only by hiding the client-side badge.
+  View on the Sync status application, enforced on the server command, not
+  only by hiding the client-side badge.
+- Same scope and page filtering as that page: badges only for pages and items
+  the user can already see in the tree or listing they're added to, and a
+  reorder tooltip never names a page the user can't see
+  (`ContentSyncPageVisibility`).
 - No additional content metadata is exposed beyond what the badge/tooltip
   shows (status and source last-published timestamp) — never field values,
   never the configured secret or target URL.

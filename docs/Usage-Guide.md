@@ -97,10 +97,14 @@ itself:
 - **Pages** lists only website channels whose Pages application they can view.
 - **Content hub** lists only workspaces whose content items they can view.
 
+- **Pages** also lists only the pages they can see in that channel's page tree:
+  page permissions (Display) apply here too, including sections where
+  inheritance is broken. Administrators and roles with **Manage permissions**
+  on the channel see every page, as in the page tree.
+
 So a role with access to one workspace sees only that workspace here, even
-with View on Sync status. Access to individual pages (page-level
-permissions within a channel) isn't checked; anyone who can view a channel
-sees the sync status of all its pages.
+with View on Sync status, and an editor who can't see a section of the page
+tree doesn't see it here either.
 
 ## Use the Sync status application
 
