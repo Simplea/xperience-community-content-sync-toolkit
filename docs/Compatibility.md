@@ -6,7 +6,7 @@ latest version used by the integration site.
 ## Supported range
 
 - Minimum supported Xperience version: `30.8.0`.
-- Latest build-verified Xperience version: `31.7.2`.
+- Latest build-verified Xperience version: `31.9.1`.
 
 `30.8.0` is not an arbitrary floor: it is the first version where Xperience's
 own Content Sync feature covers both content-hub items (added in `30.5.0`, the
@@ -38,6 +38,46 @@ Before release, validate the packed NuGet artifact in separate applications usin
 
 1. the minimum supported Xperience version; and
 2. the latest verified Xperience version.
+
+## Verification record
+
+Runtime checks of the two-instance setup (source and target on the same
+version, as Content Sync requires), driven with the Playwright CLI. The NuGet
+package was packed from the library (built against the minimum) and installed
+like a consumer would.
+
+| Version | How | Result |
+| --- | --- | --- |
+| `31.9.1` (latest) | The repository's Dancing Goat rig, both databases updated from `31.7.2` with `--kxp-update` | Pass |
+| `30.8.0` (minimum) | Two fresh Dancing Goat sites from `Kentico.Xperience.Templates` `30.8.0`, with the packed package | Pass, except page permissions (not run, see below) |
+
+Checked on both versions:
+
+- the target endpoint: the Content Sync secret gets `200`, any other `404`;
+  `Cache-Control: no-store`; schema 3 with display names and page order;
+- the application in the **Content management** menu with its icon;
+- both tabs: rows, content type and item display names, row links to the
+  editor, dates in the editor's time zone, and the Refresh tooltip;
+- every status tag's label and color: In sync (green), Missing on target
+  (red), Out of date and Order differs on target (amber), Extra on target
+  (grey on `30.8.0`; no extra item on the `31.9.1` rig);
+- **Order differs on target** naming the page out of place, and its fix;
+- the required-objects banner and "Can't sync yet" tooltips (a changed content
+  type definition);
+- the **Target unavailable** row (target stopped) and the not-configured banner
+  (`31.7.2`, `30.8.0`).
+
+Page permissions were verified on `31.9.1` (a restricted editor saw only the
+pages Kentico's page tree shows them). They weren't run on `30.8.0`: the
+template has no non-administrator account, and creating one needs Kentico's
+invitation flow. The APIs involved (`IWebPageAclManager`, the
+`cms.webpageaclmapping` object type, `WebPageAclPermissions.DISPLAY`) exist on
+`30.8.0`, and the decompiled `WebPageAclManager` and `WebPageAclRetriever` are
+identical in `30.8.0` and `31.7.2`.
+
+Differences between the versions that don't affect the toolkit: on `30.8.0`,
+listing rows are clickable elements rather than `<a>` links, dropdown options
+are buttons, and the admin home page doesn't list applications as tiles.
 
 ## Updating versions
 
