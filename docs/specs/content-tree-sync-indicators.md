@@ -69,18 +69,18 @@ Pages                                                    DancingGoatCore ▾
 
 ▾ Home
   ▾ Store
-      Coffee beans          ● Missing on target
+      Coffee beans          ● New
     ▾ Brewers
-        Chemex               ▲ Out of date on target
+        Chemex               ▲ Changed
         French press
   ▾ Articles
       Coffee processing
       Coffee brewing methods
 ```
 
-- **In-sync** and **extra-on-target** items show no badge — the absence of a
+- **In-sync** and **only-on-target** items show no badge — the absence of a
   badge is the common case and should not add visual noise to every row. Only
-  `MissingOnTarget` and `OutOfDateOnTarget` are decorated, using distinct icons
+  statuses a sync would change (`NeedsSync`) are decorated, using distinct icons
   and colors (open question for implementation: reuse Xperience's existing
   status-badge visual language if the admin component library exposes one,
   rather than introducing a new visual style).

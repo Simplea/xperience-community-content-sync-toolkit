@@ -105,7 +105,7 @@ Xperience version on both.
    license key on each instance.
 
 4. To check a real sync end to end (for example, that syncing a page moves it
-   from **Missing on target** to **In sync**), use Xperience's **Sync** actions
+   from **New** to **In sync**), use Xperience's **Sync** actions
    on the source (for example, **Sync this page** on a page). The target
    applies synchronized content through its "Content sync restoration"
    scheduled task, which runs every 30 seconds. Then use **Refresh** on the

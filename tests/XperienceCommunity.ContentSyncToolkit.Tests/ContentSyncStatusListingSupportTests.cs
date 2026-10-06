@@ -32,51 +32,110 @@ public class ContentSyncStatusListingSupportTests
     private static ContentInventoryItem Versioned(string versionStatus) =>
         new(Guid.NewGuid(), ContentInventoryItemKind.WebPage, "T", "S", "en", "/p", null, versionStatus);
 
-    [TestCase("Unpublished", "Published", "Unpublished here, still published on the target.")]
-    [TestCase("Published", "Unpublished", "Published here, unpublished on the target.")]
-    [TestCase("Unpublished", "Unpublished", "Unpublished on both instances.")]
-    [TestCase("Unpublished", null, "Unpublished here, and not on the target yet.")]
-    public void StatusTooltip_ExplainsAnUnpublishedSide(string? local, string? remote, string expected)
+    // Each status's tooltip says what it's based on and what a sync does.
+    [TestCase(ContentSyncStatus.New, "Published", null, "Not on the target yet. A sync creates it.")]
+    [TestCase(ContentSyncStatus.New, "Unpublished", null, "Not on the target yet. It's unpublished here, so a sync creates it unpublished.")]
+    [TestCase(ContentSyncStatus.Changed, "Published", "Published", "Published here after the target's copy. A sync updates it.")]
+    [TestCase(ContentSyncStatus.Changed, "Published", "Unpublished", "Published here, unpublished on the target. A sync publishes it there.")]
+    [TestCase(ContentSyncStatus.Unpublished, "Unpublished", "Published", "Unpublished here, still published on the target. A sync unpublishes it there.")]
+    [TestCase(ContentSyncStatus.InSync, "Unpublished", "Unpublished", "Unpublished on both instances.")]
+    public void StatusTooltip_ExplainsTheStatus(ContentSyncStatus status, string? local, string? remote, string expected)
     {
-        var item = CreateStatusItem(ContentSyncStatus.OutOfDateOnTarget,
+        var item = CreateStatusItem(status,
             local: local is null ? null : Versioned(local),
             remote: remote is null ? null : Versioned(remote));
 
         Assert.That(ContentSyncStatusListingSupport.StatusTooltip(item), Is.EqualTo(expected));
     }
 
+    // A draft after unpublishing can't be synced; the tooltip says why and what the target has.
+    [TestCase("Published", "The target still has it published.")]
+    [TestCase("Unpublished", "The target has it unpublished.")]
+    [TestCase(null, "The target doesn't have it.")]
+    public void StatusTooltip_ForAnUnpublishedDraft_SaysItCantSyncUntilPublished_AndWhatTheTargetHas(string? remote, string end) =>
+        Assert.That(
+            ContentSyncStatusListingSupport.StatusTooltip(CreateStatusItem(ContentSyncStatus.NotPublished,
+                local: Versioned("UnpublishedDraft"), remote: remote is null ? null : Versioned(remote))),
+            Is.EqualTo("Unpublished here, then edited again, so it has no published version. Content Sync can't sync it until it's published again. " + end));
+
+    // Never published here, while the target has it: it exists, so it isn't "only on the target".
+    [Test]
+    public void StatusTooltip_ForANeverPublishedItem_SaysOnlyADraftExistsHere() =>
+        Assert.That(
+            ContentSyncStatusListingSupport.StatusTooltip(CreateStatusItem(ContentSyncStatus.NotPublished,
+                local: Versioned("NeverPublished"), remote: Versioned("Published"))),
+            Is.EqualTo("Never published here: only a draft exists on this instance. Content Sync can't sync it until it's published. The target still has it published."));
+
+    [Test]
+    public void StatusTooltip_ForAMovedPage_SaysWhichLevelsToSync() =>
+        Assert.That(
+            ContentSyncStatusListingSupport.StatusTooltip(CreateStatusItem(ContentSyncStatus.Moved, local: Versioned("Published"), remote: Versioned("Published"))),
+            Does.Contain("sync all pages on its old and new level"));
+
     // Content Sync can't delete, so an item only on the target always says how to remove it.
     [TestCase("Published", "Only on the target.")]
     [TestCase("Unpublished", "Unpublished on the target, and not on this instance.")]
-    public void StatusTooltip_ExtraOnTarget_ExplainsThatContentSyncCannotDelete(string remote, string start)
+    public void StatusTooltip_OnlyOnTarget_ExplainsThatContentSyncCannotDelete(string remote, string start)
     {
-        var item = CreateStatusItem(ContentSyncStatus.ExtraOnTarget, remote: Versioned(remote));
+        var item = CreateStatusItem(ContentSyncStatus.OnlyOnTarget, remote: Versioned(remote));
 
         Assert.That(ContentSyncStatusListingSupport.StatusTooltip(item), Does.StartWith(start).And.Contain("delete it on the target"));
     }
 
-    [TestCase(ContentSyncStatusReason.Moved, "Moved here")]
-    [TestCase(ContentSyncStatusReason.Reordered, "Page order on this level differs on the target")]
-    [TestCase(ContentSyncStatusReason.PublishedMoreRecently, "Published here after the target's copy")]
-    public void StatusTooltip_ExplainsTheOutOfDateReason(ContentSyncStatusReason reason, string start)
-    {
-        var item = CreateStatusItem(ContentSyncStatus.OutOfDateOnTarget, local: Versioned("Published"), remote: Versioned("Published"))
-            with
-        { Reason = reason };
+    [Test]
+    public void StatusTooltip_IsNull_ForAPublishedItemInSync() =>
+        Assert.That(
+            ContentSyncStatusListingSupport.StatusTooltip(CreateStatusItem(ContentSyncStatus.InSync, local: Versioned("Published"), remote: Versioned("Published"))),
+            Is.Null);
 
-        Assert.That(ContentSyncStatusListingSupport.StatusTooltip(item), Does.StartWith(start));
+    // A newer draft isn't synced, so the status stays; the tooltip says why an edit doesn't show.
+    [Test]
+    public void StatusTooltip_ForAnItemInSyncWithANewerDraft_SaysOnlyThePublishedVersionIsSynced() =>
+        Assert.That(
+            ContentSyncStatusListingSupport.StatusTooltip(CreateStatusItem(ContentSyncStatus.InSync, local: Versioned("Published"), remote: Versioned("Published")), hasNewerDraft: true),
+            Is.EqualTo("The target has the published version. A newer draft here isn't published yet, and a sync only sends the published version."));
+
+    [Test]
+    public void StatusTooltip_WithANewerDraft_AddsTheNoteToTheStatusTooltip() =>
+        Assert.That(
+            ContentSyncStatusListingSupport.StatusTooltip(CreateStatusItem(ContentSyncStatus.Changed, local: Versioned("Published"), remote: Versioned("Published")), hasNewerDraft: true),
+            Is.EqualTo("Published here after the target's copy. A sync updates it. A newer draft here isn't published yet, and a sync only sends the published version."));
+
+    // An unpublished item's latest version isn't a newer draft of a published one.
+    [Test]
+    public void StatusTooltip_ForAnUnpublishedItem_IgnoresTheDraftFlag() =>
+        Assert.That(
+            ContentSyncStatusListingSupport.StatusTooltip(CreateStatusItem(ContentSyncStatus.Unpublished, local: Versioned("Unpublished"), remote: Versioned("Published")), hasNewerDraft: true),
+            Is.EqualTo("Unpublished here, still published on the target. A sync unpublishes it there."));
+
+    private static readonly RequiredObjectIssue contentTypeIssue =
+        new(new RequiredObject(RequiredObjectKind.ContentType, Guid.NewGuid(), "T", "Type"), RequiredObjectProblem.MissingOnTarget);
+
+    private static ContentSyncStatusItem Incompatible(ContentSyncStatus status) =>
+        CreateStatusItem(status) with { RequiredObjectIssues = [contentTypeIssue] };
+
+    // An incompatible item shows Incompatible instead of its status, in red, since nothing can be synced until
+    // the target is updated.
+    [Test]
+    public void IncompatibleItem_ShowsIncompatible_InsteadOfItsStatus()
+    {
+        var item = Incompatible(ContentSyncStatus.Changed);
+
+        Assert.That(ContentSyncStatusListingSupport.StatusLabel(item), Is.EqualTo("Incompatible"));
+        Assert.That(ContentSyncStatusListingSupport.StatusColor(item), Is.EqualTo(Color.AlertBackgroundHighEmphasis));
+        Assert.That(ContentSyncStatusListingSupport.StatusLabel(CreateStatusItem(ContentSyncStatus.Changed)), Is.EqualTo("Changed"));
     }
 
-    [TestCase("Published", "Published")]
-    [TestCase("Published", null)]
-    public void StatusTooltip_IsNull_ForOrdinaryItems(string? local, string? remote)
-    {
-        var item = CreateStatusItem(ContentSyncStatus.InSync,
-            local: local is null ? null : Versioned(local),
-            remote: remote is null ? null : Versioned(remote));
-
-        Assert.That(ContentSyncStatusListingSupport.StatusTooltip(item), Is.Null);
-    }
+    // The tooltip says what the target lacks, who fixes it, and what the sync does afterwards.
+    [TestCase(ContentSyncStatus.New, "Then a sync creates it.")]
+    [TestCase(ContentSyncStatus.Changed, "Then a sync updates it.")]
+    [TestCase(ContentSyncStatus.Unpublished, "Then a sync unpublishes it there.")]
+    [TestCase(ContentSyncStatus.Moved, "Then sync all pages on its old and new level to move it.")]
+    [TestCase(ContentSyncStatus.Reordered, "Then sync all pages on its level to fix the order.")]
+    public void StatusTooltip_ForAnIncompatibleItem_SaysWhatTheTargetNeeds_ThenWhatASyncDoes(ContentSyncStatus status, string end) =>
+        Assert.That(
+            ContentSyncStatusListingSupport.StatusTooltip(Incompatible(status)),
+            Is.EqualTo("Content type Type doesn't exist on the target instance. A developer needs to deploy it to the target first. " + end));
 
     [Test]
     public void ApplyStatusFilter_ReturnsAllItems_WhenFilterIsNull()
@@ -84,7 +143,7 @@ public class ContentSyncStatusListingSupportTests
         var items = new[]
         {
             CreateStatusItem(ContentSyncStatus.InSync),
-            CreateStatusItem(ContentSyncStatus.MissingOnTarget),
+            CreateStatusItem(ContentSyncStatus.New),
         };
 
         var result = ContentSyncStatusListingSupport.ApplyStatusFilter(items, null);
@@ -92,53 +151,99 @@ public class ContentSyncStatusListingSupportTests
         Assert.That(result, Has.Count.EqualTo(2));
     }
 
+    // Worded like Kentico's Content Sync dialog, so editors see the same message in both places.
+    [TestCase(RequiredObjectKind.ContentType, "Image", RequiredObjectProblem.DefinitionDiffers, "Content type Image has different field definitions on the source and target instance.")]
+    [TestCase(RequiredObjectKind.Language, "Spanish", RequiredObjectProblem.MissingOnTarget, "Language Spanish doesn't exist on the target instance.")]
+    [TestCase(RequiredObjectKind.WebsiteChannel, "Shop", RequiredObjectProblem.MissingOnTarget, "Website channel Shop doesn't exist on the target instance.")]
+    [TestCase(RequiredObjectKind.Workspace, "<R&D>", RequiredObjectProblem.DifferentGuidOnTarget, "Workspace <R&D> has a different identity on the target instance: it was recreated there instead of deployed.")]
+    public void IssueSentence_DescribesTheCompatibilityError(RequiredObjectKind kind, string name, RequiredObjectProblem problem, string expected) =>
+        Assert.That(
+            ContentSyncStatusListingSupport.IssueSentence(new RequiredObjectIssue(new RequiredObject(kind, Guid.NewGuid(), "code", name), problem)),
+            Is.EqualTo(expected));
+
+    // Hiding items in sync keeps everything that differs, so an incompatible item never disappears.
     [Test]
-    public void ApplyStatusFilter_ReturnsOnlyMatchingItems_WhenFilterIsSet()
+    public void ApplyHideInSync_KeepsEverythingExceptInSync_IncludingIncompatibleAndOnlyOnTarget()
     {
-        var items = new[]
+        var items = ContentSyncStatusListingSupport.StatusOrder.Select(status => CreateStatusItem(status))
+            .Append(Incompatible(ContentSyncStatus.New))
+            .ToList();
+
+        var hidden = ContentSyncStatusListingSupport.ApplyHideInSync(items, hideInSync: true);
+
+        Assert.That(hidden.Select(item => ContentSyncStatusListingSupport.StatusLabel(item)), Is.EqualTo(new[]
         {
-            CreateStatusItem(ContentSyncStatus.InSync),
-            CreateStatusItem(ContentSyncStatus.MissingOnTarget),
-            CreateStatusItem(ContentSyncStatus.MissingOnTarget),
-        };
-
-        var result = ContentSyncStatusListingSupport.ApplyStatusFilter(items, [ContentSyncStatus.MissingOnTarget]);
-
-        Assert.That(result, Has.Count.EqualTo(2));
-        Assert.That(result, Has.All.Matches<ContentSyncStatusItem>(item => item.Status == ContentSyncStatus.MissingOnTarget));
+            "Unpublished", "New", "Changed", "Moved", "Reordered", "Not published", "Only on target", "Incompatible",
+        }));
+        Assert.That(ContentSyncStatusListingSupport.ApplyHideInSync(items, hideInSync: false), Is.SameAs(items));
     }
 
     [Test]
-    public void ParseStatusFilter_NeedsAction_IsMissingPlusOutOfDate()
+    public void ParseStatusFilter_Incompatible_IsItemsWithRequiredObjectIssues_WhateverTheirStatus()
     {
-        var statuses = ContentSyncStatusListingSupport.ParseStatusFilter(ContentSyncStatusListingSupport.NeedsActionStatusFilter);
+        var incompatibleNew = Incompatible(ContentSyncStatus.New);
+        var incompatibleChanged = Incompatible(ContentSyncStatus.Changed);
+        var compatible = CreateStatusItem(ContentSyncStatus.New);
 
-        Assert.That(statuses, Is.EquivalentTo(new[] { ContentSyncStatus.MissingOnTarget, ContentSyncStatus.OutOfDateOnTarget }));
+        var result = ContentSyncStatusListingSupport.ApplyStatusFilter(
+            [incompatibleNew, compatible, incompatibleChanged], ContentSyncStatusListingSupport.ParseStatusFilter(ContentSyncStatusListingSupport.IncompatibleStatusFilter));
+
+        Assert.That(result, Is.EqualTo(new[] { incompatibleNew, incompatibleChanged }));
     }
 
-    [TestCase(nameof(ContentSyncStatus.ExtraOnTarget), ContentSyncStatus.ExtraOnTarget)]
+    // A status option matches what the tag shows, so an incompatible item doesn't match its status.
+    [TestCase(nameof(ContentSyncStatus.OnlyOnTarget), ContentSyncStatus.OnlyOnTarget)]
     [TestCase("inSync", ContentSyncStatus.InSync)]
-    public void ParseStatusFilter_StatusName_IsThatStatusOnly(string value, ContentSyncStatus expected) =>
-        Assert.That(ContentSyncStatusListingSupport.ParseStatusFilter(value), Is.EqualTo(new[] { expected }));
+    [TestCase("unpublished", ContentSyncStatus.Unpublished)]
+    public void ParseStatusFilter_StatusName_IsThatStatusOnly_Compatible(string value, ContentSyncStatus expected)
+    {
+        var items = ContentSyncStatusListingSupport.StatusOrder.Select(status => CreateStatusItem(status))
+            .Append(Incompatible(expected))
+            .ToList();
+
+        var result = ContentSyncStatusListingSupport.ApplyStatusFilter(items, ContentSyncStatusListingSupport.ParseStatusFilter(value));
+
+        Assert.That(result.Select(item => (item.Status, item.HasCompatibilityIssues)), Is.EqualTo(new[] { (expected, false) }));
+    }
+
+    // The filter allows several options and shows items matching any of them.
+    [Test]
+    public void ParseStatusFilter_SeveralValues_MatchesAnyOfThem()
+    {
+        var items = ContentSyncStatusListingSupport.StatusOrder.Select(status => CreateStatusItem(status))
+            .Append(Incompatible(ContentSyncStatus.Changed))
+            .ToList();
+
+        var result = ContentSyncStatusListingSupport.ApplyStatusFilter(items, ContentSyncStatusListingSupport.ParseStatusFilter("New, incompatible,OnlyOnTarget,not-a-status,needs-sync"));
+
+        Assert.That(result.Select(item => ContentSyncStatusListingSupport.StatusLabel(item)), Is.EqualTo(new[] { "New", "Only on target", "Incompatible" }));
+    }
+
+    // Only the tags editors see: groups of statuses are in the Show filter.
+    [Test]
+    public void StatusFilterOptions_ListIncompatible_ThenEveryStatusInOrder()
+    {
+        var expected = new[] { ("incompatible", "Incompatible") }
+            .Concat(ContentSyncStatusListingSupport.StatusOrder.Select(status => (status.ToString(), ContentSyncStatusListingSupport.StatusLabel(status))));
+
+        Assert.That(ContentSyncStatusListingSupport.StatusFilterOptions, Is.EqualTo(expected));
+        Assert.That(ContentSyncStatusListingSupport.StatusOrder, Is.EquivalentTo(Enum.GetValues<ContentSyncStatus>()), "every status is listed");
+    }
 
     [TestCase(null)]
     [TestCase("")]
+    [TestCase(" , ")]
     [TestCase("not-a-status")]
     [TestCase("42")]
     public void ParseStatusFilter_EmptyOrUnknown_IsNoFilter(string? value) =>
         Assert.That(ContentSyncStatusListingSupport.ParseStatusFilter(value), Is.Null);
 
-    // Every dropdown option must parse, or picking it would silently show everything.
+    // Every option must parse, or picking it would silently show everything.
     [Test]
-    public void StatusFilterOptions_EveryValueParses()
-    {
-        var values = ContentSyncStatusListingSupport.StatusFilterOptions
-            .Split("\r\n")
-            .Select(line => line.Split(';')[0]);
-
-        Assert.That(values, Has.All.Matches<string>(value => ContentSyncStatusListingSupport.ParseStatusFilter(value) is not null));
-        Assert.That(values.Count(), Is.EqualTo(Enum.GetValues<ContentSyncStatus>().Length + 1));
-    }
+    public void StatusFilterOptions_EveryValueParses() =>
+        Assert.That(
+            ContentSyncStatusListingSupport.StatusFilterOptions.Select(option => option.Value),
+            Has.All.Matches<string>(value => ContentSyncStatusListingSupport.ParseStatusFilter(value) is not null));
 
     [Test]
     public void ApplyContentTypeFilter_MatchesCodeNameCaseInsensitively()
@@ -147,7 +252,7 @@ public class ContentSyncStatusListingSupportTests
         {
             CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem(contentTypeName: "DancingGoat.ArticlePage")),
             CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem(contentTypeName: "DancingGoat.ProductPage")),
-            CreateStatusItem(ContentSyncStatus.ExtraOnTarget, remote: CreateInventoryItem(contentTypeName: "DancingGoat.ArticlePage")),
+            CreateStatusItem(ContentSyncStatus.OnlyOnTarget, remote: CreateInventoryItem(contentTypeName: "DancingGoat.ArticlePage")),
         };
 
         var result = ContentSyncStatusListingSupport.ApplyContentTypeFilter(items, "dancinggoat.articlepage");
@@ -250,10 +355,10 @@ public class ContentSyncStatusListingSupportTests
         var items = new[]
         {
             CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem(treePath: "/A")),
-            CreateStatusItem(ContentSyncStatus.ExtraOnTarget, remote: CreateInventoryItem(treePath: "/B")),
-            CreateStatusItem(ContentSyncStatus.OutOfDateOnTarget, local: CreateInventoryItem(treePath: "/C")),
-            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem(treePath: "/E")),
-            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem(treePath: "/D")),
+            CreateStatusItem(ContentSyncStatus.OnlyOnTarget, remote: CreateInventoryItem(treePath: "/B")),
+            CreateStatusItem(ContentSyncStatus.Changed, local: CreateInventoryItem(treePath: "/C")),
+            CreateStatusItem(ContentSyncStatus.New, local: CreateInventoryItem(treePath: "/E")),
+            CreateStatusItem(ContentSyncStatus.New, local: CreateInventoryItem(treePath: "/D")),
         };
 
         var result = ContentSyncStatusListingSupport.ApplySort(items, sortBy: null, descending: false);
@@ -269,11 +374,11 @@ public class ContentSyncStatusListingSupportTests
         var items = new[]
         {
             CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/in-sync-new", lastPublishedWhen: Day(2026, 9, 1))),
-            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem("/missing-old", lastPublishedWhen: Day(2025, 1, 1))),
-            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem("/missing-never")),
-            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem("/missing-new-b", lastPublishedWhen: Day(2026, 9, 1))),
-            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem("/missing-new-a", lastPublishedWhen: Day(2026, 9, 1))),
-            CreateStatusItem(ContentSyncStatus.OutOfDateOnTarget, local: CreateInventoryItem("/out-of-date", lastPublishedWhen: Day(2024, 1, 1))),
+            CreateStatusItem(ContentSyncStatus.New, local: CreateInventoryItem("/missing-old", lastPublishedWhen: Day(2025, 1, 1))),
+            CreateStatusItem(ContentSyncStatus.New, local: CreateInventoryItem("/missing-never")),
+            CreateStatusItem(ContentSyncStatus.New, local: CreateInventoryItem("/missing-new-b", lastPublishedWhen: Day(2026, 9, 1))),
+            CreateStatusItem(ContentSyncStatus.New, local: CreateInventoryItem("/missing-new-a", lastPublishedWhen: Day(2026, 9, 1))),
+            CreateStatusItem(ContentSyncStatus.Changed, local: CreateInventoryItem("/out-of-date", lastPublishedWhen: Day(2024, 1, 1))),
         };
 
         var result = ContentSyncStatusListingSupport.ApplySort(items, sortBy, descending: false);
@@ -294,7 +399,7 @@ public class ContentSyncStatusListingSupportTests
         {
             CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/in-sync-old", lastPublishedWhen: Day(2025, 1, 1))),
             CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/in-sync-new", lastPublishedWhen: Day(2026, 1, 1))),
-            CreateStatusItem(ContentSyncStatus.MissingOnTarget, local: CreateInventoryItem("/missing", lastPublishedWhen: Day(2026, 1, 1))),
+            CreateStatusItem(ContentSyncStatus.New, local: CreateInventoryItem("/missing", lastPublishedWhen: Day(2026, 1, 1))),
         };
 
         var result = ContentSyncStatusListingSupport.ApplySort(items, ContentSyncStatusListingSupport.StatusColumn, descending: true);
@@ -307,9 +412,9 @@ public class ContentSyncStatusListingSupportTests
     {
         var items = new[]
         {
-            CreateStatusItem(ContentSyncStatus.MissingOnTarget),
+            CreateStatusItem(ContentSyncStatus.New),
             CreateStatusItem(ContentSyncStatus.InSync),
-            CreateStatusItem(ContentSyncStatus.OutOfDateOnTarget),
+            CreateStatusItem(ContentSyncStatus.Changed),
         };
 
         var result = ContentSyncStatusListingSupport.ApplySort(items, ContentSyncStatusListingSupport.StatusColumn, descending: true);
@@ -317,8 +422,8 @@ public class ContentSyncStatusListingSupportTests
         Assert.That(result.Select(i => i.Status), Is.EqualTo(new[]
         {
             ContentSyncStatus.InSync,
-            ContentSyncStatus.OutOfDateOnTarget,
-            ContentSyncStatus.MissingOnTarget,
+            ContentSyncStatus.Changed,
+            ContentSyncStatus.New,
         }));
     }
 
@@ -444,13 +549,12 @@ public class ContentSyncStatusListingSupportTests
     }
 
     [Test]
-    public void StatusTooltip_SaysWhyAnItemCantSyncYet_BeforeItsReason()
+    public void StatusTooltip_ForAnIncompatibleItem_ListsEveryObjectTheTargetNeeds()
     {
         var type = new RequiredObject(RequiredObjectKind.ContentType, Guid.NewGuid(), "DG.Article", "Article");
         var language = new RequiredObject(RequiredObjectKind.Language, Guid.NewGuid(), "es", "Spanish");
-        var item = CreateStatusItem(ContentSyncStatus.OutOfDateOnTarget, local: Versioned("Published"), remote: Versioned("Published")) with
+        var item = CreateStatusItem(ContentSyncStatus.Changed, local: Versioned("Published"), remote: Versioned("Published")) with
         {
-            Reason = ContentSyncStatusReason.PublishedMoreRecently,
             RequiredObjectIssues =
             [
                 new RequiredObjectIssue(type, RequiredObjectProblem.DefinitionDiffers),
@@ -460,26 +564,36 @@ public class ContentSyncStatusListingSupportTests
 
         Assert.That(
             ContentSyncStatusListingSupport.StatusTooltip(item),
-            Is.EqualTo("Can't sync yet: the target has different fields for content type Article; has no language Spanish. "
-                + "A developer needs to deploy it to the target first. Published here after the target's copy."));
+            Is.EqualTo("Content type Article has different field definitions on the source and target instance. Language Spanish doesn't exist on the target instance. "
+                + "A developer needs to deploy them to the target first. Then a sync updates it."));
     }
 
-    // The banner is HTML, so names are encoded.
-    [Test]
-    public void IssueHtml_EncodesTheName()
+    // Incompatible items come first in the default sort, whatever their status, since they need a
+    // developer before anyone can sync them; reversing the sort puts them last.
+    [TestCase(null, false, new[] { "/incompatible-changed", "/incompatible-reordered", "/new", "/in-sync" })]
+    [TestCase(ContentSyncStatusListingSupport.StatusColumn, false, new[] { "/incompatible-changed", "/incompatible-reordered", "/new", "/in-sync" })]
+    [TestCase(ContentSyncStatusListingSupport.StatusColumn, true, new[] { "/in-sync", "/new", "/incompatible-reordered", "/incompatible-changed" })]
+    public void ApplySort_ByStatus_PutsIncompatibleItemsFirst(string? sortBy, bool descending, string[] expected)
     {
-        var workspace = new RequiredObject(RequiredObjectKind.Workspace, Guid.NewGuid(), "W", "<R&D>");
+        var issue = new RequiredObjectIssue(new RequiredObject(RequiredObjectKind.ContentType, Guid.NewGuid(), "T", "Type"), RequiredObjectProblem.MissingOnTarget);
+        var items = new[]
+        {
+            CreateStatusItem(ContentSyncStatus.New, local: CreateInventoryItem("/new")),
+            CreateStatusItem(ContentSyncStatus.Reordered, local: CreateInventoryItem("/incompatible-reordered")) with { RequiredObjectIssues = [issue] },
+            CreateStatusItem(ContentSyncStatus.InSync, local: CreateInventoryItem("/in-sync")),
+            CreateStatusItem(ContentSyncStatus.Changed, local: CreateInventoryItem("/incompatible-changed")) with { RequiredObjectIssues = [issue] },
+        };
 
-        Assert.That(
-            ContentSyncStatusListingSupport.IssueHtml(new RequiredObjectIssue(workspace, RequiredObjectProblem.DifferentGuidOnTarget)),
-            Is.EqualTo("<li>has a different workspace <strong>&lt;R&amp;D&gt;</strong> with the same code name (recreated rather than deployed)</li>"));
+        var result = ContentSyncStatusListingSupport.ApplySort(items, sortBy, descending);
+
+        Assert.That(result.Select(ContentSyncStatusListingSupport.DisplayName), Is.EqualTo(expected));
     }
 
     [Test]
     public void DisplayName_PrefersLocal_ButFallsBackToRemote_WhenLocalIsNull()
     {
         var item = CreateStatusItem(
-            ContentSyncStatus.ExtraOnTarget,
+            ContentSyncStatus.OnlyOnTarget,
             local: null,
             remote: CreateInventoryItem(treePath: "/OnlyOnTarget"));
 
@@ -493,9 +607,8 @@ public class ContentSyncStatusListingSupportTests
         };
 
     private static ContentSyncStatusItem Reordered(ContentSyncReorder reorder) =>
-        CreateStatusItem(ContentSyncStatus.OutOfDateOnTarget, local: Versioned("Published"), remote: Versioned("Published")) with
+        CreateStatusItem(ContentSyncStatus.Reordered, local: Versioned("Published"), remote: Versioned("Published")) with
         {
-            Reason = ContentSyncStatusReason.Reordered,
             Reorder = reorder,
         };
 
@@ -582,27 +695,27 @@ public class ContentSyncStatusListingSupportTests
             ContentSyncStatusListingSupport.RefreshTooltip(TimeSpan.Zero),
             Is.EqualTo("Reloads the target's status. A sync can take about 30 seconds to reach the target."));
 
-    [Test]
-    public void StatusLabel_SaysOrderDiffers_OnlyForAReorder()
-    {
-        var reordered = Reordered(new ContentSyncReorder("/Articles", []));
-        var newer = reordered with { Reason = ContentSyncStatusReason.PublishedMoreRecently, Reorder = null };
-
-        Assert.That(ContentSyncStatusListingSupport.StatusLabel(reordered), Is.EqualTo("Order differs on target"));
-        Assert.That(ContentSyncStatusListingSupport.StatusLabel(newer), Is.EqualTo("Out of date on target"));
-    }
-
+    [TestCase(ContentSyncStatus.Unpublished, "Unpublished")]
+    [TestCase(ContentSyncStatus.New, "New")]
+    [TestCase(ContentSyncStatus.Changed, "Changed")]
+    [TestCase(ContentSyncStatus.Moved, "Moved")]
+    [TestCase(ContentSyncStatus.Reordered, "Reordered")]
+    [TestCase(ContentSyncStatus.NotPublished, "Not published")]
+    [TestCase(ContentSyncStatus.OnlyOnTarget, "Only on target")]
     [TestCase(ContentSyncStatus.InSync, "In sync")]
-    [TestCase(ContentSyncStatus.MissingOnTarget, "Missing on target")]
-    [TestCase(ContentSyncStatus.OutOfDateOnTarget, "Out of date on target")]
-    [TestCase(ContentSyncStatus.ExtraOnTarget, "Extra on target")]
     public void StatusLabel_ReturnsExpectedText(ContentSyncStatus status, string expected) =>
         Assert.That(ContentSyncStatusListingSupport.StatusLabel(status), Is.EqualTo(expected));
 
+    // Everything a sync changes shares one color; in sync and only on target stand apart. (Incompatible,
+    // red, is per item; see IncompatibleItem_ShowsIncompatible_InsteadOfItsStatus.)
     [TestCase(ContentSyncStatus.InSync, Color.SuccessBackgroundHighEmphasis)]
-    [TestCase(ContentSyncStatus.MissingOnTarget, Color.AlertBackgroundHighEmphasis)]
-    [TestCase(ContentSyncStatus.OutOfDateOnTarget, Color.WarningBackgroundHighEmphasis)]
-    [TestCase(ContentSyncStatus.ExtraOnTarget, Color.BackgroundTagGrey)]
+    [TestCase(ContentSyncStatus.OnlyOnTarget, Color.BackgroundTagGrey)]
+    [TestCase(ContentSyncStatus.NotPublished, Color.BackgroundTagGrey)]
+    [TestCase(ContentSyncStatus.Unpublished, Color.BackgroundTagKenticoOrange)]
+    [TestCase(ContentSyncStatus.New, Color.BackgroundTagKenticoOrange)]
+    [TestCase(ContentSyncStatus.Changed, Color.BackgroundTagKenticoOrange)]
+    [TestCase(ContentSyncStatus.Moved, Color.BackgroundTagKenticoOrange)]
+    [TestCase(ContentSyncStatus.Reordered, Color.BackgroundTagKenticoOrange)]
     public void StatusColor_ReturnsExpectedToken(ContentSyncStatus status, Color expected) =>
         Assert.That(ContentSyncStatusListingSupport.StatusColor(status), Is.EqualTo(expected));
 }

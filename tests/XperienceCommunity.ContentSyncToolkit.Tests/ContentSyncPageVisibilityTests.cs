@@ -10,12 +10,12 @@ public class ContentSyncPageVisibilityTests
         new(guid, ContentInventoryItemKind.WebPage, "T", "Channel", "en", treePath, null, "Published");
 
     private static ContentSyncStatusItem Local(Guid guid, string treePath) =>
-        new(guid, ContentSyncStatus.MissingOnTarget, Page(guid, treePath), null);
+        new(guid, ContentSyncStatus.New, Page(guid, treePath), null);
 
     private static ContentSyncStatusItem OnlyOnTarget(string treePath)
     {
         var guid = Guid.NewGuid();
-        return new ContentSyncStatusItem(guid, ContentSyncStatus.ExtraOnTarget, null, Page(guid, treePath));
+        return new ContentSyncStatusItem(guid, ContentSyncStatus.OnlyOnTarget, null, Page(guid, treePath));
     }
 
     private static ContentSyncStatusResult Result(params ContentSyncStatusItem[] items) => new(true, items);
@@ -81,8 +81,7 @@ public class ContentSyncPageVisibilityTests
             [(row, "/A/Row", true), (shown, "/A/Shown", true), (hidden, "/A/Hidden", false), (parent, "/A", false)]);
         var item = Local(row, "/A/Row") with
         {
-            Status = ContentSyncStatus.OutOfDateOnTarget,
-            Reason = ContentSyncStatusReason.Reordered,
+            Status = ContentSyncStatus.Reordered,
             Reorder = new ContentSyncReorder("/A", [Page(shown, "/A/Shown"), Page(hidden, "/A/Hidden")]) { Parent = Page(parent, "/A") },
         };
 

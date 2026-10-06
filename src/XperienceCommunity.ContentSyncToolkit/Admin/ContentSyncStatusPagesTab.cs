@@ -5,7 +5,6 @@ using Kentico.Xperience.Admin.Base;
 using Microsoft.Extensions.Options;
 
 using XperienceCommunity.ContentSyncToolkit.Admin;
-using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 [assembly: UIPage(
@@ -32,7 +31,6 @@ internal sealed class ContentSyncStatusPagesTab(
     : ContentSyncStatusTabBase(
         new ContentSyncStatusPagesFilterModel(),
         "Path",
-        RequiredObjectKind.WebsiteChannel,
         settings,
         options,
         syncStatusService,
@@ -72,9 +70,9 @@ internal sealed class ContentSyncStatusPagesTab(
         return visibility.Apply(result);
     }
 
-    protected override Task<IReadOnlyDictionary<Guid, int>> GetLocalItemIdsAsync(
+    protected override Task<IReadOnlyDictionary<Guid, ContentSyncLocalItem>> GetLocalItemsAsync(
         ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken) =>
-        itemIdResolver.GetWebPageItemIdsAsync(scope.Name, languageName, [.. items.Select(item => item.Guid)], cancellationToken);
+        itemIdResolver.GetWebPageItemsAsync(scope.Name, languageName, [.. items.Select(item => item.Guid)], cancellationToken);
 
     // A website channel scope's ID is its WebsiteChannelID.
     protected override ContentSyncStatusItemLink GetItemLink(ContentSyncScope scope, string languageName, int itemId) =>

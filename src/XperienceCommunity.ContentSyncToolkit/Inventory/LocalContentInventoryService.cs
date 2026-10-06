@@ -7,7 +7,11 @@ namespace XperienceCommunity.ContentSyncToolkit.Inventory;
 
 /// <summary>
 /// Lists the items Content Sync can act on: every item with a published version (compared by that
-/// version), plus unpublished items, whose unpublish Content Sync can also push. Secured items are
+/// version), plus unpublished items, whose unpublish Content Sync can also push. Items without a
+/// published version for another reason are listed too: unpublished and then edited again
+/// (<see cref="ContentInventoryVersionStatus.UnpublishedDraft"/>) and never published
+/// (<see cref="ContentInventoryVersionStatus.NeverPublished"/>). Content Sync can't sync them, but
+/// leaving them out would make an item the other instance has look deleted here. Secured items are
 /// included; Content Sync syncs them like any other. See docs/specs/content-inventory-foundation.md,
 /// Publication-state scope.
 /// </summary>
@@ -24,9 +28,10 @@ internal sealed class LocalContentInventoryService(
     // even when a newer draft exists, which is what Content Sync would push.
     private static readonly ContentQueryExecutionOptions publishedOptions = new() { IncludeSecuredItems = true };
 
-    // Unpublished items have no published version, so they need the latest versions, restricted to
-    // the Unpublished status. A single ForPreview query for everything would instead return a pending
-    // draft in place of a published version, changing what published items are compared by.
+    // Items without a published version (unpublished, or Draft (Initial): never published, or
+    // unpublished and edited again) need the latest versions, restricted to those statuses. A single
+    // ForPreview query for everything would instead return a pending draft in place of a published
+    // version, changing what published items are compared by.
     private static readonly ContentQueryExecutionOptions unpublishedOptions = new() { ForPreview = true, IncludeSecuredItems = true };
 
     // An unknown channel or language is an empty inventory, not an error: the content query would
@@ -134,8 +139,10 @@ internal sealed class LocalContentInventoryService(
     {
         if (unpublishedOnly)
         {
-            parameters.Where(where => where.WhereEquals(
-                nameof(IContentQueryDataContainer.ContentItemCommonDataVersionStatus), (int)VersionStatus.Unpublished));
+            parameters.Where(where => where
+                .WhereEquals(nameof(IContentQueryDataContainer.ContentItemCommonDataVersionStatus), (int)VersionStatus.Unpublished)
+                .Or()
+                .WhereEquals(nameof(IContentQueryDataContainer.ContentItemCommonDataVersionStatus), (int)VersionStatus.InitialDraft));
         }
 
         parameters
@@ -254,8 +261,24 @@ internal sealed class LocalContentInventoryService(
 
     // Unpublished rows get the status by constant rather than VersionStatus.ToString(): 30.8.0 also
     // declares Archived with the same value, and .NET doesn't guarantee which name ToString() picks.
-    private static string VersionStatusOf(IContentQueryDataContainer container, bool unpublished) =>
-        unpublished ? ContentInventoryVersionStatus.Unpublished : container.ContentItemCommonDataVersionStatus.ToString();
+    // The unpublished query's other rows are Draft (Initial): a last publish date tells an item
+    // unpublished and edited again from one never published.
+    private static string VersionStatusOf(IContentQueryDataContainer container, bool unpublished)
+    {
+        if (!unpublished)
+        {
+            return container.ContentItemCommonDataVersionStatus.ToString();
+        }
+
+        if (container.ContentItemCommonDataVersionStatus != VersionStatus.InitialDraft)
+        {
+            return ContentInventoryVersionStatus.Unpublished;
+        }
+
+        return container.ContentItemCommonDataLastPublishedWhen is null
+            ? ContentInventoryVersionStatus.NeverPublished
+            : ContentInventoryVersionStatus.UnpublishedDraft;
+    }
 
     private static ContentInventoryItem MapWebPage(
         IWebPageContentQueryDataContainer container, string websiteChannelName, string languageName,

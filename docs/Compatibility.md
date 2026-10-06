@@ -42,7 +42,8 @@ Before release, validate the packed NuGet artifact in separate applications usin
 ## Verification record
 
 Runtime checks of the two-instance setup (source and target on the same
-version, as Content Sync requires), driven with the Playwright CLI. The NuGet
+version, as Content Sync requires) for `1.0.0-beta.1`, driven with the
+Playwright CLI. The NuGet
 package was packed from the library (built against the minimum) and installed
 like a consumer would.
 
@@ -85,6 +86,35 @@ suggests.
 Differences between the versions that don't affect the toolkit: on `30.8.0`,
 listing rows are clickable elements rather than `<a>` links, dropdown options
 are buttons, and the admin home page doesn't list applications as tiles.
+
+### 1.0.0-beta.2 statuses
+
+`1.0.0-beta.2` replaced the four statuses with nine, Incompatible and Not
+published among them, and made the Status filter a multi-select (see the
+[Usage Guide](Usage-Guide.md#statuses)). Checked live on `31.9.1` on the
+repository's rig, in a 1440px-wide window:
+
+- every column fits without cutting a status label or a date;
+- the Incompatible, Reordered, Not published and In sync tags in their colors, and
+  their tooltips;
+- the Hide items in sync checkbox on each tab, and that unchecked it filters
+  nothing;
+- the multi-select Status filter: options in order, two options combined on
+  each tab, and an incompatible Changed item matching Incompatible, not
+  Changed;
+- the default sort (Incompatible first), and the status and header tooltips;
+- that the required-objects banner no longer shows;
+- with Kentico's own Content Sync, a content item unpublished (Unpublished),
+  synced (In sync), re-drafted (Not published), republished (Changed) and
+  synced back (In sync);
+- the newer-draft note on a published article whose new version is in a
+  workflow step (Ready for review), and on a published content item whose new
+  version is scheduled to publish.
+
+On `30.8.0`, the library compiles against the general selector and filter
+condition APIs, and the color names the tags resolve at runtime
+(`BackgroundTagKenticoOrange`, `AlertBackgroundHighEmphasis`) were confirmed
+in the admin assembly's metadata; the page wasn't rerun live there.
 
 ## Updating versions
 

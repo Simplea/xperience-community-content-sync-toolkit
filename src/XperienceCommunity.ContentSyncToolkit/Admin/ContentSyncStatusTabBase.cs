@@ -5,7 +5,6 @@ using Kentico.Xperience.Admin.Base;
 
 using Microsoft.Extensions.Options;
 
-using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 using LoadDataSettings = Kentico.Xperience.Admin.Base.LoadDataSettings;
@@ -23,7 +22,6 @@ namespace XperienceCommunity.ContentSyncToolkit.Admin;
 internal abstract class ContentSyncStatusTabBase(
     ContentSyncStatusFilterModelBase filterModel,
     string nameColumnCaption,
-    RequiredObjectKind scopeKind,
     IContentSyncToolkitSettings settings,
     IOptions<ContentSyncToolkitOptions> options,
     IContentSyncStatusService syncStatusService,
@@ -38,21 +36,18 @@ internal abstract class ContentSyncStatusTabBase(
 #pragma warning restore S1075
 
     private const string StatusTooltip =
-        "<strong>Missing on target</strong>: published here, not on the target yet.<br>"
-        + "<strong>Out of date on target</strong>: the target has an older published version.<br>"
-        + "<strong>Order differs on target</strong>: the pages on this level are in a different order on the target.<br>"
-        + "<strong>Extra on target</strong>: on the target, but not published here.<br>"
-        + "<strong>In sync</strong>: the target has the same published version.";
+        "<strong>Incompatible</strong>: a compatibility error; a sync would fail until a developer updates the target. Hover it for details.<br>"
+        + "What a sync from here would do on the target:<br>"
+        + "<strong>Unpublished</strong>: unpublish it there.<br>"
+        + "<strong>New</strong>: create it.<br>"
+        + "<strong>Changed</strong>: update it to the version published here.<br>"
+        + "<strong>Moved</strong> / <strong>Reordered</strong>: change its place in the page tree.<br>"
+        + "<strong>Not published</strong>: nothing yet; it has no published version here. Publish it to sync.<br>"
+        + "<strong>Only on target</strong>: nothing; Content Sync can't delete, so delete it there.<br>"
+        + "<strong>In sync</strong>: nothing; it's the same on both.";
 
     private const string LastPublishedTooltip =
         "When the item was last published on this instance, in your time zone. For items only on the target, when it was published there.";
-
-    // How long the page waits for the target's required objects before showing without the banner.
-    // The listing's own fetch reports an unreachable target.
-    private static readonly TimeSpan requiredObjectsBannerTimeout = TimeSpan.FromSeconds(5);
-
-    // The banner lists at most this many objects, then a count of the rest.
-    private const int MaxBannerIssues = 8;
 
     // Both filter models name their content type field the same; see ContentSyncStatusAdminWiringTests.
     private const string ContentTypeFilterFieldName = nameof(ContentSyncStatusPagesFilterModel.ContentType);
@@ -62,11 +57,13 @@ internal abstract class ContentSyncStatusTabBase(
         FilterFormModel = filterModel,
         ColumnConfigurations =
         [
+            // Widths are 8px grid units; the minimums add up to 93, which fits the 920px grid of a
+            // 1440px-wide window (see docs/specs/sync-status-admin-page.md, Column widths).
             SortableColumn(ContentSyncStatusListingSupport.NameColumn, nameColumnCaption, minWidth: 40, maxWidth: 100, searchable: true),
-            SortableColumn(ContentSyncStatusListingSupport.ContentTypeColumn, "Content type", minWidth: 24, maxWidth: 40),
+            SortableColumn(ContentSyncStatusListingSupport.ContentTypeColumn, "Content type", minWidth: 18, maxWidth: 32),
             // The default sort, so the header shows it; see ContentSyncStatusListingSupport.ApplySort.
-            SortableColumn(ContentSyncStatusListingSupport.StatusColumn, "Status", minWidth: 20, maxWidth: 28, tooltip: StatusTooltip, defaultDirection: SortTypeEnum.Asc),
-            SortableColumn(ContentSyncStatusListingSupport.LastPublishedColumn, "Last published", minWidth: 20, maxWidth: 28, tooltip: LastPublishedTooltip),
+            SortableColumn(ContentSyncStatusListingSupport.StatusColumn, "Status", minWidth: 17, maxWidth: 24, tooltip: StatusTooltip, defaultDirection: SortTypeEnum.Asc),
+            SortableColumn(ContentSyncStatusListingSupport.LastPublishedColumn, "Last published", minWidth: 18, maxWidth: 24, tooltip: LastPublishedTooltip),
         ],
         PageSizes = [10, 25, 50],
         HeaderActions =
@@ -96,8 +93,8 @@ internal abstract class ContentSyncStatusTabBase(
     protected abstract Task<ContentSyncStatusResult> GetStatusAsync(
         string scopeName, string languageName, bool forceRefresh, CancellationToken cancellationToken);
 
-    /// <summary>Local item IDs for the given items (one listing page), keyed by item GUID.</summary>
-    protected abstract Task<IReadOnlyDictionary<Guid, int>> GetLocalItemIdsAsync(
+    /// <summary>Local item IDs and draft state for the given items (one listing page), keyed by item GUID.</summary>
+    protected abstract Task<IReadOnlyDictionary<Guid, ContentSyncLocalItem>> GetLocalItemsAsync(
         ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken);
 
     /// <summary>Where an item opens in Xperience's own editor.</summary>
@@ -142,63 +139,9 @@ internal abstract class ContentSyncStatusTabBase(
                     Content = NoScopesGuidance,
                 });
             }
-            else if (await GetRequiredObjectsCalloutAsync(scopes) is { } requiredObjectsCallout)
-            {
-                PageConfiguration.Callouts.Add(requiredObjectsCallout);
-            }
         }
 
         await base.ConfigurePage();
-    }
-
-    // Warns before an editor tries a sync that would fail: the objects Content Sync needs that the
-    // target is missing or has differently. Content types and languages apply to both tabs; channels
-    // only to Pages and workspaces only to Content hub, limited to the ones this user can see. Best
-    // effort: if the target can't be asked in time, the page shows without the banner.
-    private async Task<CalloutConfiguration?> GetRequiredObjectsCalloutAsync(IReadOnlyList<ContentSyncScope> visibleScopes)
-    {
-        RequiredObjectsCheckResult check;
-        using var timeout = new CancellationTokenSource(requiredObjectsBannerTimeout);
-        try
-        {
-            check = await syncStatusService.CheckRequiredObjectsAsync(refreshRequestStore.IsRefreshRequested(TabKey), timeout.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            return null;
-        }
-        catch (Exception ex)
-        {
-            EventLogService.LogException(nameof(ContentSyncStatusTabBase), "REQUIREDOBJECTS", ex);
-            return null;
-        }
-
-        var visibleScopeNames = visibleScopes.Select(scope => scope.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var issues = check.Issues
-            .Where(issue => issue.Object.Kind is RequiredObjectKind.ContentType or RequiredObjectKind.Language
-                || (issue.Object.Kind == scopeKind && visibleScopeNames.Contains(issue.Object.Name)))
-            .OrderBy(issue => issue.Object.Kind)
-            .ThenBy(issue => issue.Object.DisplayName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        if (issues.Count == 0)
-        {
-            return null;
-        }
-
-        string more = issues.Count > MaxBannerIssues ? $"<li>and {issues.Count - MaxBannerIssues} more</li>" : string.Empty;
-
-        return new CalloutConfiguration
-        {
-            Type = CalloutType.FriendlyWarning,
-            Placement = CalloutPlacement.OnDesk,
-            Headline = "Some items can't be synced until the target is updated",
-            Content = "Content Sync doesn't transfer these, and fails for items that use them. The target:"
-                + "<ul>" + string.Concat(issues.Take(MaxBannerIssues).Select(ContentSyncStatusListingSupport.IssueHtml)) + more + "</ul>"
-                + "A developer needs to deploy them to the target (CI/CD or a deployment package). "
-                + "The Status tooltip of each affected item says what it needs.",
-            ContentAsHtml = true,
-        };
     }
 
     // Header actions ignore a command's result, so the documented way to refresh the listing is
@@ -277,7 +220,8 @@ internal abstract class ContentSyncStatusTabBase(
                 ContentSyncStatusFilterValueExtractor.ExtractStringParameter(where, nameof(ContentSyncStatusFilterModelBase.Status)),
                 ContentSyncStatusFilterValueExtractor.ExtractStringParameter(where, ContentTypeFilterFieldName),
                 ContentSyncStatusFilterValueExtractor.ExtractDateParameter(where, nameof(ContentSyncStatusFilterModelBase.PublishedFrom)),
-                ContentSyncStatusFilterValueExtractor.ExtractDateParameter(where, nameof(ContentSyncStatusFilterModelBase.PublishedTo))),
+                ContentSyncStatusFilterValueExtractor.ExtractDateParameter(where, nameof(ContentSyncStatusFilterModelBase.PublishedTo)),
+                ContentSyncStatusFilterValueExtractor.ExtractBoolParameter(where, nameof(ContentSyncStatusFilterModelBase.HideInSync)) == true),
             settings.SearchTerm,
             settings.SortBy,
             settings.SortType == SortTypeEnum.Desc,
@@ -287,31 +231,39 @@ internal abstract class ContentSyncStatusTabBase(
 
     private async Task<IEnumerable<Row>> ToRowsAsync(ContentSyncStatusView view, CancellationToken cancellationToken)
     {
-        var links = await GetItemLinksAsync(view, cancellationToken);
+        var details = await GetRowDetailsAsync(view, cancellationToken);
 
-        return [.. view.Items.Select(item => ToRow(item, links.GetValueOrDefault(item.Guid)))];
+        return [.. view.Items.Select(item =>
+        {
+            var detail = details.GetValueOrDefault(item.Guid);
+            return ToRow(item, detail.Link, detail.HasNewerDraft);
+        })];
     }
 
-    // Links are a convenience: if the ID lookup fails, rows still render, just without links.
-    private async Task<IReadOnlyDictionary<Guid, string>> GetItemLinksAsync(ContentSyncStatusView view, CancellationToken cancellationToken)
+    // Each row's editor link and whether it has a newer draft. Both are conveniences: if the lookup
+    // fails, rows still render, just without links or draft hints.
+    private async Task<IReadOnlyDictionary<Guid, (string? Link, bool HasNewerDraft)>> GetRowDetailsAsync(
+        ContentSyncStatusView view, CancellationToken cancellationToken)
     {
-        // Extra-on-target items don't exist on this instance, so there's nothing to open.
+        // Only-on-target items don't exist on this instance, so there's nothing to open.
         var localItems = view.Items.Where(item => item.Local is not null).ToList();
         if (view.Scope is null || view.LanguageName is null || localItems.Count == 0)
         {
-            return new Dictionary<Guid, string>();
+            return new Dictionary<Guid, (string?, bool)>();
         }
 
         try
         {
-            var ids = await GetLocalItemIdsAsync(view.Scope, view.LanguageName, localItems, cancellationToken);
+            var items = await GetLocalItemsAsync(view.Scope, view.LanguageName, localItems, cancellationToken);
 
-            return ids.ToDictionary(id => id.Key, id => GetItemLink(view.Scope, view.LanguageName, id.Value).GetPath(pageLinkGenerator));
+            return items.ToDictionary(
+                item => item.Key,
+                item => ((string?)GetItemLink(view.Scope, view.LanguageName, item.Value.Id).GetPath(pageLinkGenerator), item.Value.HasNewerDraft));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             EventLogService.LogException(nameof(ContentSyncStatusTabBase), "ITEMLINKS", ex);
-            return new Dictionary<Guid, string>();
+            return new Dictionary<Guid, (string?, bool)>();
         }
     }
 
@@ -329,7 +281,7 @@ internal abstract class ContentSyncStatusTabBase(
             TooltipAsHtml = tooltip is not null,
         };
 
-    private static Row ToRow(ContentSyncStatusItem item, string? link) =>
+    private static Row ToRow(ContentSyncStatusItem item, string? link, bool hasNewerDraft) =>
         new()
         {
             Identifier = item.Guid,
@@ -338,7 +290,7 @@ internal abstract class ContentSyncStatusTabBase(
             [
                 new StringCell { Value = ContentSyncStatusListingSupport.DisplayName(item) },
                 new StringCell { Value = ContentSyncStatusListingSupport.ContentTypeDisplayName(item) },
-                TagCell(ContentSyncStatusListingSupport.StatusLabel(item), ContentSyncStatusListingSupport.StatusColor(item.Status), ContentSyncStatusListingSupport.StatusTooltip(item)),
+                TagCell(ContentSyncStatusListingSupport.StatusLabel(item), ContentSyncStatusListingSupport.StatusColor(item), ContentSyncStatusListingSupport.StatusTooltip(item, hasNewerDraft)),
                 // Kentico's own local date-time cell: the browser shows it in the editor's time zone.
                 LocalDateTimeCell(ContentSyncStatusListingSupport.LastPublishedWhen(item)),
             ],

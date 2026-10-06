@@ -3,12 +3,49 @@ using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 
 namespace XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
+/// <summary>
+/// What differs between this instance and the target for one item, in the terms of what a sync
+/// would do. See docs/specs/content-inventory-foundation.md, Comparison rules.
+/// </summary>
 public enum ContentSyncStatus
 {
+    /// <summary>The target has the same published version, publish state and position.</summary>
     InSync,
-    MissingOnTarget,
-    OutOfDateOnTarget,
-    ExtraOnTarget
+
+    /// <summary>On this instance, not on the target yet. A sync creates it.</summary>
+    New,
+
+    /// <summary>
+    /// The target's copy is out of date: published on this instance after it, or unpublished there
+    /// while published here. A sync updates (and publishes) it.
+    /// </summary>
+    Changed,
+
+    /// <summary>Unpublished on this instance, still published on the target. A sync unpublishes it there.</summary>
+    Unpublished,
+
+    /// <summary>A page at a different place in the tree on the target. Syncing its old and new levels moves it.</summary>
+    Moved,
+
+    /// <summary>A page on a level whose order differs on the target. Syncing the whole level reorders it.</summary>
+    Reordered,
+
+    /// <summary>On the target only. Content Sync can't delete, so it has to be deleted on the target by hand.</summary>
+    OnlyOnTarget,
+
+    /// <summary>
+    /// Has no published version on this instance (unpublished and then edited again, or never
+    /// published), while the target has it or it was published here before. Content Sync can't sync
+    /// it until it's published.
+    /// </summary>
+    NotPublished,
+}
+
+public static class ContentSyncStatusExtensions
+{
+    /// <summary>Whether a sync from this instance would change the item on the target.</summary>
+    public static bool NeedsSync(this ContentSyncStatus status) =>
+        status is not ContentSyncStatus.InSync and not ContentSyncStatus.OnlyOnTarget and not ContentSyncStatus.NotPublished;
 }
 
 /// <summary>
@@ -16,8 +53,8 @@ public enum ContentSyncStatus
 /// </summary>
 /// <param name="Guid">The item's identity, shared by <paramref name="Local"/> and <paramref name="Remote"/> when both are present.</param>
 /// <param name="Status">The classification.</param>
-/// <param name="Local">The local item, or <see langword="null"/> when the item only exists on the target (<see cref="ContentSyncStatus.ExtraOnTarget"/>).</param>
-/// <param name="Remote">The remote item, or <see langword="null"/> when the item only exists locally (<see cref="ContentSyncStatus.MissingOnTarget"/>).</param>
+/// <param name="Local">The local item, or <see langword="null"/> when the item only exists on the target (<see cref="ContentSyncStatus.OnlyOnTarget"/>).</param>
+/// <param name="Remote">The remote item, or <see langword="null"/> when the item only exists locally (<see cref="ContentSyncStatus.New"/>).</param>
 public sealed record ContentSyncStatusItem(
     Guid Guid,
     ContentSyncStatus Status,
@@ -25,22 +62,23 @@ public sealed record ContentSyncStatusItem(
     ContentInventoryItem? Remote)
 {
     /// <summary>
-    /// Why the item is <see cref="ContentSyncStatus.OutOfDateOnTarget"/>; <see cref="ContentSyncStatusReason.None"/>
-    /// for every other status.
-    /// </summary>
-    public ContentSyncStatusReason Reason { get; init; }
-
-    /// <summary>
-    /// For an item Content Sync still has to push (<see cref="ContentSyncStatus.MissingOnTarget"/> or
-    /// <see cref="ContentSyncStatus.OutOfDateOnTarget"/>), the objects it needs that the target is
-    /// missing or has differently, so a sync of it would fail. Empty when there are none, for every
-    /// other status, and when the target couldn't be checked.
+    /// For an item that needs a sync (<see cref="ContentSyncStatusExtensions.NeedsSync"/>), the objects
+    /// it needs that the target is missing or has differently, so a sync of it would fail. Empty when
+    /// there are none, for every other status, and when the target couldn't be checked.
     /// </summary>
     public IReadOnlyList<RequiredObjectIssue> RequiredObjectIssues { get; init; } = [];
 
     /// <summary>
-    /// For an item that's <see cref="ContentSyncStatusReason.Reordered"/>, its level and the pages on
-    /// it that are out of place on the target; <see langword="null"/> otherwise.
+    /// Whether a sync of this item would fail until a developer deploys the objects in
+    /// <see cref="RequiredObjectIssues"/> to the target. Independent of <see cref="Status"/>, which
+    /// still says what the sync would do once it can run; the admin page shows an incompatible item as
+    /// Incompatible instead of its status.
+    /// </summary>
+    public bool HasCompatibilityIssues => RequiredObjectIssues.Count > 0;
+
+    /// <summary>
+    /// For a <see cref="ContentSyncStatus.Reordered"/> item, its level and the pages on it that are
+    /// out of place on the target; <see langword="null"/> otherwise.
     /// </summary>
     public ContentSyncReorder? Reorder { get; init; }
 }
@@ -61,22 +99,4 @@ public sealed record ContentSyncReorder(string ParentPath, IReadOnlyList<Content
     /// can't see them; counted so the message stays true without naming them.
     /// </summary>
     public int HiddenMisplacedCount { get; init; }
-}
-
-/// <summary>Why an item is <see cref="ContentSyncStatus.OutOfDateOnTarget"/>.</summary>
-public enum ContentSyncStatusReason
-{
-    None,
-
-    /// <summary>Published on this instance after the target's copy.</summary>
-    PublishedMoreRecently,
-
-    /// <summary>Published on one instance and unpublished on the other.</summary>
-    PublishStateDiffers,
-
-    /// <summary>The page's tree path differs: moved to another parent on one instance.</summary>
-    Moved,
-
-    /// <summary>The page's position among its siblings differs.</summary>
-    Reordered,
 }

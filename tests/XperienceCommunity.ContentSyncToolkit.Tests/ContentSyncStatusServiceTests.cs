@@ -136,7 +136,7 @@ public class ContentSyncStatusServiceTests
         var result = await service.GetWebPageSyncStatusAsync("Channel", "en", CancellationToken.None);
 
         Assert.That(result.TargetAvailable, Is.True);
-        Assert.That(result.Items.Single().Status, Is.EqualTo(ContentSyncStatus.MissingOnTarget));
+        Assert.That(result.Items.Single().Status, Is.EqualTo(ContentSyncStatus.New));
         Assert.That(result.Items.Single().RequiredObjectIssues, Is.Empty);
     }
 

@@ -42,9 +42,10 @@ UI to represent both.
 ## Goal
 
 Let an authorized editor select a website channel or a content-hub workspace
-and see, for every local item in that scope, whether it is missing on the
-configured target, out of date on the target, in sync, or present on the
-target but not locally — without leaving the administration UI or needing to
+and see, for every local item in that scope, what a sync would do on the
+configured target (create, update, publish, unpublish, move, or reorder it),
+whether it's already in sync or only on the target, and whether the target
+can accept it yet — without leaving the administration UI or needing to
 know Xperience's internal sync mechanics.
 
 ## Entry point and interaction
@@ -138,9 +139,10 @@ live: Xperience omits it from the compiled filter entirely).
 | Filter | Component | Values and behavior |
 | --- | --- | --- |
 | **Language** | Dropdown of the instance's content languages | No selection compares the instance's **default** content language. A language deleted after the filter was applied shows a "no longer exists" row, like a deleted channel/workspace. Each language is compared separately; there is no "all languages" view. |
-| **Status** | Dropdown: *Needs action*, *Missing on target*, *Out of date on target*, *Extra on target*, *In sync* (placeholder *All*) | *Needs action* = Missing plus Out of date — what Content Sync still has to push. Extra is excluded because Content Sync only pushes source → target. A single dropdown was chosen over a multi-select: it covers the main question in one choice, and reading back a multi-select needs a custom condition builder. |
+| **Hide items in sync** | Checkbox | Leaves out In sync items; everything else stays, Incompatible and Only on target included, so an item never disappears just because it can't be synced yet. Combines with Status like every other field (AND). Read back as a `bool` parameter; unchecked adds no condition and no "Applied filters" chip (confirmed live on 31.9.1). Two drafts were dropped: a *Needs sync* option in the Status list (a group mixed in with statuses), and a *Show* dropdown with *Not in sync* and *Ready to sync*, which differ only for Incompatible and Only on target items, so most of the time they showed the same list. |
+| **Status** | General selector (multi-select with search): *Incompatible*, then each status in the sort order (placeholder *All*) | Items matching **any** selected option. *Incompatible* = items whose required objects the target lacks. Each status option matches the tag shown, so an incompatible item matches *Incompatible* only. Kentico's general selector returns the selected values as a list, so `ContentSyncStatusMultiValueConditionBuilder` (the field's `FilterCondition` builder) compiles them into one parameter, comma-separated, which is read back like the other fields. Its options come from `ContentSyncStatusFilterOptionsDataProvider`. Verified live on 31.9.1, and the general selector, its data provider interface and `FilterCondition` exist in 30.8.0 (the library compiles against it). |
 | **Content type** | Dropdown of website content types (Pages) or reusable content types (Content hub) | Lists every type of that kind, not only the ones present in the selected scope, because an options provider can't see the selected channel/workspace. Options show the type's display name; the value is its code name. |
-| **Published from** / **Published to** | Two date inputs | Filter on the date in the Last published column (the local date, or the target's for Extra on target). Both bounds are inclusive whole days, taken in the **server's** time zone: the date inputs carry no time zone and the server can't see the editor's, so near midnight a day boundary can differ from the column, which shows the editor's time zone. Items without a publish date are excluded while either bound is set. |
+| **Published from** / **Published to** | Two date inputs | Filter on the date in the Last published column (the local date, or the target's for Only on target). Both bounds are inclusive whole days, taken in the **server's** time zone: the date inputs carry no time zone and the server can't see the editor's, so near midnight a day boundary can differ from the column, which shows the editor's time zone. Items without a publish date are excluded while either bound is set. |
 
 Every filter value is read back from `LoadDataSettings.FilterWhereCondition`
 the same way as the channel/workspace (see Server workflow): each field
@@ -154,22 +156,75 @@ page path, and a dropdown can't list sections of the selected channel), and a
 loads, so a summary couldn't follow the applied filter; the Status filter
 answers the same question).
 
+**Statuses.** One Status column, one tag per item. The color says what to
+do, and the label says what's different (see the foundation's
+[Comparison rules](content-inventory-foundation.md#comparison-rules)):
+
+| Tag | Shown for | Tag color |
+| --- | --- | --- |
+| Incompatible | `HasCompatibilityIssues`, whatever the status | Red (`AlertBackgroundHighEmphasis`) |
+| Unpublished | `Unpublished` | Kentico orange |
+| New | `New` | Kentico orange |
+| Changed | `Changed` | Kentico orange |
+| Moved | `Moved` | Kentico orange |
+| Reordered | `Reordered` | Kentico orange |
+| Not published | `NotPublished` | Grey |
+| Only on target | `OnlyOnTarget` | Grey |
+| In sync | `InSync` | Green |
+
+Four colors, one per thing to do: red means a developer has to update the
+target first, orange means sync it, grey means a sync can't change it right
+now (not published here, or only on the target), green means done. The
+default sort follows the same order. A color per status would be too many to learn, so the label says
+what changes.
+
+Incompatible takes the place of the item's status rather than sitting next to it:
+until the target is fixed, the editor can't act on the status, so it would
+only add a second thing to read. The tooltip still says what the sync will do
+afterwards. Beta.2 drafts called it *Blocked*, first as a separate column (an
+icon and "Blocked") and then as a status. The column was dropped (two places
+to look, and it took about 110px from the path at 1440px), and the label was
+renamed because it said that an item couldn't sync but not why. Kentico's own
+Content Sync dialog calls this a *Compatibility error* ("Content type Image has
+different field definitions on the source and target instance."), so the tag
+says **Incompatible**, which fits the Status column, and its tooltip repeats
+Kentico's sentence.
+
+Each label means a different outcome or action for the editor, which is why
+Publish pending (same action as Changed) was merged into Changed, while Moved
+and Reordered stay apart (they need different syncs) and Unpublished stays
+apart (retracted content still live on the target is the riskiest gap, so it
+sorts first among the orange statuses).
+
+Before 1.0.0-beta.2 there were four statuses (Missing on target, Out of date
+on target with a reason, Extra on target, In sync), and the reason only showed
+in the tooltip, so editors had to hover to tell an edit from an unpublish or a
+move.
+
+**Column widths.** `MinWidth`/`MaxWidth` are 8px grid units. At a 1440px-wide
+window the grid is 920px, so the minimums add up to 93 (Name 40, Content type
+18, Status 17, Last published 18): every status label and a full date and
+time fit. Long paths and content type names are cut with an ellipsis. Verified
+live on 31.9.1.
+
 **Column tooltips.** The Status and Last published column headers carry
-tooltips (`ColumnConfiguration.Tooltip`) explaining the four statuses and which
+tooltips (`ColumnConfiguration.Tooltip`): what each status means and which
 instance the date comes from. Plain text cells have no tooltip, but the status
-tag does (`TagTableCellComponentProps.TooltipText`). It says why an item has
-its status, and what to do where Content Sync needs something unusual, using
-the comparer's `Reason` and each side's publication state:
+tag does (`TagTableCellComponentProps.TooltipText`). It says what a sync would
+do for that item, and what to do where Content Sync needs something unusual:
 
 | Case | Tooltip |
 | --- | --- |
-| Unpublished on one side | "Unpublished here, still published on the target." / "Published here, unpublished on the target." |
-| Moved | "Moved here. To move it on the target, sync all pages on its old and new level." |
-| Reordered | The tag reads **Order differs on target** (the status is still Out of date, so sorting and filters are unchanged). Tooltip: "Page order on this level differs on the target: Coffee Beverages Explained is in a different position there. This usually happens when only some pages of a level are synced. To fix it, use Sync with all subpages on Articles." It names up to 3 out-of-place pages, then "and N more", by display name; on the channel's top level it says to sync all pages on the level. Positions aren't given as numbers, because the page tree also shows drafts, which aren't compared. |
-| Published more recently | "Published here after the target's copy." |
-| Only on the target | "Only on the target. Content Sync can't delete content: if it was deleted here, delete it on the target." |
-| Unpublished on both, or only here | "Unpublished on both instances." / "Unpublished here, and not on the target yet." |
-| Can't sync yet (Missing or Out of date, and the target lacks an object the item needs) | "Can't sync yet: the target has no content type Event; has different fields for content type Image. A developer needs to deploy it to the target first." Comes before the item's other tooltip, if any. |
+| Incompatible | "Content type Event doesn't exist on the target instance. Content type Image has different field definitions on the source and target instance. A developer needs to deploy them to the target first. Then a sync creates it." One sentence per compatibility error, worded like Kentico's Content Sync dialog; an object recreated on the target instead of deployed reads "…has a different identity on the target instance: it was recreated there instead of deployed." The last sentence follows the item's status (creates, updates, unpublishes, or which pages to sync). |
+| Unpublished | "Unpublished here, still published on the target. A sync unpublishes it there." |
+| New | "Not on the target yet. A sync creates it." / "Not on the target yet. It's unpublished here, so a sync creates it unpublished." |
+| Changed | "Published here after the target's copy. A sync updates it." / "Published here, unpublished on the target. A sync publishes it there." |
+| Moved | "At a different place in the tree on the target. To move it, sync all pages on its old and new level." |
+| Reordered | "Page order on this level differs on the target: Coffee Beverages Explained is in a different position there. This usually happens when only some pages of a level are synced. To fix it, use Sync with all subpages on Articles." It names up to 3 out-of-place pages, then "and N more", by display name; on the channel's top level it says to sync all pages on the level. Positions aren't given as numbers, because the page tree also shows drafts, which aren't compared. |
+| Not published | "Unpublished here, then edited again, so it has no published version. Content Sync can't sync it until it's published again." or, for an item never published here that the target has, "Never published here: only a draft exists on this instance. Content Sync can't sync it until it's published.", followed by "The target still has it published.", "The target has it unpublished." or "The target doesn't have it." |
+| Only on target | "Only on the target. Content Sync can't delete content: if it was deleted here, delete it on the target." |
+| In sync, unpublished on both | "Unpublished on both instances." (A published item in sync has no tooltip.) |
+| Newer draft (any status of a published item) | Adds "A newer draft here isn't published yet, and a sync only sends the published version." For an item in sync, which otherwise has no tooltip: "The target has the published version. A newer draft here isn't published yet, and a sync only sends the published version." The status doesn't change, because Content Sync sends the published version; the note is for the editor who just saved changes and would otherwise read In sync as "my changes are on the target". It comes from the per-page item ID query (`IContentSyncItemIdResolver`, latest versions), whose `VersionStatus.Draft` marks a draft of a published item, so it adds no query. |
 
 See the foundation's
 [Comparison rules](content-inventory-foundation.md#comparison-rules),
@@ -192,7 +247,7 @@ hub's own date column.
 **Click to open.** Each row with a local item links (`Row.Action`, a link
 action) to that item in Xperience's own editor: the page in its website
 channel application for Pages, the content item's editor for Content hub.
-*Extra on target* rows have no link — the item doesn't exist on this instance.
+*Only on target* rows have no link — the item doesn't exist on this instance.
 Links are generated with `IPageLinkGenerator` against Kentico's public page
 types (`WebPageLayout`, `ContentItemEdit`), not hardcoded admin URLs. Each
 generated path segment is filled from the value's string form: for Content
@@ -212,8 +267,10 @@ Every column is sortable from its header. The default is **Status**,
 ascending, set as the Status column's `SortingConfiguration.DefaultDirection`
 so the header shows the sort icon on first load and one click reverses it
 (confirmed live on 31.7.2). Status ascending means urgency, not alphabetical:
-Missing on target, Out of date on target, Extra on target, In sync — the
-foundation's [status ordering convention](content-inventory-foundation.md#status-ordering-for-consumers).
+Incompatible first, then Unpublished, New, Changed, Moved, Reordered, Not published,
+Only on target, In sync — the foundation's
+[status ordering convention](content-inventory-foundation.md#status-ordering-for-consumers).
+Reversing it puts Incompatible last.
 
 | Sort | Tie-break |
 | --- | --- |
@@ -246,11 +303,19 @@ before the table loads can be banners. On `30.8.0` callouts offer two styles,
 | --- | --- | --- |
 | **Not configured as a source** (Content Sync's source role not enabled with a target URL) | Yes | `FriendlyWarning` banner explaining that the toolkit isn't configured as a source, linking to the [Usage Guide](../Usage-Guide.md). The table loads no rows and no fetch is attempted. |
 | **No channels or workspaces** (a brand-new instance, or none the user can access) | Yes | `QuickTip` banner pointing to **Configuration → Channel management** or **Workspaces**, as plain text. Kentico's admin URLs aren't a public API, so the banner doesn't hardcode a link. |
-| **Target is missing objects Content Sync needs** (see the foundation's [Required objects](content-inventory-foundation.md#required-objects)) | Yes — independent of the selected scope | `FriendlyWarning` banner, "Some items can't be synced until the target is updated", listing up to 8 objects (then "and N more"): content types and languages on both tabs, plus website channels on Pages and workspaces on Content hub, limited to the ones the user can see. Each says how the target differs (missing, different fields, or recreated with another GUID). The page waits at most 5 seconds for the target; if it can't answer in time, or runs an older toolkit version, the page shows without the banner. Refresh also refreshes the banner. |
+| **Target is missing objects Content Sync needs** (see the foundation's [Required objects](content-inventory-foundation.md#required-objects)) | No | The affected items show the Incompatible status (see Statuses), sort first, and can be filtered. |
 | **Target unavailable** (`TargetAvailable = false`) | No — depends on the selected scope | A single table row with a red "Target unavailable" status tag and an explanation. The table must not fall back to showing local content as if it were unclassified. |
 | **Selected scope no longer exists** (deleted after the filter was applied) | No | A single table row, "The selected channel/workspace no longer exists", with a grey "Not available" tag. |
 | **Loading failed** (any unexpected exception in `LoadData`) | No | A single table row, "Sync status couldn't be loaded. Try Refresh; details are in the event log.", with a red "Error" tag. The exception is written to the event log, never shown. |
 | **No items in the selected scope** | No | Xperience's native empty state (no rows returned). With a channel/workspace filter applied, Xperience words it as "We couldn't find any matches"; that's accepted for consistency with other admin listings. |
+
+Before 1.0.0-beta.2, missing objects were also a `FriendlyWarning` banner
+listing up to 8 objects. It was removed: it grew with the number of issues and
+pushed the table down, it was built before the rows loaded, so it showed on a
+tab with no affected items (an Image content type problem on the Pages tab),
+and the Incompatible status now says the same per item, where the editor looks.
+The developer's question, what to deploy, is answered by the Incompatible tooltips,
+which name each object.
 
 The table stays visible under a banner, so the not-configured state also shows
 the native empty state beneath the warning. That duplication is accepted.
@@ -594,8 +659,9 @@ the rows are built without an action when there's no local item).
 
 - An authorized editor can select a website channel or content-hub workspace
   and see every local item's sync status against the configured target.
-- Status values match the foundation's classification exactly: in sync,
-  missing on target, out of date on target, extra on target.
+- Status values match the foundation's classification exactly (see
+  [Comparison rules](content-inventory-foundation.md#comparison-rules)), and
+  incompatible items are marked whatever their status.
 - Target-unavailable and source-not-configured states are visually distinct
   from "no items in this scope" and from each other.
 - Refresh reflects current target state without a full browser reload (it
