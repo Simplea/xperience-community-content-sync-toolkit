@@ -111,10 +111,20 @@ repository's rig, in a 1440px-wide window:
   workflow step (Ready for review), and on a published content item whose new
   version is scheduled to publish.
 
-On `30.8.0`, the library compiles against the general selector and filter
-condition APIs, and the color names the tags resolve at runtime
-(`BackgroundTagKenticoOrange`, `AlertBackgroundHighEmphasis`) were confirmed
-in the admin assembly's metadata; the page wasn't rerun live there.
+Checked live on `30.8.0` (October 2026), with the packed `1.0.0-beta.2`
+package on two fresh Dancing Goat sites from `Kentico.Xperience.Templates`
+`30.8.0`, in a 1440px-wide window:
+
+- every staged status with its color and tooltip: Incompatible (red, the
+  target's Home page type changed), Unpublished, New, Changed (unpublished on
+  the target), Moved and Reordered (orange), Not published and Only on target
+  (grey), and In sync (green) with the newer-draft note;
+- the Hide items in sync checkbox, and the multi-select Status filter
+  (Unpublished and Only on target combined);
+- the Status header tooltip, and every column fitting the 920px grid.
+
+`30.8.0` labels the content item editor's button **Edit content item** where
+`31.9.1` says **Create new version**; that doesn't affect the toolkit.
 
 ## Updating versions
 
