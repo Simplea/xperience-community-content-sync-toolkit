@@ -22,6 +22,18 @@ that compares this instance with its Content Sync target:
 - Kentico's own permissions: editors only see the channels, workspaces and
   pages they can see in Xperience.
 
+![Sync status Pages tab listing pages as Incompatible, Unpublished, New, Changed, Moved and Reordered](https://raw.githubusercontent.com/Simplea/xperience-community-content-sync-toolkit/main/docs/images/pages-statuses.jpg)
+
+Hover a status to see what it's based on and what to do. An incompatible item
+names what the target is missing, in the same words as Kentico's Content Sync
+dialog:
+
+![Tooltip on an Incompatible tag: Content type Image has different field definitions on the source and target instance; a developer needs to deploy it to the target first](https://raw.githubusercontent.com/Simplea/xperience-community-content-sync-toolkit/main/docs/images/incompatible-tooltip.png)
+
+A reordered level names the page that's out of place and how to fix it:
+
+![Tooltip on a Reordered tag: page order on this level differs on the target, Grinders is in a different position; use Sync with all subpages on Store](https://raw.githubusercontent.com/Simplea/xperience-community-content-sync-toolkit/main/docs/images/reordered-tooltip.png)
+
 It's configured entirely by Xperience's own Content Sync settings, so there's
 nothing extra to set up. Inline indicators in Xperience's page tree and Content
 hub are planned.

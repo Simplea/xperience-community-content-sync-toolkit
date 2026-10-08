@@ -118,6 +118,8 @@ tree doesn't see it here either.
 The application has two tabs: **Pages** (one website channel at a time) and
 **Content hub** (one workspace at a time).
 
+![Sync status Pages tab with Hide items in sync applied, listing pages as Incompatible, Unpublished, New, Changed, Moved and Reordered](images/pages-statuses.jpg)
+
 - **Filter** opens the filter panel. All fields are optional and combine:
   - **Channel** (Pages) or **Workspace** (Content hub). Without a selection,
     the first one is shown.
@@ -131,6 +133,8 @@ The application has two tabs: **Pages** (one website channel at a time) and
   - **Content type**.
   - **Published from** / **Published to**: whole days, both included, matched
     against the Last published column.
+
+  <img src="images/filter-panel.png" width="380" alt="Filter panel with Hide items in sync checked and Unpublished and New selected in the Status filter">
 - **Search** by path (Pages) or name (Content hub, the name the Content hub
   shows); press Enter to apply.
 - **Sort** by clicking a column header. The list starts sorted by **Status**,
@@ -166,6 +170,9 @@ The status color says what to do, and the label says what's different:
 - **Green**: nothing to do.
 
 The list is sorted the same way: red first, then orange, grey and green.
+Hover the ⓘ next to **Status** for the same summary in the application:
+
+![Status column tooltip summarizing each status](images/status-legend-tooltip.png)
 
 | Status | Color | Meaning | What to do |
 | --- | --- | --- | --- |
@@ -180,6 +187,8 @@ The list is sorted the same way: red first, then orange, grey and green.
 | **In sync** | Green | The target has the same published version. | Nothing. |
 
 Hover a status tag for details about that item.
+
+![Content hub tab with Hide items in sync applied, listing items as Incompatible, Unpublished, New, Changed, Not published and Only on target](images/content-hub-statuses.jpg)
 
 ### What each status covers
 
@@ -205,6 +214,8 @@ error, for example "Content type Image has different field definitions on the
 source and target instance.", then says what a sync will do once it's fixed.
 Linked items, reusable field schemas, image variants, member roles and project
 code aren't checked.
+
+![Tooltip on an Incompatible tag: Content type Image has different field definitions on the source and target instance](images/incompatible-tooltip.png)
 
 **Unpublished**
 
@@ -253,6 +264,8 @@ a level, such as a single new page, can leave the level in a different order
 there. The status page then marks every page on the level, because Content
 Sync only transfers an order change when the whole level is synced.
 
+![Tooltip on a Reordered tag naming the page out of place and the level to sync](images/reordered-tooltip.png)
+
 - Hover the tag: it names the page or pages that are out of place.
 - To fix it, open the page tree, and on the level's parent page use **Sync with
   all subpages**.
@@ -269,6 +282,8 @@ Sync only transfers an order change when the whole level is synced.
 - The item was never published here, but the target has it, for example
   because the database was copied or a sync was interrupted. Only a draft
   exists here, so Content Sync can't sync it.
+
+![Tooltip on a Not published tag: unpublished here, then edited again; Content Sync can't sync it until it's published again](images/not-published-tooltip.png)
 
 Publish it to sync it: it then shows as **Changed** (or **In sync**, if the
 target already has that version). This is different from editing a published
@@ -291,6 +306,8 @@ Rows of this status can't be opened, because the item doesn't exist here.
   still matches; the tooltip says there's a newer draft. Publish it to see
   **Changed**.
 - The item is unpublished on both instances.
+
+![Tooltip on an In sync tag noting a newer draft that isn't published yet](images/newer-draft-tooltip.png)
 
 **Not listed**
 
