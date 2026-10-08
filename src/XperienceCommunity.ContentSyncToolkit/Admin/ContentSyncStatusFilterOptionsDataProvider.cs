@@ -23,11 +23,11 @@ internal sealed class ContentSyncStatusFilterOptionsDataProvider : IGeneralSelec
     public Task<IEnumerable<ObjectSelectorListItem<string>>> GetSelectedItemsAsync(IEnumerable<string> selectedValues, CancellationToken cancellationToken) =>
         Task.FromResult((selectedValues ?? []).Select(value =>
         {
-            var option = ContentSyncStatusListingSupport.StatusFilterOptions
+            var (optionValue, optionText) = ContentSyncStatusListingSupport.StatusFilterOptions
                 .FirstOrDefault(option => string.Equals(option.Value, value, StringComparison.OrdinalIgnoreCase));
-            return option.Value is null
+            return optionValue is null
                 ? new ObjectSelectorListItem<string> { Value = value, Text = value, IsValid = false }
-                : ToListItem(option.Value, option.Text);
+                : ToListItem(optionValue, optionText);
         }));
 
     private static ObjectSelectorListItem<string> ToListItem(string value, string text) =>

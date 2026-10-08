@@ -235,8 +235,8 @@ internal abstract class ContentSyncStatusTabBase(
 
         return [.. view.Items.Select(item =>
         {
-            var detail = details.GetValueOrDefault(item.Guid);
-            return ToRow(item, detail.Link, detail.HasNewerDraft);
+            var (link, hasNewerDraft) = details.GetValueOrDefault(item.Guid);
+            return ToRow(item, link, hasNewerDraft);
         })];
     }
 
