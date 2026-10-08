@@ -83,8 +83,9 @@ IContentSyncStatusService                            ContentInventoryController
   configured target's endpoint.
 - **`ContentSyncStatusComparer`** — pure, static diff logic: matches local vs.
   remote inventory by GUID and classifies each item by what a sync would do on
-  the target: new, changed, unpublished, moved, reordered,
-  only on target (present on target but not locally), or in sync.
+  the target: new, changed, unpublished, moved, reordered, not published
+  (no published version here, so it can't be synced yet), only on target
+  (present on target but not locally), or in sync.
 - **Required objects** (`ILocalRequiredObjectsService`,
   `RequiredObjectsComparer`) — Content Sync doesn't transfer content types,
   languages, channels or workspaces, and fails for items whose objects the
@@ -103,7 +104,7 @@ Full data contract, security model, and test plan for these pieces:
 
 **Publish-timestamp comparison, not content hashing.** Content Sync itself only
 exposes publish timestamps (`ContentItemCommonDataLastPublishedWhen`), not a
-content hash. The comparer's "out of date" classification is therefore
+content hash. The comparer's "changed" classification is therefore
 timestamp-based and knowingly sensitive to clock skew between the two servers —
 documented as an accepted limitation, not solved in the initial version.
 

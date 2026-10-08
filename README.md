@@ -36,7 +36,7 @@ The project is developed and maintained by Andres Villenas at SimpleA.
 
 | Xperience Version | Library Version |
 | ----------------- | --------------- |
-| 30.8.0 or newer   | 1.0.0-beta.1    |
+| 30.8.0 or newer   | 1.0.0-beta.2    |
 
 Runtime-verified on 30.8.0 and 31.9.1.
 

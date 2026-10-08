@@ -89,11 +89,10 @@ Sync status
 └────────────────┘  ┌───────────────────────────┬──────────────┬───────────┬─────┐
                      │ Path / Name                │ Content type │ Status    │ ... │
                      ├───────────────────────────┼──────────────┼───────────┼─────┤
-                     │ /Home                      │ Home         │ ✓ In sync │ ... │
-                     │ /Store/Coffee-beans        │ Product      │ ● Missing │ ... │
-                     │ /Store/Brewers/Chemex      │ Product      │ ▲ Out of  │ ... │
-                     │                             │              │   date    │     │
-                     │ /Articles/Coffee-processing│ Article      │ ✓ In sync │ ... │
+                     │ /Store/Coffee-beans        │ Product      │ New       │ ... │
+                     │ /Store/Brewers/Chemex      │ Product      │ Changed   │ ... │
+                     │ /Home                      │ Home         │ In sync   │ ... │
+                     │ /Articles/Coffee-processing│ Article      │ In sync   │ ... │
                      └───────────────────────────┴──────────────┴───────────┴─────┘
 
                      Showing 24 of 24 items
@@ -146,7 +145,9 @@ live: Xperience omits it from the compiled filter entirely).
 
 Every filter value is read back from `LoadDataSettings.FilterWhereCondition`
 the same way as the channel/workspace (see Server workflow): each field
-compiles to a named parameter, strings as `string` and dates as `DateTime`.
+compiles to a named parameter, strings as `string`, dates as `DateTime` and
+the Hide items in sync checkbox as `bool`; the Status selector's values arrive
+as one comma-separated string (see the Status row above).
 Filtering, like search, runs in memory on the classified result before sorting
 and paging.
 
@@ -248,6 +249,16 @@ hub's own date column.
 action) to that item in Xperience's own editor: the page in its website
 channel application for Pages, the content item's editor for Content hub.
 *Only on target* rows have no link — the item doesn't exist on this instance.
+Content Sync's own actions differ by tab: a page can be synced from the page
+tree (**Sync this page**, **Sync with all subpages**), but a content item only
+from the Content hub list, by selecting it and using **Sync**; the content item
+editor has no Sync action (verified live on 31.9.1). Linking Content hub rows
+to that list instead was tried and dropped: the list can't be opened with an
+item searched or selected (Kentico keeps both in browser session state, not in
+the URL, and no URL parameter is read), so the editor had to search for the
+item again, and lost the direct link to edit it. Kentico has no public API to
+start a sync, so a Sync action on this page isn't possible either.
+
 Links are generated with `IPageLinkGenerator` against Kentico's public page
 types (`WebPageLayout`, `ContentItemEdit`), not hardcoded admin URLs. Each
 generated path segment is filled from the value's string form: for Content
@@ -582,7 +593,16 @@ Findings from live verification on `31.7.2` that constrain the implementation:
   pointing at one of these is Kentico's supported way to populate options at
   render time instead).
 - `ContentSyncStatusFilterValueExtractor`: reads the selected channel/workspace
-  back out of `LoadDataSettings.FilterWhereCondition` (see Server workflow).
+  and every other filter field back out of
+  `LoadDataSettings.FilterWhereCondition` (see Server workflow).
+- `ContentSyncStatusFilterOptionsDataProvider`: the Status filter's options
+  (an `IGeneralSelectorDataProvider`), and
+  `ContentSyncStatusMultiValueConditionBuilder`: the `IWhereConditionBuilder`
+  that compiles the selected statuses into one parameter (see Filters and
+  item navigation).
+- `IContentSyncItemIdResolver`: per listing page of rows, each local item's ID
+  (for its editor link) and whether its latest version is a newer draft (for
+  the status tooltip), in one content query.
 - `ContentSyncStatusListingSupport`: pure, unit-testable search/sort/paging and
   status-presentation helpers shared by both tabs.
 - `ContentSyncStatusRefreshRequestStore`: the small in-memory per-tab
@@ -622,13 +642,14 @@ requirement for every pull request. It exists because the minimum and latest
 versions can behave differently even when both compile — `Color`'s enum values
 shifted between `30.8.0` and `31.x`. Cover:
 
-- selecting a channel with a mix of in-sync, missing, out-of-date, and
-  extra-on-target items and verifying each renders with the correct status;
+- selecting a channel with items in every status (see the foundation's
+  [Scenarios](content-inventory-foundation.md#scenarios)) and verifying each
+  renders with the correct status, color and tooltip;
 - selecting a workspace and verifying the same for content-hub items;
-- publishing new content on the source and confirming it appears as missing
+- publishing new content on the source and confirming it appears as New
   until Refresh (or TTL expiry) reflects an updated target state, if also
   synced;
-- stopping the target instance and verifying the unavailable-target banner
+- stopping the target instance and verifying the Target unavailable row
   renders instead of a stale or misleading table;
 - unconfigured source instance shows the not-configured banner;
 - unauthorized user cannot see the menu entry or invoke the commands directly.
@@ -655,6 +676,10 @@ second language (the rig has only English), the language-not-found row, and
 that Extra on target rows have no link (the rig had no such items at the time;
 the rows are built without an action when there's no local item).
 
+The 1.0.0-beta.2 statuses, filters and tooltips were verified live on
+`31.9.1`, including a full round trip with Kentico's own Content Sync; see the
+[Compatibility](../Compatibility.md#100-beta2-statuses) record.
+
 ## Acceptance criteria
 
 - An authorized editor can select a website channel or content-hub workspace
@@ -671,17 +696,20 @@ the rows are built without an action when there's no local item).
 
 ## Out of scope
 
-- Items that have never been published. The table lists published and
-  unpublished content, matching what Content Sync can act on — a newly created
-  or cloned item appears only once published. See
+- Items that have never been published, on their own. The table lists what
+  Content Sync can act on — a newly created or cloned item appears only once
+  published. The exception is an item the target has: it's listed as Not
+  published, so it doesn't look deleted here. See
   [Publication-state scope](content-inventory-foundation.md#publication-state-scope).
 - Following the admin's own language switcher. `ListingPageBase`'s
   `GetCurrentContentLanguage()` is `private`, not `protected`, so it isn't
   reachable from a derived page; the Language filter is used instead.
 - Triggering an actual Content Sync operation (push) from this page. The page
   is read-only status visibility; initiating a sync remains Xperience's own
-  **Sync this page**/**Sync with all subpages**/Content hub **Sync** actions,
-  which a row's link leads to.
+  **Sync this page**/**Sync with all subpages** (page tree) and **Sync**
+  (Content hub list) actions. A page's row link opens it where those page tree
+  actions are; a content item's opens its editor, and Sync is in the Content
+  hub list (see Click to open).
 - A Section filter and a per-status summary line (see Filters and item
   navigation).
 - Server-side search or pagination for very large scopes; this version loads

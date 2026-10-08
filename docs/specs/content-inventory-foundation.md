@@ -217,7 +217,17 @@ pair is no worse than it was.
 
 `VersionStatus` is a plain string, not Kentico's `VersionStatus` enum, so the
 wire contract does not couple to Kentico's internal type layout across
-potentially different versions running on the source and target.
+potentially different versions running on the source and target. Values:
+
+| Value | Meaning |
+| --- | --- |
+| `"Published"` | The published version (an item with a newer draft is still sent this way). |
+| `"Unpublished"` | Unpublished. `"Archived"` is read the same: 30.8.0's enum alias for it. |
+| `"UnpublishedDraft"` | Since 1.0.0-beta.2: unpublished, then edited again; no published version. |
+| `"NeverPublished"` | Since 1.0.0-beta.2: never published; only a draft. |
+
+The two newer values were added without a schema version change: an older
+toolkit version reads them as published (see Publication-state scope).
 
 ### Target endpoint
 
@@ -288,7 +298,8 @@ Verified live on the rig (31.7.2): with the target's Image content type
 definition changed and its Events workspace given another GUID, the Content
 hub tab showed both in the banner, and the Image item missing on the target
 said in its Status tooltip that it can't sync yet; restoring the values
-cleared both.
+cleared both. Since 1.0.0-beta.2 there's no banner: such items show the
+Incompatible status, with each object in the tooltip.
 
 ## Local inventory behavior
 
@@ -569,15 +580,17 @@ the published row wins):
 
 1. **Published versions** — the default `ForPreview = false`, which returns
    each item's published version even when a newer draft exists.
-2. **Unpublished items** — `ForPreview = true`, restricted to
-   `ContentItemCommonDataVersionStatus = Unpublished`. Two queries rather than
-   one `ForPreview = true` query, because the latter returns a pending draft's
-   row in place of the published version for published-with-draft items,
-   changing what those are compared by.
+2. **Items without a published version** — `ForPreview = true`, restricted to
+   `ContentItemCommonDataVersionStatus` Unpublished or InitialDraft. Two
+   queries rather than one `ForPreview = true` query, because the latter
+   returns a pending draft's row in place of the published version for
+   published-with-draft items, changing what those are compared by.
 
-Unpublished rows get `VersionStatus = "Unpublished"` from a constant
-(`ContentInventoryVersionStatus.Unpublished`), not from
-`VersionStatus.ToString()` — see the naming difference below.
+The second query's rows get their `VersionStatus` from constants, not from
+`VersionStatus.ToString()` (see the naming difference below): `"Unpublished"`,
+or for an InitialDraft row `"UnpublishedDraft"` when it has a
+`LastPublishedWhen` (unpublished, then edited again) and `"NeverPublished"`
+when it doesn't.
 
 `IncludeSecuredItems` defaults to `false`. Before it was set, a secured page
 (Dancing Goat's `/Articles/Coffee_Beverages_Explained`) was missing from both
@@ -597,6 +610,11 @@ They're evaluated before the timestamp rule, because unpublishing keeps
 | Published | Unpublished | `Changed` |
 | Unpublished | Unpublished | the timestamp rule |
 | absent | Unpublished | `OnlyOnTarget` (the existing rule) |
+| UnpublishedDraft | anything, or absent | `NotPublished` |
+| NeverPublished | Published or Unpublished | `NotPublished` |
+| NeverPublished | absent | left out — nothing to sync, and nothing on the target |
+| Published | UnpublishedDraft | `Changed` (no published version on the target) |
+| any | NeverPublished | as if absent on the target: `New`, or left out |
 
 `"Archived"` counts as unpublished (see below), and a missing (`null`)
 `VersionStatus` counts as published.

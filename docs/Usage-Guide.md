@@ -140,9 +140,12 @@ The application has two tabs: **Pages** (one website channel at a time) and
   the order.
   The page doesn't remember a different sort: it starts sorted by Status again
   each time you open it or use Refresh.
-- **Click a row** to open the item in its editor, where you can sync it with
-  Xperience's own Content Sync actions. Only on target rows can't be opened,
-  because the item doesn't exist on this instance.
+- **Click a row** to open the item in its editor. To sync it, use Xperience's
+  own Content Sync actions: for a page, **Sync this page** or **Sync with all
+  subpages** in the page tree; for a content item, select it in the **Content
+  hub** list and use **Sync** (the content item editor has no Sync action).
+  Only on target rows can't be opened, because the item doesn't exist on this
+  instance.
 - **Refresh** fetches the target's inventory again instead of using the cached
   copy. The applied filters and search are kept. Without it, the target's list
   is reused for up to 90 seconds (`InventoryCacheDuration`), so a page can
