@@ -25,10 +25,23 @@ public static class ContentSyncStatusComparer
             bool hasLocal = localByGuid.TryGetValue(guid, out var localItem);
             bool hasRemote = remoteByGuid.TryGetValue(guid, out var remoteItem);
 
-            var classification = Classify(hasLocal, hasRemote, localItem, remoteItem);
-            if (classification is { } c)
+            // A never-published draft on the target isn't something to compare with: a sync from
+            // here sends the published version as if the target didn't have the item. Nothing of it
+            // is live there either, so on its own it isn't listed.
+            if (hasRemote && ContentInventoryVersionStatus.IsNeverPublished(remoteItem!.VersionStatus))
             {
-                results.Add(new ContentSyncStatusItem(guid, c.Status, localItem, remoteItem) { Reason = c.Reason });
+                hasRemote = false;
+                remoteItem = null;
+            }
+
+            if (!hasLocal && !hasRemote)
+            {
+                continue;
+            }
+
+            if (Classify(hasLocal, hasRemote, localItem, remoteItem) is { } status)
+            {
+                results.Add(new ContentSyncStatusItem(guid, status, localItem, remoteItem));
             }
         }
 
@@ -36,15 +49,28 @@ public static class ContentSyncStatusComparer
     }
 
     // Null means the item is left out: there's nothing Content Sync would do with it.
-    private static (ContentSyncStatus Status, ContentSyncStatusReason Reason)? Classify(
+    private static ContentSyncStatus? Classify(
         bool hasLocal, bool hasRemote, ContentInventoryItem? local, ContentInventoryItem? remote)
     {
         if (!hasLocal)
         {
-            return (ContentSyncStatus.ExtraOnTarget, ContentSyncStatusReason.None);
+            return ContentSyncStatus.OnlyOnTarget;
         }
 
-        bool localUnpublished = ContentInventoryVersionStatus.IsUnpublished(local!.VersionStatus);
+        // Without a published version, Content Sync can't sync the item until it's published. An item
+        // unpublished and edited again is listed whatever the target has; a never-published one only
+        // when the target has it, so it isn't mistaken for deleted here.
+        if (ContentInventoryVersionStatus.IsUnpublishedDraft(local!.VersionStatus))
+        {
+            return ContentSyncStatus.NotPublished;
+        }
+
+        if (ContentInventoryVersionStatus.IsNeverPublished(local.VersionStatus))
+        {
+            return hasRemote ? ContentSyncStatus.NotPublished : null;
+        }
+
+        bool localUnpublished = ContentInventoryVersionStatus.IsUnpublished(local.VersionStatus);
 
         if (!hasRemote)
         {
@@ -52,19 +78,20 @@ public static class ContentSyncStatusComparer
             // unpublished content-hub item.
             return localUnpublished && local.Kind == ContentInventoryItemKind.ContentHubItem
                 ? null
-                : (ContentSyncStatus.MissingOnTarget, ContentSyncStatusReason.None);
+                : ContentSyncStatus.New;
         }
 
         // Unpublishing keeps LastPublishedWhen, so a publish-state difference is invisible to the
         // timestamp rule below and has to be checked first.
-        if (localUnpublished != ContentInventoryVersionStatus.IsUnpublished(remote!.VersionStatus))
+        // A draft on the target has no published version there either.
+        if (localUnpublished != ContentInventoryVersionStatus.HasNoPublishedVersion(remote!.VersionStatus))
         {
-            return (ContentSyncStatus.OutOfDateOnTarget, ContentSyncStatusReason.PublishStateDiffers);
+            return localUnpublished ? ContentSyncStatus.Unpublished : ContentSyncStatus.Changed;
         }
 
         if (IsPublishedMoreRecently(local.LastPublishedWhen, remote.LastPublishedWhen))
         {
-            return (ContentSyncStatus.OutOfDateOnTarget, ContentSyncStatusReason.PublishedMoreRecently);
+            return ContentSyncStatus.Changed;
         }
 
         // Moving a page changes its tree path without a new version or publish date.
@@ -73,10 +100,10 @@ public static class ContentSyncStatusComparer
             && remote.TreePath is not null
             && !string.Equals(local.TreePath, remote.TreePath, StringComparison.OrdinalIgnoreCase))
         {
-            return (ContentSyncStatus.OutOfDateOnTarget, ContentSyncStatusReason.Moved);
+            return ContentSyncStatus.Moved;
         }
 
-        return (ContentSyncStatus.InSync, ContentSyncStatusReason.None);
+        return ContentSyncStatus.InSync;
     }
 
     // Both timestamps are UTC (see ContentInventoryTime). No local date means nothing to push.
@@ -99,7 +126,7 @@ public static class ContentSyncStatusComparer
         var levels = results
             .Where(item => item.Local is { Kind: ContentInventoryItemKind.WebPage, TreePath: not null, Order: not null }
                 && item.Remote is { TreePath: not null, Order: not null }
-                && item.Reason != ContentSyncStatusReason.Moved)
+                && item.Status != ContentSyncStatus.Moved)
             .GroupBy(item => ParentPath(item.Local!.TreePath!), StringComparer.OrdinalIgnoreCase);
 
         var reordered = new Dictionary<Guid, ContentSyncReorder>();
@@ -137,7 +164,7 @@ public static class ContentSyncStatusComparer
         }
 
         return [.. results.Select(item => reordered.TryGetValue(item.Guid, out var reorder)
-            ? item with { Status = ContentSyncStatus.OutOfDateOnTarget, Reason = ContentSyncStatusReason.Reordered, Reorder = reorder }
+            ? item with { Status = ContentSyncStatus.Reordered, Reorder = reorder }
             : item)];
     }
 

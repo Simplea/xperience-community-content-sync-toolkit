@@ -20,7 +20,7 @@ exists on the target and diffing it against the source:
 
 - an admin page for exploring the page/content-hub tree and seeing what's
   missing on the target (see [sync-status-admin-page](specs/sync-status-admin-page.md));
-- inline "missing on target" indicators in the existing content tree and
+- inline "not on target yet" indicators in the existing content tree and
   content hub UIs (see [content-tree-sync-indicators](specs/content-tree-sync-indicators.md)).
 
 This document describes the shared foundation both features are built on. The
@@ -82,9 +82,10 @@ IContentSyncStatusService                            ContentInventoryController
 - **`IContentInventoryClient`** — the source-side HTTP client that calls a
   configured target's endpoint.
 - **`ContentSyncStatusComparer`** — pure, static diff logic: matches local vs.
-  remote inventory by GUID and classifies each item as in sync, missing on
-  target, out of date on target, or extra on target (present on target but not
-  locally).
+  remote inventory by GUID and classifies each item by what a sync would do on
+  the target: new, changed, unpublished, moved, reordered, not published
+  (no published version here, so it can't be synced yet), only on target
+  (present on target but not locally), or in sync.
 - **Required objects** (`ILocalRequiredObjectsService`,
   `RequiredObjectsComparer`) — Content Sync doesn't transfer content types,
   languages, channels or workspaces, and fails for items whose objects the
@@ -103,7 +104,7 @@ Full data contract, security model, and test plan for these pieces:
 
 **Publish-timestamp comparison, not content hashing.** Content Sync itself only
 exposes publish timestamps (`ContentItemCommonDataLastPublishedWhen`), not a
-content hash. The comparer's "out of date" classification is therefore
+content hash. The comparer's "changed" classification is therefore
 timestamp-based and knowingly sensitive to clock skew between the two servers —
 documented as an accepted limitation, not solved in the initial version.
 

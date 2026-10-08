@@ -20,6 +20,15 @@ internal static class ContentSyncStatusFilterValueExtractor
     public static DateTime? ExtractDateParameter(IWhereCondition? condition, string parameterName) =>
         ExtractParameter(condition, parameterName) as DateTime?;
 
+    // A checkbox arrives as a bool; read leniently in case a version sends its text form.
+    public static bool? ExtractBoolParameter(IWhereCondition? condition, string parameterName) =>
+        ExtractParameter(condition, parameterName) switch
+        {
+            bool value => value,
+            string text when bool.TryParse(text, out bool parsed) => parsed,
+            _ => null,
+        };
+
     // A field left empty adds no parameter at all, so a missing parameter means "not filtered".
     // Parameters is null, not empty, when no field is set.
     private static object? ExtractParameter(IWhereCondition? condition, string parameterName)

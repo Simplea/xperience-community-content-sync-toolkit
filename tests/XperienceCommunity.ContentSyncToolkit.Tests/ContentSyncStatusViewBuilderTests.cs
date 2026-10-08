@@ -168,28 +168,30 @@ public class ContentSyncStatusViewBuilderTests
     {
         var result = new ContentSyncStatusResult(true,
         [
-            Item("/Articles/Missing-new", ContentSyncStatus.MissingOnTarget, "Test.Article", Day(2026, 3, 1)),
-            Item("/Articles/OutOfDate-new", ContentSyncStatus.OutOfDateOnTarget, "Test.Article", Day(2026, 3, 2)),
-            Item("/Articles/Missing-old", ContentSyncStatus.MissingOnTarget, "Test.Article", Day(2025, 3, 1)),
-            Item("/Articles/Extra-new", ContentSyncStatus.ExtraOnTarget, "Test.Article", Day(2026, 3, 1)),
-            Item("/Store/Missing-new", ContentSyncStatus.MissingOnTarget, "Test.Product", Day(2026, 3, 1)),
+            Item("/Articles/Missing-new", ContentSyncStatus.New, "Test.Article", Day(2026, 3, 1)),
+            Item("/Articles/OutOfDate-new", ContentSyncStatus.Changed, "Test.Article", Day(2026, 3, 2)),
+            Item("/Articles/Missing-old", ContentSyncStatus.New, "Test.Article", Day(2025, 3, 1)),
+            Item("/Articles/Extra-new", ContentSyncStatus.OnlyOnTarget, "Test.Article", Day(2026, 3, 1)),
+            Item("/Store/Missing-new", ContentSyncStatus.New, "Test.Product", Day(2026, 3, 1)),
             Item("/Articles/InSync-new", ContentSyncStatus.InSync, "Test.Article", Day(2026, 3, 1)),
         ]);
+        // Hide items in sync and Status combine: In sync is dropped even though Status selects it.
         var filter = new ContentSyncStatusFilter(
-            Status: ContentSyncStatusListingSupport.NeedsActionStatusFilter,
+            Status: "New,Changed,InSync",
             ContentTypeName: "Test.Article",
-            PublishedFrom: Day(2026, 1, 1));
+            PublishedFrom: Day(2026, 1, 1),
+            HideInSync: true);
 
         var view = await Build(Request(filter: filter, searchTerm: "new", pageSize: 1), twoScopes, result);
 
-        Assert.That(view.TotalCount, Is.EqualTo(2), "only new, article, needs-action items match");
+        Assert.That(view.TotalCount, Is.EqualTo(2), "only new, article, not-in-sync items of the selected statuses match");
         Assert.That(view.Items.Select(ContentSyncStatusListingSupport.DisplayName), Is.EqualTo(new[] { "/Articles/Missing-new" }));
     }
 
     [Test]
     public async Task FiltersMatchingNothing_ReturnAnEmptyItemsView()
     {
-        var view = await Build(Request(filter: new ContentSyncStatusFilter(Status: nameof(ContentSyncStatus.ExtraOnTarget))), twoScopes);
+        var view = await Build(Request(filter: new ContentSyncStatusFilter(Status: nameof(ContentSyncStatus.OnlyOnTarget))), twoScopes);
 
         Assert.That(view.Kind, Is.EqualTo(ContentSyncStatusViewKind.Items));
         Assert.That(view.TotalCount, Is.Zero);
@@ -226,9 +228,9 @@ public class ContentSyncStatusViewBuilderTests
         var result = new ContentSyncStatusResult(true,
         [
             Item("/Articles/C", ContentSyncStatus.InSync),
-            Item("/Articles/B", ContentSyncStatus.MissingOnTarget),
+            Item("/Articles/B", ContentSyncStatus.New),
             Item("/Articles/A", ContentSyncStatus.InSync),
-            Item("/Store/X", ContentSyncStatus.MissingOnTarget),
+            Item("/Store/X", ContentSyncStatus.New),
         ]);
 
         var view = await Build(Request(searchTerm: "articles", pageSize: 2, pageIndex: 0), twoScopes, result);

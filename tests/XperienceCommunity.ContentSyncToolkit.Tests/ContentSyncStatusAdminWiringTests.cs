@@ -107,10 +107,10 @@ public class ContentSyncStatusAdminWiringTests
     public void FilterValueExtractor_ReadsEachFieldOfACombinedFilter()
     {
         var condition = new WhereCondition()
-            .WhereEquals("Status", "needs-action")
+            .WhereEquals("Status", "New,incompatible")
             .WhereEquals("PublishedFrom", Day(2026, 1, 1));
 
-        Assert.That(ContentSyncStatusFilterValueExtractor.ExtractStringParameter(condition, "Status"), Is.EqualTo("needs-action"));
+        Assert.That(ContentSyncStatusFilterValueExtractor.ExtractStringParameter(condition, "Status"), Is.EqualTo("New,incompatible"));
         Assert.That(ContentSyncStatusFilterValueExtractor.ExtractDateParameter(condition, "PublishedFrom"), Is.EqualTo(Day(2026, 1, 1)));
         Assert.That(ContentSyncStatusFilterValueExtractor.ExtractDateParameter(condition, "PublishedTo"), Is.Null);
         Assert.That(ContentSyncStatusFilterValueExtractor.ExtractDateParameter(condition, "Status"), Is.Null, "a string value isn't read as a date");
@@ -121,10 +121,53 @@ public class ContentSyncStatusAdminWiringTests
     [TestCase(typeof(ContentSyncStatusContentHubFilterModel), "Workspace")]
     public void FilterModels_ExposeTheFieldsLoadDataReads(Type filterModelType, string scopeField)
     {
-        string[] expected = [scopeField, "Language", "Status", "ContentType", "PublishedFrom", "PublishedTo"];
+        string[] expected = [scopeField, "Language", "HideInSync", "Status", "ContentType", "PublishedFrom", "PublishedTo"];
 
         Assert.That(filterModelType.GetProperties().Select(property => property.Name), Is.EquivalentTo(expected));
     }
+
+    // The Status filter allows several options; its condition carries them as one parameter that
+    // the extractor reads like any other field.
+    [Test]
+    public async Task MultiValueConditionBuilder_JoinsTheSelectedValuesIntoOneParameter()
+    {
+        var condition = await new ContentSyncStatusMultiValueConditionBuilder().Build("Status", new List<string> { "incompatible", "", "New" });
+
+        Assert.That(ContentSyncStatusFilterValueExtractor.ExtractStringParameter(condition, "Status"), Is.EqualTo("incompatible,New"));
+    }
+
+    [TestCase(null)]
+    [TestCase(42)]
+    public async Task MultiValueConditionBuilder_AddsNothing_WithoutASelection(object? value)
+    {
+        var empty = await new ContentSyncStatusMultiValueConditionBuilder().Build("Status", value!);
+        var none = await new ContentSyncStatusMultiValueConditionBuilder().Build("Status", Array.Empty<string>());
+
+        Assert.That(ContentSyncStatusFilterValueExtractor.ExtractStringParameter(empty, "Status"), Is.Null);
+        Assert.That(ContentSyncStatusFilterValueExtractor.ExtractStringParameter(none, "Status"), Is.Null);
+    }
+
+    [Test]
+    public async Task StatusFilterOptions_AreSearchable_AndShowUnknownSelectionsAsInvalid()
+    {
+        var provider = new ContentSyncStatusFilterOptionsDataProvider();
+
+        var all = await provider.GetItemsAsync(string.Empty, 0, CancellationToken.None);
+        var searched = await provider.GetItemsAsync("on", 0, CancellationToken.None);
+        var selected = (await provider.GetSelectedItemsAsync(["incompatible", "PublishPending"], CancellationToken.None)).ToList();
+
+        Assert.That(all.Items.Select(item => item.Value), Is.EqualTo(ContentSyncStatusListingSupport.StatusFilterOptions.Select(option => option.Value)));
+        Assert.That(searched.Items.Select(item => item.Text), Is.EqualTo(new[] { "Only on target" }));
+        Assert.That(selected.Select(item => (item.Text, item.IsValid)), Is.EqualTo(new[] { ("Incompatible", true), ("PublishPending", false) }));
+    }
+
+    [TestCase(true, true)]
+    [TestCase(false, false)]
+    [TestCase("True", true)]
+    public void FilterValueExtractor_ReadsACheckbox(object value, bool expected) =>
+        Assert.That(
+            ContentSyncStatusFilterValueExtractor.ExtractBoolParameter(new WhereCondition().WhereEquals("HideInSync", value), "HideInSync"),
+            Is.EqualTo(expected));
 
     [Test]
     public void FilterValueExtractor_ReturnsNull_ForAnotherParameterOrNoCondition()

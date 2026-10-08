@@ -123,9 +123,9 @@ internal sealed class ContentSyncScopeAccess(
         var pageIds = new Dictionary<Guid, int>();
         foreach (var batch in localPages.Select(page => page.Guid).Chunk(BatchSize))
         {
-            foreach (var (guid, id) in await itemIdResolver.GetWebPageItemIdsAsync(websiteChannel.Name, languageName, batch, cancellationToken))
+            foreach (var (guid, page) in await itemIdResolver.GetWebPageItemsAsync(websiteChannel.Name, languageName, batch, cancellationToken))
             {
-                pageIds[guid] = id;
+                pageIds[guid] = page.Id;
             }
         }
 

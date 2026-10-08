@@ -5,7 +5,6 @@ using Kentico.Xperience.Admin.Base;
 using Microsoft.Extensions.Options;
 
 using XperienceCommunity.ContentSyncToolkit.Admin;
-using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 [assembly: UIPage(
@@ -31,7 +30,6 @@ internal sealed class ContentSyncStatusContentHubTab(
     : ContentSyncStatusTabBase(
         new ContentSyncStatusContentHubFilterModel(),
         "Name",
-        RequiredObjectKind.Workspace,
         settings,
         options,
         syncStatusService,
@@ -57,9 +55,9 @@ internal sealed class ContentSyncStatusContentHubTab(
         string scopeName, string languageName, bool forceRefresh, CancellationToken cancellationToken) =>
         SyncStatusService.GetContentHubSyncStatusAsync(scopeName, languageName, forceRefresh, cancellationToken);
 
-    protected override Task<IReadOnlyDictionary<Guid, int>> GetLocalItemIdsAsync(
+    protected override Task<IReadOnlyDictionary<Guid, ContentSyncLocalItem>> GetLocalItemsAsync(
         ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken) =>
-        itemIdResolver.GetContentItemIdsAsync(
+        itemIdResolver.GetContentItemsAsync(
             scope.Name,
             languageName,
             [.. items.Select(item => item.Local!.ContentTypeName).Distinct(StringComparer.OrdinalIgnoreCase)],

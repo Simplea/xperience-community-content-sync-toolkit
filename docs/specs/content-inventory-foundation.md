@@ -217,7 +217,17 @@ pair is no worse than it was.
 
 `VersionStatus` is a plain string, not Kentico's `VersionStatus` enum, so the
 wire contract does not couple to Kentico's internal type layout across
-potentially different versions running on the source and target.
+potentially different versions running on the source and target. Values:
+
+| Value | Meaning |
+| --- | --- |
+| `"Published"` | The published version (an item with a newer draft is still sent this way). |
+| `"Unpublished"` | Unpublished. `"Archived"` is read the same: 30.8.0's enum alias for it. |
+| `"UnpublishedDraft"` | Since 1.0.0-beta.2: unpublished, then edited again; no published version. |
+| `"NeverPublished"` | Since 1.0.0-beta.2: never published; only a draft. |
+
+The two newer values were added without a schema version change: an older
+toolkit version reads them as published (see Publication-state scope).
 
 ### Target endpoint
 
@@ -275,7 +285,7 @@ public sealed record RequiredObject(RequiredObjectKind Kind, Guid Guid, string N
 - `IContentSyncStatusService.CheckRequiredObjectsAsync` fetches the target's
   list (cached like an inventory) and compares. The status methods attach the
   relevant issues (`RequiredObjectIssues`) to each item Content Sync still has
-  to push (Missing or Out of date): its content type, its language, and its
+  to push (any status a sync would change): its content type, its language, and its
   channel (pages) or workspace (content hub items). They only ask the target
   when some item needs a push. A failed or unsupported check never fails the
   status: items are compared as before, without issues.
@@ -288,7 +298,8 @@ Verified live on the rig (31.7.2): with the target's Image content type
 definition changed and its Events workspace given another GUID, the Content
 hub tab showed both in the banner, and the Image item missing on the target
 said in its Status tooltip that it can't sync yet; restoring the values
-cleared both.
+cleared both. Since 1.0.0-beta.2 there's no banner: such items show the
+Incompatible status, with each object in the tooltip.
 
 ## Local inventory behavior
 
@@ -349,15 +360,38 @@ rig):
 ## Comparison rules
 
 `ContentSyncStatusComparer` is pure, static logic matching local and remote
-inventory by GUID:
+inventory by GUID. Each status names what a sync from the source would do on
+the target, so consumers don't need a second field to explain it:
+
+| Status | Meaning |
+| --- | --- |
+| `New` | Only on the source; a sync creates it. |
+| `Unpublished` | Unpublished on the source, still published on the target; a sync unpublishes it. |
+| `Changed` | The target's copy is out of date: published on the source after it, or unpublished on the target while published on the source; a sync updates (and publishes) it. |
+| `Moved` | A page at a different tree path on the target. |
+| `Reordered` | A page whose level is in a different order on the target. |
+| `NotPublished` | No published version on the source (unpublished, then edited again; or never published while the target has it); Content Sync can't sync it until it's published. |
+| `OnlyOnTarget` | Only on the target; Content Sync can't delete it. |
+| `InSync` | Nothing to do. |
+
+`ContentSyncStatusExtensions.NeedsSync` is true for every status except
+`NotPublished`, `OnlyOnTarget` and `InSync`. Whether the target can accept the item (see
+Required objects) is separate: `ContentSyncStatusItem.HasCompatibilityIssues`.
+
+1.0.0-beta.1 had four statuses (`MissingOnTarget`, `OutOfDateOnTarget`,
+`ExtraOnTarget`, `InSync`) plus a `Reason` for `OutOfDateOnTarget`;
+1.0.0-beta.2 replaced them with the statuses above. (A beta.2 draft also had
+`PublishPending`, folded into `Changed` because editors do the same thing for
+both, and `UnpublishPending`, renamed `Unpublished`.) The verification records
+below keep the names used at the time.
 
 | Local present | Remote present | Local timestamp | Remote timestamp | Status |
 | --- | --- | --- | --- | --- |
-| no | yes | — | — | `ExtraOnTarget` |
-| yes | no | — | — | `MissingOnTarget` |
+| no | yes | — | — | `OnlyOnTarget` |
+| yes | no | — | — | `New` |
 | yes | yes | null | any | `InSync` |
-| yes | yes | not null | null | `OutOfDateOnTarget` |
-| yes | yes | not null | not null | `OutOfDateOnTarget` if local > remote, else `InSync` (equal timestamps are `InSync`) |
+| yes | yes | not null | null | `Changed` |
+| yes | yes | not null | not null | `Changed` if local > remote, else `InSync` (equal timestamps are `InSync`) |
 
 Timestamps are compared in UTC (see Time zones). Publication state is checked
 before this table (see Publication-state scope), and two page rules after it,
@@ -366,10 +400,10 @@ date (position lives on the page record, `WebPageItemTreePath` and
 `WebPageItemOrder`, not on its published version):
 
 - **Moved:** both sides have the page, the table says `InSync`, but
-  the tree paths differ (case-insensitively) → `OutOfDateOnTarget`.
+  the tree paths differ (case-insensitively) → `Moved`.
 - **Reordered:** for each parent level, the pages present on both sides are
   compared by their **relative** order. If it differs, every `InSync` page on
-  that level becomes `OutOfDateOnTarget`. Order values can't be compared
+  that level becomes `Reordered`. Order values can't be compared
   directly: a page that exists on only one side shifts every later sibling's
   value. The whole level is marked because Kentico's
   [Content sync](https://docs.kentico.com/documentation/business-users/content-sync#sync-moved-or-reordered-pages)
@@ -423,9 +457,8 @@ End to end on 31.7.2, with the Playwright CLI:
 3. Used **Sync with all subpages** on Articles. The level returned to `InSync`,
    and the target's page tree matched the source's order.
 
-Each `ContentSyncStatusItem` carries a `Reason` for `OutOfDateOnTarget`:
-`PublishedMoreRecently`, `PublishStateDiffers`, `Moved`, or `Reordered`
-(`None` otherwise), so consumers can explain the status.
+Each status is specific enough to explain itself (see the table above), so
+`ContentSyncStatusItem` has no separate reason field.
 
 This remains a timestamp comparison across two independently running servers,
 so it's sensitive to clock skew between instances. No content hash is available
@@ -440,7 +473,7 @@ would close it, and is deferred: see Out of scope.
 
 A failed remote fetch (target unreachable, rejected, or erroring) must never be
 treated as "target has zero items" — that would make every local item falsely
-report as `MissingOnTarget`. `IContentSyncStatusService` surfaces fetch failure
+report as `New`. `IContentSyncStatusService` surfaces fetch failure
 as `TargetAvailable = false` and does not run the comparer in that case.
 
 ### Status ordering for consumers
@@ -448,12 +481,15 @@ as `TargetAvailable = false` and does not run the comparer in that case.
 The comparer returns items unordered. Features that list them should use one
 shared order, so the same content reads the same way everywhere:
 
-1. By urgency — what Content Sync would add, then update, then what only the
-   target has: `MissingOnTarget`, `OutOfDateOnTarget`, `ExtraOnTarget`,
-   `InSync`.
-2. Within a status, most recently published first (the local publish date, or
-   the target's for `ExtraOnTarget`); never-published items last.
-3. Then by path or name.
+1. Incompatible items first (`HasCompatibilityIssues`), since they need a developer before
+   anyone can sync them.
+2. Content still live on the target that was taken down here, then what a
+   sync would create, update, move or reorder, then what only the target has,
+   then what a sync can't change, then what's done: `Unpublished`, `New`,
+   `Changed`, `Moved`, `Reordered`, `NotPublished`, `OnlyOnTarget`, `InSync`.
+3. Within a status, most recently published first (the local publish date, or
+   the target's for `OnlyOnTarget`); never-published items last.
+4. Then by path or name.
 
 The [sync status admin page](sync-status-admin-page.md#sorting) uses this as
 its default sort (`ContentSyncStatusListingSupport.StatusSortRank` and
@@ -471,15 +507,70 @@ documentation:
 
 | Item state | In the inventory? | Why |
 | --- | --- | --- |
-| Draft (Initial), or a custom workflow step before the first publish | No | Content Sync cannot synchronize never-published items. Listing them as `MissingOnTarget` would ask an editor to do something they can't. |
+| Draft (Initial), a custom workflow step before the first publish, or a scheduled first publish | Yes, `VersionStatus = "NeverPublished"`, but only to tell the comparer the item exists here | Content Sync cannot synchronize never-published items (greyed out in its dialog, verified live), so the comparer never lists one on its own. Listing them as `New` would ask an editor to do something they can't. When the other instance has the item, it shows as `NotPublished` here instead of `OnlyOnTarget`; a never-published item on the target is ignored, so the source's published item shows as `New`. |
 | Published | Yes, `VersionStatus = "Published"` | — |
-| Published, with a pending Draft (New version) or workflow step | Yes, compared by its last **published** version | Content Sync synchronizes the latest published version, not the draft — so a pending draft does not make the item out of date. |
+| Published, with a pending Draft (New version) or workflow step | Yes, compared by its last **published** version | Content Sync synchronizes the latest published version, not the draft — so a pending draft does not make the item out of date. Kentico added syncing such items in 30.8.0, this toolkit's minimum. The admin page mentions the draft in the status tooltip (see the admin page spec). |
 | Unpublished (published once, then unpublished) | Yes, `VersionStatus = "Unpublished"` | Content Sync can push an unpublish: unpublished pages without restriction, and unpublished content-hub items when the target has them published. |
-| Unpublished, then re-drafted (Draft (Initial) with a `LastPublishedWhen`) | No | See Verification results. Whether Content Sync acts on it is undocumented. |
+| Unpublished, then re-drafted (Draft (Initial) with a `LastPublishedWhen`) | Yes, `VersionStatus = "UnpublishedDraft"` | Kentico's Content Sync dialog greys it out (verified live on 31.9.1), so it can't be synced until it's published again. It's listed so it doesn't look deleted: left out, the target's copy showed as `OnlyOnTarget` with a "delete it on the target" hint while the item still existed here. The comparer classifies it as `NotPublished`, whatever the target has. On the target side, it has no published version, so it counts like an unpublished item. `"UnpublishedDraft"` and `"NeverPublished"` are new inventory values (no schema change); an older toolkit version treats them as published. Not Kentico's `Draft`, which is a new version of an item that's still published. |
 | Secured (requires authentication) | Yes, in any of the states above | Content Sync syncs secured items like any other. |
 
 In practice: a newly created or cloned item only appears once it's published.
 That's expected, not a bug.
+
+### Scenarios
+
+Every lifecycle state, what Content Sync can do with it, and what the status
+page shows. Verified live on 31.9.1 where marked.
+
+On the source:
+
+| Item state | Kentico state | Content Sync | Status page |
+| --- | --- | --- | --- |
+| New, never published | Draft (Initial), no publish date | Can't sync (greyed out, verified) | Not listed (verified) |
+| New, in a workflow step before the first publish | Workflow step | Can't sync | Not listed (verified: an unpublished Articles page) |
+| New, first publish scheduled | Scheduled | Can't sync until published | Not listed; **New** once published |
+| Published | Published | Syncs | Compared |
+| Published, then edited and saved | Draft (New version) | Syncs the published version | Its status, plus the newer-draft note (verified) |
+| Published, new version in a workflow step | `VersionStatus.Draft` with a step | Syncs the published version | Same (verified: Ready for review) |
+| Published, new version scheduled | `VersionStatus.Draft`, scheduled | Syncs the published version; scheduling isn't synced | Same (verified) |
+| Published, unpublish scheduled | Published | Syncs as published; scheduling isn't synced | Compared |
+| Unpublished | Unpublished | Pushes the unpublish | **Unpublished**, **In sync**, or **New** for a page (verified) |
+| Unpublished content hub item the target doesn't have | Unpublished | No change (Kentico docs) | Not listed |
+| Unpublished, then edited again | Draft (Initial) with a publish date | Can't sync (greyed out, verified) | **Not published** (verified) |
+| Never published here, but the target has it | Draft (Initial), no publish date | Can't sync | **Not published** |
+| Deleted here | Recycle bin | Can't delete on the target | **Only on target** |
+| Not translated into the selected language | No language variant | One language at a time | Not listed |
+
+On the target:
+
+| Item state | Status page |
+| --- | --- |
+| Missing | **New** |
+| Published | Compared |
+| Published, with its own newer draft | Compared by the published version; edits made on the target aren't visible |
+| Unpublished | **Changed** ("a sync publishes it there") or **In sync** (verified) |
+| Unpublished, then edited again | Counts as unpublished |
+| Never published (only a draft, for example after an interrupted sync) | Ignored: the source's item shows as **New** |
+
+Verified live on 31.9.1 (October 2026): a content item (Macap M2D) unpublished
+on the source and then edited with **Create new version** became Draft
+(Initial) with its `LastPublishedWhen` kept; Kentico's Content Sync dialog
+greyed it out with Sync disabled. Before the `UnpublishedDraft` rule the status
+page showed it as `OnlyOnTarget` ("…not on this instance… delete it on the
+target"); with it, the page shows `NotPublished` (then labeled Draft), "The target still has it
+published." Republishing it showed `Changed` ("Published here, unpublished on
+the target" after the unpublish had been synced), and a sync brought it back
+to `InSync`.
+
+Verified live on 31.9.1 (October 2026), for pages and content items:
+
+- A new Article page and a new Reference content item, saved but never
+  published (Draft (Initial)), weren't listed. Kentico's own Sync dialog showed
+  the content item greyed out with Sync disabled. An article created under the
+  Articles section's workflow and never published wasn't listed either.
+- A published, in-sync page (Contacts, SEO title changed) and content item
+  (Hario Mini Mill Slim, name changed), each saved as Draft (New version),
+  stayed **In sync**: they're compared by their published versions.
 
 ### Inventory queries
 
@@ -489,15 +580,17 @@ the published row wins):
 
 1. **Published versions** — the default `ForPreview = false`, which returns
    each item's published version even when a newer draft exists.
-2. **Unpublished items** — `ForPreview = true`, restricted to
-   `ContentItemCommonDataVersionStatus = Unpublished`. Two queries rather than
-   one `ForPreview = true` query, because the latter returns a pending draft's
-   row in place of the published version for published-with-draft items,
-   changing what those are compared by.
+2. **Items without a published version** — `ForPreview = true`, restricted to
+   `ContentItemCommonDataVersionStatus` Unpublished or InitialDraft. Two
+   queries rather than one `ForPreview = true` query, because the latter
+   returns a pending draft's row in place of the published version for
+   published-with-draft items, changing what those are compared by.
 
-Unpublished rows get `VersionStatus = "Unpublished"` from a constant
-(`ContentInventoryVersionStatus.Unpublished`), not from
-`VersionStatus.ToString()` — see the naming difference below.
+The second query's rows get their `VersionStatus` from constants, not from
+`VersionStatus.ToString()` (see the naming difference below): `"Unpublished"`,
+or for an InitialDraft row `"UnpublishedDraft"` when it has a
+`LastPublishedWhen` (unpublished, then edited again) and `"NeverPublished"`
+when it doesn't.
 
 `IncludeSecuredItems` defaults to `false`. Before it was set, a secured page
 (Dancing Goat's `/Articles/Coffee_Beverages_Explained`) was missing from both
@@ -505,30 +598,35 @@ inventories, so the admin page never listed it at all.
 
 ### Comparison rules for publication state
 
-No new `ContentSyncStatus` member and no wire-contract change: the rules reuse
-`OutOfDateOnTarget` and the existing `VersionStatus` field. They're evaluated
-before the timestamp rule, because unpublishing keeps `LastPublishedWhen`:
+No wire-contract change: the rules use the existing `VersionStatus` field.
+They're evaluated before the timestamp rule, because unpublishing keeps
+`LastPublishedWhen`:
 
 | Local | Remote | Status |
 | --- | --- | --- |
-| Unpublished page | absent | `MissingOnTarget` (Content Sync can create it) |
+| Unpublished page | absent | `New` (Content Sync can create it) |
 | Unpublished content-hub item | absent | left out — Content Sync makes no change for a new unpublished content item |
-| Unpublished | Published | `OutOfDateOnTarget` |
-| Published | Unpublished | `OutOfDateOnTarget` |
+| Unpublished | Published | `Unpublished` |
+| Published | Unpublished | `Changed` |
 | Unpublished | Unpublished | the timestamp rule |
-| absent | Unpublished | `ExtraOnTarget` (the existing rule) |
+| absent | Unpublished | `OnlyOnTarget` (the existing rule) |
+| UnpublishedDraft | anything, or absent | `NotPublished` |
+| NeverPublished | Published or Unpublished | `NotPublished` |
+| NeverPublished | absent | left out — nothing to sync, and nothing on the target |
+| Published | UnpublishedDraft | `Changed` (no published version on the target) |
+| any | NeverPublished | as if absent on the target: `New`, or left out |
 
 `"Archived"` counts as unpublished (see below), and a missing (`null`)
 `VersionStatus` counts as published.
 
-The admin page's status tag explains a publish-state difference in its
-tooltip (for example, "Unpublished here, still published on the target"), so
-`OutOfDateOnTarget` isn't ambiguous between newer edits and a different
-publish state.
+`Unpublished` is its own status because it's the riskiest gap: content taken
+down here is still live on the target. A page published here and unpublished
+on the target is `Changed`, since the editor does the same thing as for a
+newer edit; the admin page's tooltip says a sync publishes it there.
 
 **Mixed versions.** A target running an older toolkit version doesn't send
 unpublished items, so an item unpublished on that target is reported as it was
-before: `MissingOnTarget`. That's no worse than before the change.
+before: `New`. That's no worse than before the change.
 
 This changed `ContentSyncStatusComparer`'s classification but not any public
 signature — a minor-version change under this repository's release policy.
@@ -570,8 +668,9 @@ signature — a minor-version change under this repository's release policy.
   version of an *unpublished* page moves that row to `InitialDraft` (0) while
   keeping its original `LastPublishedWhen`. Such an item matches neither query
   above; `LastPublishedWhen` is what distinguishes "never published" from
-  "unpublished, then re-drafted". Whether Content Sync can act on such an item
-  is undocumented, so it's left out.
+  "unpublished, then re-drafted". Such an item was first left out; since
+  1.0.0-beta.2 the unpublished query also returns it, as `"UnpublishedDraft"`
+  (see the table above).
 - **Content Sync of an unpublished page absent on the target creates it
   there, unpublished.** Verified with Xperience's own Content Sync between the
   two rig instances (target on HTTPS with a trusted development certificate;
@@ -701,7 +800,7 @@ continues.
 
 - Unknown channel, workspace, or language name (local or remote): empty
   inventory result, not an error. On the source this means a channel or
-  language the target doesn't have yet shows every item as `MissingOnTarget`,
+  language the target doesn't have yet shows every item as `New`,
   not "target unavailable."
 - Remote target unreachable, TLS/connection failure, or timeout:
   `ContentInventoryFetchStatus.Unreachable`; surfaced by the orchestrating
@@ -766,8 +865,8 @@ repository's established convention):
   with no action opting out;
 - local inventory guard: an unknown channel or language returns an empty
   inventory without running a query;
-- comparer: both empty; local-only (`MissingOnTarget`); remote-only
-  (`ExtraOnTarget`); equal timestamps; newer local; newer remote; both null;
+- comparer: both empty; local-only (`New`); remote-only
+  (`OnlyOnTarget`); equal timestamps; newer local; newer remote; both null;
   local-null/remote-present; local-present/remote-null; duplicate GUIDs within
   one side (defined behavior, not an unhandled exception); a mixed batch;
   pass-through of `ContentTypeName`/`ScopeName`/`TreePath`/`LanguageName`;
@@ -819,8 +918,7 @@ using the Dancing Goat integration host:
 - A target instance with Content Sync's `Target.Enabled = false`, or any caller presenting a
   missing or incorrect secret, receives an identical rejection response.
 - A source instance correctly classifies local content against a live target's
-  inventory into in-sync, missing-on-target, out-of-date-on-target, and
-  extra-on-target categories.
+  inventory into the statuses in Comparison rules.
 - A target that is unreachable or rejects the request never causes local
   content to be misreported as missing.
 - The implementation passes compatibility validation on `30.8.0` and `31.7.2`
@@ -841,7 +939,7 @@ using the Dancing Goat integration host:
 - Detecting deletions as such. Content Sync can't delete on the target
   (Kentico's documentation: "Content synchronization cannot be used to delete
   items on the target instance"), so an item deleted on the source is simply
-  `ExtraOnTarget`; consumers explain that it has to be deleted on the target by
+  `OnlyOnTarget`; consumers explain that it has to be deleted on the target by
   hand.
 - Wire-level pagination or continuation tokens; internal looping produces one
   complete in-memory response.

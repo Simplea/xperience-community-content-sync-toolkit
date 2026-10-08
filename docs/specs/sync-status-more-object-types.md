@@ -46,8 +46,8 @@ Spanish on the target. Content Sync also syncs one language per sync, so a
 forgotten language is a common gap.
 
 **Proposal.** A **Languages** view: one row per item, one column per language,
-each cell showing that language variant's status (Missing, Out of date,
-Order differs, In sync, or "not translated here"). A filter shows only items
+each cell showing that language variant's status (New, Changed, Reordered,
+In sync, and so on, or "not translated here"). A filter shows only items
 with a gap in some language.
 
 **Data.** The existing inventory, once per language. The endpoint already
@@ -68,7 +68,7 @@ submission data for removed fields on the target when synced (Kentico's
 warning), so editors should see it before syncing.
 
 **Proposal.** A **Forms** tab, like Content hub: each form's status, with
-"Fields differ" as an out-of-date reason, and a tooltip that repeats Kentico's
+a "Fields differ" status (a kind of Changed), and a tooltip that repeats Kentico's
 warning about removed fields.
 
 **Data.** A forms inventory: form GUID, code and display name, last modified
@@ -86,9 +86,9 @@ tag on the source isn't visible on the target until an item using it is
 synced, and nothing shows that the tag differs.
 
 **Proposal.** Compare taxonomies and tags by GUID: missing, renamed, or moved
-to another parent on the target. Show them in the required-objects banner
-style ("The target has an older version of tag X; sync any item that uses it")
-rather than as a tab, since editors can't sync tags directly.
+to another parent on the target. Show them on the items that use them, like
+Incompatible ("The target has an older version of tag X; sync any item that uses
+it"), rather than as a tab, since editors can't sync tags directly.
 
 ### 4. Page URLs
 
@@ -98,7 +98,7 @@ on the target, and editors may expect it to show as a difference.
 **Open question first.** Whether a URL change creates a new page version (then
 the publish date already covers it) or not. Verify on the rig before
 designing anything; if it doesn't, compare each page's canonical URL path per
-language and add a "URL changed" out-of-date reason.
+language and add a "URL changed" status.
 
 ### 5. Content folders
 
@@ -106,8 +106,8 @@ language and add a "URL changed" out-of-date reason.
 publish date, so it would look In sync while the target shows it elsewhere.
 
 **Open question first.** As for URLs: verify whether a folder move creates a
-version. If not, compare each item's folder (by GUID) and add a "Moved to
-another folder" reason, like pages' Moved.
+version. If not, compare each item's folder (by GUID) and show a moved item
+as Moved, like pages.
 
 ### 6. More required objects
 

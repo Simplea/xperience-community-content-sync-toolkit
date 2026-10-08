@@ -11,13 +11,14 @@ gives no visibility into what is still missing there. This toolkit adds that
 visibility with a **Sync status** application (under **Content management**)
 that compares this instance with its Content Sync target:
 
-- **Pages** and **Content hub** tabs listing each item's status: missing on
-  the target, out of date, in a different order, only on the target, or in
-  sync, with filters, search and a link to each item's editor.
-- Explanations of why an item is out of date and what to sync, including pages
-  moved or reordered without being republished.
-- Warnings before a sync would fail because the target is missing a content
-  type, language, channel or workspace this instance has.
+- **Pages** and **Content hub** tabs with one status per item: Incompatible,
+  Unpublished, New, Changed, Moved, Reordered, Not published, Only on target, or In sync,
+  with a multi-select status filter, search and a link to each item's editor.
+- Explanations of what to sync, including pages moved or reordered without
+  being republished.
+- **Incompatible** items, which a sync would fail for because the target is missing
+  a content type, language, channel or workspace this instance has, with what
+  a developer needs to deploy.
 - Kentico's own permissions: editors only see the channels, workspaces and
   pages they can see in Xperience.
 
@@ -35,7 +36,7 @@ The project is developed and maintained by Andres Villenas at SimpleA.
 
 | Xperience Version | Library Version |
 | ----------------- | --------------- |
-| 30.8.0 or newer   | 1.0.0-beta.1    |
+| 30.8.0 or newer   | 1.0.0-beta.2    |
 
 Runtime-verified on 30.8.0 and 31.9.1.
 

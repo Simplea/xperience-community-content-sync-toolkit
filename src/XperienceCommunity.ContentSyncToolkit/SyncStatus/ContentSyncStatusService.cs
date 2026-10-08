@@ -82,7 +82,7 @@ internal sealed class ContentSyncStatusService(
         return new ContentSyncStatusResult(true, await AddRequiredObjectIssuesAsync(items, forceRefresh, cancellationToken));
     }
 
-    // Only items Content Sync still has to push can be blocked, so the target isn't asked otherwise.
+    // Only items Content Sync still has to push can be incompatible, so the target isn't asked otherwise.
     private async Task<IReadOnlyList<ContentSyncStatusItem>> AddRequiredObjectIssuesAsync(
         IReadOnlyList<ContentSyncStatusItem> items, bool forceRefresh, CancellationToken cancellationToken)
     {
@@ -103,7 +103,7 @@ internal sealed class ContentSyncStatusService(
     }
 
     private static bool NeedsPush(ContentSyncStatusItem item) =>
-        item.Local is not null && item.Status is ContentSyncStatus.MissingOnTarget or ContentSyncStatus.OutOfDateOnTarget;
+        item.Local is not null && item.Status.NeedsSync();
 
     private static string CacheKey(ContentInventoryItemKind kind, string scopeName, string languageName) =>
         $"{kind}|{scopeName}|{languageName}";
