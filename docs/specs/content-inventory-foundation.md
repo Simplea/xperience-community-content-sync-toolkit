@@ -587,7 +587,7 @@ On the source:
 | Unpublished, then edited again | Draft (Initial) with a publish date | Can't sync (greyed out, verified) | **Not published** (verified) |
 | Never published here, but the target has it | Draft (Initial), no publish date | Can't sync | **Not published** |
 | Deleted here | Recycle bin | Can't delete on the target | **Only on target** |
-| Not translated into the selected language | No language variant | One language at a time | Not listed |
+| Not translated into the selected language | No language variant | One language at a time | Not listed (verified) |
 
 On the target:
 
@@ -639,6 +639,23 @@ The second query's rows get their `VersionStatus` from constants, not from
 or for an InitialDraft row `"UnpublishedDraft"` when it has a
 `LastPublishedWhen` (unpublished, then edited again) and `"NeverPublished"`
 when it doesn't.
+
+Both queries call `InLanguage(languageName, useLanguageFallbacks: false)`. With
+the default fallbacks, an item with no variant in the language came back with
+its fallback language's data, labelled with the requested language: on the
+test rig, Spanish (which falls back to English) listed all 20,279 pages
+although only 9 had a Spanish variant. Content Sync syncs one language
+variant, so an untranslated item isn't listed. The admin page's ID and draft
+lookups (`ContentSyncItemIdResolver`) turn fallbacks off too. Fallbacks also
+made translated items wrong: the display name query took its language from
+the first row, often an English fallback, so Spanish pages showed English
+names; and an item never published in Spanish showed its English published
+version. Verified live on 31.9.1: the Spanish inventories list exactly the
+items with a Spanish variant (7 pages and 2 content hub items on the source,
+6 and 2 on the target), with Spanish names, and English is unchanged. A target
+older than this change still applies fallbacks, so a source on this version
+shows its untranslated items as **Only on target** in that language until the
+target is upgraded.
 
 `IncludeSecuredItems` defaults to `false`. Before it was set, a secured page
 (Dancing Goat's `/Articles/Coffee_Beverages_Explained`) was missing from both
@@ -837,7 +854,10 @@ at both:
   inventories](#large-inventories) — and `.Columns(...)` to read only the
   columns the inventory maps. `Offset` is documented for paging, but its
   cost grows with the offset; `TopN` cannot be combined with it in the same
-  query scope.
+  query scope;
+- `CMS.ContentEngine.ContentItemQueryBuilder.InLanguage(string languageName, bool useLanguageFallbacks)`
+  — fallbacks off, so only the language's own variants are listed (see
+  [Inventory queries](#inventory-queries)).
 
 Production code must not reference namespaces or types marked `.Internal` or
 use reflection to access non-public members at runtime (the reflection above

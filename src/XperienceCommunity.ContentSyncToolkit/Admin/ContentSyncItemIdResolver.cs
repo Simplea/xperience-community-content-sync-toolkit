@@ -36,6 +36,9 @@ internal sealed class ContentSyncItemIdResolver(IContentQueryExecutor contentQue
     // what tells a pending draft apart: for a published item with a newer draft, it's the draft.
     private static readonly ContentQueryExecutionOptions options = new() { ForPreview = true, IncludeSecuredItems = true };
 
+    // Without fallbacks, like the inventory: the draft state read is the language's own variant's.
+    private const bool UseLanguageFallbacks = false;
+
     public async Task<IReadOnlyDictionary<Guid, ContentSyncLocalItem>> GetWebPageItemsAsync(
         string websiteChannelName, string languageName, IReadOnlyCollection<Guid> webPageItemGuids, CancellationToken cancellationToken)
     {
@@ -46,7 +49,7 @@ internal sealed class ContentSyncItemIdResolver(IContentQueryExecutor contentQue
 
         var builder = new ContentItemQueryBuilder()
             .ForContentTypes(types => types.ForWebsite(websiteChannelName, PathMatch.Children("/")))
-            .InLanguage(languageName)
+            .InLanguage(languageName, UseLanguageFallbacks)
             .Parameters(p => p.Where(where => where.WhereIn(nameof(IWebPageContentQueryDataContainer.WebPageItemGUID), webPageItemGuids)));
 
         var items = await contentQueryExecutor.GetWebPageResult(
@@ -71,7 +74,7 @@ internal sealed class ContentSyncItemIdResolver(IContentQueryExecutor contentQue
         var builder = new ContentItemQueryBuilder()
             .ForContentTypes(types => types.OfContentType([.. contentTypeNames]))
             .InWorkspaces(workspaceName)
-            .InLanguage(languageName)
+            .InLanguage(languageName, UseLanguageFallbacks)
             .Parameters(p => p.Where(where => where.WhereIn(nameof(IContentQueryDataContainer.ContentItemGUID), contentItemGuids)));
 
         var items = await contentQueryExecutor.GetResult(
