@@ -131,10 +131,12 @@ startup can't react to configuration that changes without an app restart and
 would duplicate the runtime gate that's already mandatory for the "disabled
 looks identical to wrong secret" security requirement.
 
-**No wire-level pagination.** `ILocalContentInventoryService` pages internally
-(`Offset` with `OrderBy`, looped until a page returns fewer rows than requested) and
-returns one complete in-memory list. Large sites are an accepted v1 limitation;
-revisit if response sizes become a real problem.
+**No wire-level pagination.** `ILocalContentInventoryService` reads the items
+in batches of 5,000 by content item ID (keyset paging, looped until a batch
+returns fewer items), reading only the columns it maps, and returns one complete
+in-memory list. On a 20,000-item inventory that takes ~0.2-0.3 s, the target's
+response is 7-8 MB, and its cached list ~7 MB (see the foundation spec, Large
+inventories). Revisit if response sizes become a real problem.
 
 **Minimum supported version tracks Content Sync's own feature completeness,
 not just API availability.** Content Sync shipped in two phases: content-hub
