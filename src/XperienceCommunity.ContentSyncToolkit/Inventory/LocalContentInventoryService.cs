@@ -105,13 +105,19 @@ internal sealed class LocalContentInventoryService(
         return [.. published, .. unpublished.Where(item => !publishedGuids.Contains(item.Guid))];
     }
 
+    // Only items with a variant in the language are listed. With fallbacks, the query would also return
+    // an item that has none in the fallback language's data, labelled with this language; Content Sync
+    // can't sync an item in a language it has no variant in. See docs/specs/content-inventory-foundation.md,
+    // Inventory queries.
+    private const bool UseLanguageFallbacks = false;
+
     private async Task<IReadOnlyList<ContentInventoryItem>> QueryWebPagesAsync(
         string websiteChannelName, string languageName, IReadOnlyDictionary<string, string> contentTypeDisplayNames,
         ContentItemKeys keys, int afterId, bool unpublishedOnly, CancellationToken cancellationToken)
     {
         var builder = new ContentItemQueryBuilder()
             .ForContentTypes(types => types.ForWebsite(websiteChannelName, PathMatch.Children("/")))
-            .InLanguage(languageName)
+            .InLanguage(languageName, UseLanguageFallbacks)
             .Parameters(p => Page(p, afterId, unpublishedOnly).Columns(webPageColumns));
 
         return [.. await contentQueryExecutor.GetWebPageResult(
@@ -128,7 +134,7 @@ internal sealed class LocalContentInventoryService(
         var builder = new ContentItemQueryBuilder()
             .ForContentTypes(types => types.OfContentType([.. contentTypeDisplayNames.Keys]))
             .InWorkspaces(workspaceName)
-            .InLanguage(languageName)
+            .InLanguage(languageName, UseLanguageFallbacks)
             .Parameters(p => Page(p, afterId, unpublishedOnly).Columns(contentHubColumns));
 
         return [.. await contentQueryExecutor.GetResult(

@@ -322,6 +322,8 @@ outside the current view:
 - An unpublished content hub item the target doesn't have.
 - Items in another language, website channel or workspace than the one
   selected in the filter.
+- Items not translated into the selected language, even when the language
+  falls back to another. Content Sync syncs each language version separately.
 - Pages you can't see in the page tree, and channels or workspaces you have no
   access to (see Give editors access).
 
