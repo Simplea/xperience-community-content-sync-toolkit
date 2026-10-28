@@ -320,8 +320,8 @@ public interface ILocalContentInventoryService
 Both take the channel/workspace name as an explicit parameter rather than
 relying on ambient `IWebsiteChannelContext`, because the implementation must
 answer for whatever scope a remote caller asks about, not "the current
-request's channel." Both page internally (`Offset` with `OrderBy`, looped until
-a page returns fewer rows than requested) and return one complete in-memory list — see
+request's channel." Both read the items in batches (see [Large
+inventories](#large-inventories)) and return one complete in-memory list — see
 Out of scope for why wire-level pagination is not part of this version.
 
 Two things the original specification got wrong, corrected after verification
@@ -356,6 +356,54 @@ rig):
   excludes non-public classes from controller discovery — the route never
   registers at all, and requests fall through to the host application's own
   404 handling with no error indicating why.
+
+### Large inventories
+
+The inventory is read in batches of 5,000 items by content item ID (keyset
+paging): each batch is `WhereGreater(ContentItemID, <highest ID of the previous
+batch>)`, ordered by `ContentItemID`, with `TopN(5000)`, and reading stops at the
+first batch with fewer items. Both the published and the unpublished queries
+(see [Inventory queries](#inventory-queries)) are read this way.
+
+The first release used `Offset` with 500-item batches. Measured on the
+two-instance rig with 20,000 pages and 20,000 Content hub items (31.9.1, local
+SQL Server):
+
+| Inventory of 20,000 | `Offset`, 500 per batch | Keyset, 5,000 per batch |
+| --- | --- | --- |
+| Pages query | ~3.9 s | ~0.4 s |
+| Content hub query | ~1.8 s | ~0.2 s |
+| Target endpoint, pages (8 MB) | 3.6-5.4 s | ~0.5 s |
+| Target endpoint, Content hub (7 MB) | 1.8-2.2 s | ~0.3 s |
+
+`Offset` re-reads every earlier row for each batch, so the total grows with the
+square of the inventory size. Each batch also has a fixed cost across every
+content type it covers, which is why batches are large: keyset paging with
+500-item batches still took ~0.9 s for the Content hub query. Display names
+(one more query per 1,000 items) add ~0.1 s, and the comparison ~5-25 ms.
+
+The queries also name the columns they read (`Columns(...)`): the content item
+ID, language ID, publish state and last publish date, plus the GUID, code name,
+and for pages the tree path and order. `ContentTypeName` isn't a column; the
+content query provides it either way. Without the list, every system column of
+every row was read and discarded:
+
+| Inventory of 20,000, per request | All columns | Named columns |
+| --- | --- | --- |
+| Pages query | ~500 ms, 205 MB allocated | ~270 ms, 90 MB allocated |
+| Content hub query | ~280 ms, 110 MB allocated | ~175 ms, 70 MB allocated |
+
+The whole inventory is held in memory while a request compares it: the local
+one for the request, the target's for the cache duration (see
+`InventoryCacheDuration`). Values most items share (content type name and
+display name, channel or workspace, language, publish state) are kept once per
+response rather than once per item, which brings the target's cached list for
+20,000 pages from ~12 MB to ~7 MB.
+
+With both changes, a listing request on a 20,000-item channel takes ~0.3 s
+(paging, sorting, searching) and ~1 s with Refresh, which also fetches the
+target's inventory. Measured with the target on the same machine; a remote
+target adds the transfer of its 7-8 MB response.
 
 ## Comparison rules
 
@@ -784,10 +832,12 @@ at both:
   `ContentItemCommonDataVersionStatus`) in one object;
 - `CMS.Websites.PathMatch.Children(string path, int nestingLevel = -1)` — the
   default `-1` means "all levels," confirmed via reflection;
-- `CMS.ContentEngine.ContentQueryParametersBase<T>.Offset(int offset, int fetch)`
-  paired with `.OrderBy(...)` — the documented paging mechanism; `TopN` cannot
-  be combined with `Offset` in the same query scope, so the internal paging
-  loop uses `Offset` exclusively.
+- `CMS.ContentEngine.WhereParameters.WhereGreater(...)` with `.OrderBy(...)` and
+  `.TopN(...)` on the query-level parameters — the batches of [Large
+  inventories](#large-inventories) — and `.Columns(...)` to read only the
+  columns the inventory maps. `Offset` is documented for paging, but its
+  cost grows with the offset; `TopN` cannot be combined with it in the same
+  query scope.
 
 Production code must not reference namespaces or types marked `.Internal` or
 use reflection to access non-public members at runtime (the reflection above

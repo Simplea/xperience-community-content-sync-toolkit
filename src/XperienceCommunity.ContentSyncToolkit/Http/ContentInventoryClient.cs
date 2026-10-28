@@ -38,10 +38,16 @@ internal sealed class ContentInventoryClient(HttpClient httpClient) : IContentIn
             : RequiredObjectsFetchResult.Failed(FailureStatus(status));
     }
 
-    private static ContentInventoryFetchResult ToInventoryResult(ContentInventoryFetchStatus status, ContentInventoryResponse? body) =>
-        body?.Items is not null
-            ? ContentInventoryFetchResult.Success([.. body.Items.Select(NormalizeTime)])
-            : ContentInventoryFetchResult.Failed(FailureStatus(status));
+    private static ContentInventoryFetchResult ToInventoryResult(ContentInventoryFetchStatus status, ContentInventoryResponse? body)
+    {
+        if (body?.Items is null)
+        {
+            return ContentInventoryFetchResult.Failed(FailureStatus(status));
+        }
+
+        var strings = new Dictionary<string, string>(StringComparer.Ordinal);
+        return ContentInventoryFetchResult.Success([.. body.Items.Select(item => Normalize(item, strings))]);
+    }
 
     // A body only comes with Success; Success without one (a 200 that isn't the expected JSON, or a
     // JSON null) is an Error, never an empty result.
@@ -92,6 +98,34 @@ internal sealed class ContentInventoryClient(HttpClient httpClient) : IContentIn
 
     // Schema 2 targets send UTC; schema 1 targets send server-local time with no time zone, which is
     // taken as this server's local time (how they were compared before).
-    private static ContentInventoryItem NormalizeTime(ContentInventoryItem item) =>
-        item with { LastPublishedWhen = ContentInventoryTime.ToUtc(item.LastPublishedWhen) };
+    // The response is cached for the whole cache duration, so values most items share (content type,
+    // channel or workspace, language, publish state) are kept once each rather than once per item, as
+    // JSON deserialization creates them. On a 20,000-item inventory, that's most of the cached list's
+    // memory. See docs/specs/content-inventory-foundation.md, Large inventories.
+    private static ContentInventoryItem Normalize(ContentInventoryItem item, Dictionary<string, string> strings) =>
+        item with
+        {
+            LastPublishedWhen = ContentInventoryTime.ToUtc(item.LastPublishedWhen),
+            ContentTypeName = Shared(item.ContentTypeName, strings)!,
+            ScopeName = Shared(item.ScopeName, strings)!,
+            LanguageName = Shared(item.LanguageName, strings)!,
+            VersionStatus = Shared(item.VersionStatus, strings),
+            ContentTypeDisplayName = Shared(item.ContentTypeDisplayName, strings),
+        };
+
+    private static string? Shared(string? value, Dictionary<string, string> strings)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (strings.TryGetValue(value, out string? shared))
+        {
+            return shared;
+        }
+
+        strings[value] = value;
+        return value;
+    }
 }

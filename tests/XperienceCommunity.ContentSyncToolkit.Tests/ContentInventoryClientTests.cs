@@ -84,6 +84,35 @@ public class ContentInventoryClientTests
         Assert.That(result.Items[0].Guid, Is.EqualTo(itemGuid));
     }
 
+    // JSON deserialization creates a string per item; values items share are kept once each.
+    [Test]
+    public async Task GetWebPagesAsync_SharesValuesRepeatedAcrossItems()
+    {
+        static string Item(int n, string? displayName) =>
+            "{\"guid\":\"6f1f2c1e-0000-0000-0000-00000000000" + n + "\",\"kind\":0,\"contentTypeName\":\"Acme.Article\","
+            + "\"scopeName\":\"Site\",\"languageName\":\"en\",\"treePath\":\"/a" + n + "\",\"lastPublishedWhen\":null,"
+            + "\"versionStatus\":\"Published\",\"name\":\"a" + n + "\""
+            + (displayName is null ? string.Empty : ",\"contentTypeDisplayName\":\"" + displayName + "\"") + "}";
+        var client = new ContentInventoryClient(CreateHttpClient(RawJson(
+            "{\"schemaVersion\":3,\"generatedAtUtc\":\"2026-03-01T12:00:00+00:00\",\"items\":["
+            + Item(1, "Article") + "," + Item(2, "Article") + "," + Item(3, null) + "]}")));
+
+        var result = await client.GetWebPagesAsync("Site", "en", CancellationToken.None);
+
+        var (first, second, third) = (result.Items[0], result.Items[1], result.Items[2]);
+        Assert.Multiple(() =>
+        {
+            Assert.That(second.ContentTypeName, Is.SameAs(first.ContentTypeName));
+            Assert.That(second.ScopeName, Is.SameAs(first.ScopeName));
+            Assert.That(second.LanguageName, Is.SameAs(first.LanguageName));
+            Assert.That(second.VersionStatus, Is.SameAs(first.VersionStatus));
+            Assert.That(second.ContentTypeDisplayName, Is.SameAs(first.ContentTypeDisplayName));
+            Assert.That(third.ContentTypeDisplayName, Is.Null);
+            Assert.That(second.TreePath, Is.EqualTo("/a2"));
+            Assert.That(second.Name, Is.EqualTo("a2"));
+        });
+    }
+
     private static FakeHttpMessageHandler RawJson(string json) =>
         new(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {

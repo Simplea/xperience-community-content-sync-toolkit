@@ -20,9 +20,12 @@ internal sealed class LocalContentInventoryService(
     IContentScopeLookup scopeLookup,
     IEventLogService eventLogService) : ILocalContentInventoryService
 {
-    // Offset-based paging requires OrderBy for consistent results; TopN cannot be combined with
-    // Offset in the same query scope, so this is the only paging mechanism used here.
-    private const int PageSize = 500;
+    // Items are read in batches by content item ID (keyset paging): each batch starts after the last
+    // ID read, so its cost doesn't grow with how far into the list it is, as Offset's does. Each batch
+    // also has a fixed cost across every content type it covers, so batches are large. Measured on a
+    // 20,000-item rig: Offset with 500-item batches took 1.8-4 s, this takes 0.2-0.4 s. See
+    // docs/specs/content-inventory-foundation.md, Large inventories.
+    private const int PageSize = 5000;
 
     // The published versions. The default ForPreview = false returns each item's published version
     // even when a newer draft exists, which is what Content Sync would push.
@@ -49,9 +52,9 @@ internal sealed class LocalContentInventoryService(
         var keys = new ContentItemKeys();
 
         var published = await PageThroughAsync(
-            offset => QueryWebPagesAsync(websiteChannelName, languageName, contentTypeDisplayNames, keys, offset, unpublishedOnly: false, cancellationToken));
+            afterId => QueryWebPagesAsync(websiteChannelName, languageName, contentTypeDisplayNames, keys, afterId, unpublishedOnly: false, cancellationToken), keys);
         var unpublished = await PageThroughAsync(
-            offset => QueryWebPagesAsync(websiteChannelName, languageName, contentTypeDisplayNames, keys, offset, unpublishedOnly: true, cancellationToken));
+            afterId => QueryWebPagesAsync(websiteChannelName, languageName, contentTypeDisplayNames, keys, afterId, unpublishedOnly: true, cancellationToken), keys);
 
         return await WithDisplayNamesAsync(Merge(published, unpublished), keys, cancellationToken);
     }
@@ -80,9 +83,9 @@ internal sealed class LocalContentInventoryService(
         var keys = new ContentItemKeys();
 
         var published = await PageThroughAsync(
-            offset => QueryContentHubItemsAsync(workspaceName, languageName, contentTypeDisplayNames, keys, offset, unpublishedOnly: false, cancellationToken));
+            afterId => QueryContentHubItemsAsync(workspaceName, languageName, contentTypeDisplayNames, keys, afterId, unpublishedOnly: false, cancellationToken), keys);
         var unpublished = await PageThroughAsync(
-            offset => QueryContentHubItemsAsync(workspaceName, languageName, contentTypeDisplayNames, keys, offset, unpublishedOnly: true, cancellationToken));
+            afterId => QueryContentHubItemsAsync(workspaceName, languageName, contentTypeDisplayNames, keys, afterId, unpublishedOnly: true, cancellationToken), keys);
 
         return await WithDisplayNamesAsync(Merge(published, unpublished), keys, cancellationToken);
     }
@@ -104,12 +107,12 @@ internal sealed class LocalContentInventoryService(
 
     private async Task<IReadOnlyList<ContentInventoryItem>> QueryWebPagesAsync(
         string websiteChannelName, string languageName, IReadOnlyDictionary<string, string> contentTypeDisplayNames,
-        ContentItemKeys keys, int offset, bool unpublishedOnly, CancellationToken cancellationToken)
+        ContentItemKeys keys, int afterId, bool unpublishedOnly, CancellationToken cancellationToken)
     {
         var builder = new ContentItemQueryBuilder()
             .ForContentTypes(types => types.ForWebsite(websiteChannelName, PathMatch.Children("/")))
             .InLanguage(languageName)
-            .Parameters(p => Page(p, offset, unpublishedOnly));
+            .Parameters(p => Page(p, afterId, unpublishedOnly).Columns(webPageColumns));
 
         return [.. await contentQueryExecutor.GetWebPageResult(
             builder,
@@ -120,13 +123,13 @@ internal sealed class LocalContentInventoryService(
 
     private async Task<IReadOnlyList<ContentInventoryItem>> QueryContentHubItemsAsync(
         string workspaceName, string languageName, IReadOnlyDictionary<string, string> contentTypeDisplayNames,
-        ContentItemKeys keys, int offset, bool unpublishedOnly, CancellationToken cancellationToken)
+        ContentItemKeys keys, int afterId, bool unpublishedOnly, CancellationToken cancellationToken)
     {
         var builder = new ContentItemQueryBuilder()
             .ForContentTypes(types => types.OfContentType([.. contentTypeDisplayNames.Keys]))
             .InWorkspaces(workspaceName)
             .InLanguage(languageName)
-            .Parameters(p => Page(p, offset, unpublishedOnly));
+            .Parameters(p => Page(p, afterId, unpublishedOnly).Columns(contentHubColumns));
 
         return [.. await contentQueryExecutor.GetResult(
             builder,
@@ -135,7 +138,32 @@ internal sealed class LocalContentInventoryService(
             cancellationToken)];
     }
 
-    private static void Page(ContentQueryParameters parameters, int offset, bool unpublishedOnly)
+    // The batch of items after the given content item ID, in ID order.
+    private static readonly string[] commonColumns =
+    [
+        nameof(IContentQueryDataContainer.ContentItemID),
+        nameof(IContentQueryDataContainer.ContentItemCommonDataContentLanguageID),
+        nameof(IContentQueryDataContainer.ContentItemCommonDataVersionStatus),
+        nameof(IContentQueryDataContainer.ContentItemCommonDataLastPublishedWhen),
+    ];
+
+    private static readonly string[] webPageColumns =
+    [
+        .. commonColumns,
+        nameof(IWebPageContentQueryDataContainer.WebPageItemGUID),
+        nameof(IWebPageContentQueryDataContainer.WebPageItemTreePath),
+        nameof(IWebPageContentQueryDataContainer.WebPageItemName),
+        nameof(IWebPageContentQueryDataContainer.WebPageItemOrder),
+    ];
+
+    private static readonly string[] contentHubColumns =
+    [
+        .. commonColumns,
+        nameof(IContentQueryDataContainer.ContentItemGUID),
+        nameof(IContentQueryDataContainer.ContentItemName),
+    ];
+
+    private static ContentQueryParameters Page(ContentQueryParameters parameters, int afterId, bool unpublishedOnly)
     {
         if (unpublishedOnly)
         {
@@ -146,27 +174,36 @@ internal sealed class LocalContentInventoryService(
         }
 
         parameters
+            .Where(where => where.WhereGreater(nameof(IContentQueryDataContainer.ContentItemID), afterId))
             .OrderBy(nameof(IContentQueryDataContainer.ContentItemID))
-            .Offset(offset, PageSize);
+            .TopN(PageSize);
+
+        return parameters;
     }
 
-    private static async Task<IReadOnlyList<ContentInventoryItem>> PageThroughAsync(
-        Func<int, Task<IReadOnlyList<ContentInventoryItem>>> queryPage)
+    private static Task<IReadOnlyList<ContentInventoryItem>> PageThroughAsync(
+        Func<int, Task<IReadOnlyList<ContentInventoryItem>>> queryPage, ContentItemKeys keys) =>
+        PageThroughAsync(queryPage, item => keys.ContentItemIds[item.Guid], PageSize);
+
+    // Reads batches until one comes back short. Each batch starts after the highest content item ID
+    // in the previous one.
+    internal static async Task<IReadOnlyList<T>> PageThroughAsync<T>(
+        Func<int, Task<IReadOnlyList<T>>> queryPage, Func<T, int> contentItemIdOf, int pageSize)
     {
-        var items = new List<ContentInventoryItem>();
-        int offset = 0;
+        var items = new List<T>();
+        int afterId = 0;
 
         while (true)
         {
-            var page = await queryPage(offset);
+            var page = await queryPage(afterId);
             items.AddRange(page);
 
-            if (page.Count < PageSize)
+            if (page.Count < pageSize)
             {
                 return items;
             }
 
-            offset += PageSize;
+            afterId = page.Max(contentItemIdOf);
         }
     }
 
@@ -241,7 +278,8 @@ internal sealed class LocalContentInventoryService(
     }
 
     // Remembers each mapped item's content item ID and the query's language ID, which the inventory
-    // doesn't carry but the display name query needs. The content query maps rows one at a time.
+    // doesn't carry but the display name query and paging need. The content query maps rows one at a
+    // time.
     private sealed class ContentItemKeys
     {
         public Dictionary<Guid, int> ContentItemIds { get; } = [];
