@@ -204,6 +204,10 @@ internal static class ContentSyncStatusListingSupport
     private const string CannotDeleteHint =
         " Content Sync can't delete content: if it was deleted here, delete it on the target.";
 
+    // With a link to the item on the target (see docs/specs/target-item-links.md).
+    private const string OpenOnTargetHint =
+        " Open it there with the link on its name: Content Sync can't delete content, so delete or unpublish it on the target.";
+
     public const string IncompatibleLabel = "Incompatible";
 
     // An incompatible item's tooltip: each compatibility error in the words of Kentico's own Content
@@ -274,10 +278,12 @@ internal static class ContentSyncStatusListingSupport
     // hasNewerDraft (a published item whose latest version is a draft) adds a note: Content Sync sends
     // the published version, so the status is right, but an editor who just saved changes could
     // otherwise read In sync as "my changes are on the target".
-    public static string? StatusTooltip(ContentSyncStatusItem item, bool hasNewerDraft = false)
+    //
+    // opensOnTarget (an Only on target row linking to the item on the target) says the row opens it.
+    public static string? StatusTooltip(ContentSyncStatusItem item, bool hasNewerDraft = false, bool opensOnTarget = false)
     {
         bool showDraft = hasNewerDraft && item.Local is not null && !ContentInventoryVersionStatus.IsUnpublished(item.Local.VersionStatus);
-        string? tooltip = StatusOnlyTooltip(item);
+        string? tooltip = StatusOnlyTooltip(item, opensOnTarget);
 
         if (!showDraft)
         {
@@ -289,7 +295,7 @@ internal static class ContentSyncStatusListingSupport
             : tooltip + " " + NewerDraftHint;
     }
 
-    private static string? StatusOnlyTooltip(ContentSyncStatusItem item)
+    private static string? StatusOnlyTooltip(ContentSyncStatusItem item, bool opensOnTarget)
     {
         if (item.HasCompatibilityIssues)
         {
@@ -311,8 +317,8 @@ internal static class ContentSyncStatusListingSupport
             ContentSyncStatus.NotPublished =>
                 (item.Local is not null && ContentInventoryVersionStatus.IsNeverPublished(item.Local.VersionStatus) ? NeverPublishedTooltip : UnpublishedDraftTooltip)
                 + " " + TargetState(item.Remote is not null, remoteUnpublished),
-            ContentSyncStatus.OnlyOnTarget when remoteUnpublished => "Unpublished on the target, and not on this instance." + CannotDeleteHint,
-            ContentSyncStatus.OnlyOnTarget => "Only on the target." + CannotDeleteHint,
+            ContentSyncStatus.OnlyOnTarget when remoteUnpublished => "Unpublished on the target, and not on this instance." + (opensOnTarget ? OpenOnTargetHint : CannotDeleteHint),
+            ContentSyncStatus.OnlyOnTarget => "Only on the target." + (opensOnTarget ? OpenOnTargetHint : CannotDeleteHint),
             ContentSyncStatus.InSync when localUnpublished => "Unpublished on both instances.",
             _ => null,
         };

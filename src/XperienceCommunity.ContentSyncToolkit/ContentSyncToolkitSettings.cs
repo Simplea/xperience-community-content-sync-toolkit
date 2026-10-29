@@ -8,7 +8,14 @@ namespace XperienceCommunity.ContentSyncToolkit;
 /// <param name="TargetUrl">Where the target is; this instance acts as a source only when set.</param>
 /// <param name="Secret">Sent to the target with every inventory request.</param>
 /// <param name="RequestTimeout">Timeout for requests to the target (the toolkit's own setting).</param>
-internal sealed record EffectiveSourceSettings(Uri? TargetUrl, string? Secret, TimeSpan RequestTimeout);
+internal sealed record EffectiveSourceSettings(Uri? TargetUrl, string? Secret, TimeSpan RequestTimeout)
+{
+    /// <summary>
+    /// The target's administration, ending in a slash so admin paths resolve under it; null when
+    /// this instance isn't a source.
+    /// </summary>
+    public Uri? TargetAdminUrl { get; init; }
+}
 
 /// <summary>Target settings, from Xperience's Content Sync target configuration.</summary>
 /// <param name="Enabled">Whether inventory requests are answered.</param>
@@ -42,11 +49,30 @@ internal sealed class ContentSyncToolkitSettings(
     {
         var source = contentSync.Source?.Enabled == true ? contentSync.Source : null;
 
+        var targetUrl = ToAbsoluteUri(source?.TargetUrl);
+
         return new EffectiveSourceSettings(
-            ToAbsoluteUri(source?.TargetUrl),
+            targetUrl,
             NullIfEmpty(source?.Secret),
-            toolkit.RequestTimeout);
+            toolkit.RequestTimeout)
+        {
+            TargetAdminUrl = targetUrl is null ? null : ResolveTargetAdminUrl(toolkit, targetUrl),
+        };
     }
+
+    // Xperience's administration path, the same on every instance.
+    private const string AdminPath = "admin";
+
+    // The toolkit's TargetAdminUrl, or the target's /admin.
+    private static Uri ResolveTargetAdminUrl(ContentSyncToolkitOptions toolkit, Uri targetUrl) =>
+        WithTrailingSlash(ToAbsoluteUri(toolkit.TargetAdminUrl) ?? new Uri(WithTrailingSlash(targetUrl), AdminPath));
+
+    // A base URL must end in a slash for a relative path to resolve under it rather than replace its
+    // last segment.
+#pragma warning disable S1075 // URL syntax, not an environment-specific path.
+    private static Uri WithTrailingSlash(Uri uri) =>
+        uri.AbsolutePath.EndsWith('/') ? uri : new UriBuilder(uri) { Path = uri.AbsolutePath + '/' }.Uri;
+#pragma warning restore S1075
 
     // A target exactly when Content Sync's target role is enabled.
     internal static EffectiveTargetSettings ResolveTarget(ContentSynchronizationOptions contentSync)

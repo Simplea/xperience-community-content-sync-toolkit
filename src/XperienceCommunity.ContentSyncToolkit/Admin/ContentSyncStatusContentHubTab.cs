@@ -5,6 +5,7 @@ using Kentico.Xperience.Admin.Base;
 using Microsoft.Extensions.Options;
 
 using XperienceCommunity.ContentSyncToolkit.Admin;
+using XperienceCommunity.ContentSyncToolkit.Http;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 [assembly: UIPage(
@@ -25,6 +26,7 @@ internal sealed class ContentSyncStatusContentHubTab(
     IContentSyncScopeProvider scopeProvider,
     IContentSyncFilterOptionsProvider filterOptionsProvider,
     IContentSyncItemIdResolver itemIdResolver,
+    IContentInventoryClient inventoryClient,
     ContentSyncStatusRefreshRequestStore refreshRequestStore,
     IPageLinkGenerator pageLinkGenerator)
     : ContentSyncStatusTabBase(
@@ -63,6 +65,10 @@ internal sealed class ContentSyncStatusContentHubTab(
             [.. items.Select(item => item.Local!.ContentTypeName).Distinct(StringComparer.OrdinalIgnoreCase)],
             [.. items.Select(item => item.Guid)],
             cancellationToken);
+
+    protected override Task<TargetItemIdsFetchResult> GetTargetItemIdsAsync(
+        ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken) =>
+        inventoryClient.GetContentItemIdsAsync(scope.Name, languageName, [.. items.Select(item => item.Guid)], cancellationToken);
 
     // A workspace scope's ID is its WorkspaceID.
     protected override ContentSyncStatusItemLink GetItemLink(ContentSyncScope scope, string languageName, int itemId) =>

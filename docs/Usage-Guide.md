@@ -73,13 +73,14 @@ If Content Sync isn't configured as a source, the status page shows a banner
 saying so; if it isn't configured as a target, the target rejects inventory
 requests. The toolkit has no purpose without Content Sync.
 
-Two optional toolkit settings tune the source's requests:
+Three optional toolkit settings, all on the source:
 
 ```json
 {
   "ContentSyncToolkit": {
     "RequestTimeout": "00:00:30",
-    "InventoryCacheDuration": "00:01:30"
+    "InventoryCacheDuration": "00:01:30",
+    "TargetAdminUrl": "https://prod.example.com/admin"
   }
 }
 ```
@@ -88,6 +89,7 @@ Two optional toolkit settings tune the source's requests:
 | --- | --- | --- |
 | `RequestTimeout` | 30 seconds | Timeout for requests to the target. |
 | `InventoryCacheDuration` | 90 seconds | How long the target's inventory is cached on the source. The source's own content is never cached. |
+| `TargetAdminUrl` | `{TargetUrl}/admin` | Where **Only on target** rows open the target's administration. Set it when Content Sync's `TargetUrl` isn't an address editors' browsers can reach, such as an internal host name. |
 
 ## Give editors access
 
@@ -148,8 +150,8 @@ The application has two tabs: **Pages** (one website channel at a time) and
   own Content Sync actions: for a page, **Sync this page** or **Sync with all
   subpages** in the page tree; for a content item, select it in the **Content
   hub** list and use **Sync** (the content item editor has no Sync action).
-  Only on target rows can't be opened, because the item doesn't exist on this
-  instance.
+  **Only on target** rows can't be opened here, because the item doesn't
+  exist on this instance; their name links to it on the target instead.
 - **Refresh** fetches the target's inventory again instead of using the cached
   copy. The applied filters and search are kept. Without it, the target's list
   is reused for up to 90 seconds (`InventoryCacheDuration`), so a page can
@@ -183,7 +185,7 @@ Hover the ⓘ next to **Status** for the same summary in the application:
 | **Moved** | Orange | At a different place in the page tree on the target. | Sync all pages on its old and new level. |
 | **Reordered** | Orange | The pages on this level are in a different order on the target. | Use **Sync with all subpages** on the level's parent. |
 | **Not published** | Grey | No published version here (unpublished, then edited again; or never published while the target has it). | Publish it; Content Sync can't sync it until then. |
-| **Only on target** | Grey | On the target but not on this instance. | Nothing to sync: Content Sync can't delete. Delete it on the target if it shouldn't be there. |
+| **Only on target** | Grey | On the target but not on this instance. | Nothing to sync: Content Sync can't delete. Open it on the target with the link on its name, and delete it there if it shouldn't be there. |
 | **In sync** | Green | The target has the same published version. | Nothing. |
 
 Hover a status tag for details about that item.
@@ -295,7 +297,11 @@ In sync).
 - You deleted the item here; Content Sync can't delete it on the target.
 - Someone created the item directly on the target.
 
-Rows of this status can't be opened, because the item doesn't exist here.
+The item's name (its path on the Pages tab) is a link, marked ↗, that opens
+it in the target's administration in a new tab, where you can delete it,
+unpublish it, or schedule the unpublish. You need an account on the target;
+sign in there if asked. The link needs the target on this toolkit version or
+later; with an older target, the name is plain text.
 
 **In sync**
 

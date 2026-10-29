@@ -20,4 +20,11 @@ public sealed class ContentSyncToolkitOptions
     /// inventory is never cached; only the cross-instance call is.
     /// </summary>
     public TimeSpan InventoryCacheDuration { get; set; } = TimeSpan.FromSeconds(90);
+
+    /// <summary>
+    /// Where editors open the target's administration, for links to items that exist only on the
+    /// target. Defaults to <c>{TargetUrl}/admin</c>, from Content Sync's source settings; set it
+    /// when that address isn't one editors' browsers can reach.
+    /// </summary>
+    public string? TargetAdminUrl { get; set; }
 }

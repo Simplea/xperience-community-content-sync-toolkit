@@ -18,6 +18,7 @@ namespace XperienceCommunity.ContentSyncToolkit.Http;
 public sealed class ContentInventoryController(
     ILocalContentInventoryService inventoryService,
     ILocalRequiredObjectsService requiredObjectsService,
+    IContentItemIdLookup itemIdLookup,
     TimeProvider timeProvider) : ControllerBase
 {
     private const int SchemaVersion = ContentSyncToolkitConstants.SchemaVersion;
@@ -37,6 +38,27 @@ public sealed class ContentInventoryController(
         var items = await inventoryService.GetContentHubItemsAsync(workspaceName, languageName, cancellationToken);
         return new ContentInventoryResponse(SchemaVersion, timeProvider.GetUtcNow(), items);
     }
+
+    // This instance's IDs for items the source lists as only here, so it can link to them in this
+    // instance's administration. See docs/specs/target-item-links.md.
+    [HttpGet("web-page-ids")]
+    public async Task<ActionResult<TargetItemIdsResponse>> GetWebPageIds(
+        [FromQuery] string channelName, [FromQuery] string languageName, [FromQuery] string? guids, CancellationToken cancellationToken)
+    {
+        var ids = await itemIdLookup.GetWebPageIdsAsync(channelName, languageName, ContentItemIdLookup.ParseGuids(guids), cancellationToken);
+        return ToItemIdsResponse(ids);
+    }
+
+    [HttpGet("content-item-ids")]
+    public async Task<ActionResult<TargetItemIdsResponse>> GetContentItemIds(
+        [FromQuery] string workspaceName, [FromQuery] string languageName, [FromQuery] string? guids, CancellationToken cancellationToken)
+    {
+        var ids = await itemIdLookup.GetContentItemIdsAsync(workspaceName, languageName, ContentItemIdLookup.ParseGuids(guids), cancellationToken);
+        return ToItemIdsResponse(ids);
+    }
+
+    private TargetItemIdsResponse ToItemIdsResponse(ContentItemIds ids) =>
+        new(SchemaVersion, timeProvider.GetUtcNow(), ids.ScopeId, [.. ids.Ids.Select(item => new TargetItemId(item.Key, item.Value))]);
 
     // What Content Sync needs on this instance but doesn't transfer, so the source can warn before a
     // sync fails. Only a caller holding Content Sync's secret, who can already push content here,

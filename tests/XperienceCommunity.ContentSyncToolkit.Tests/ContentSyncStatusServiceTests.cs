@@ -67,6 +67,15 @@ public class ContentSyncStatusServiceTests
             RequiredObjectsCallCount++;
             return Task.FromResult(RequiredObjectsResult);
         }
+
+        // The sync status service doesn't look up target IDs; only the admin page does.
+        public Task<TargetItemIdsFetchResult> GetWebPageIdsAsync(
+            string channelName, string languageName, IReadOnlyCollection<Guid> guids, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<TargetItemIdsFetchResult> GetContentItemIdsAsync(
+            string workspaceName, string languageName, IReadOnlyCollection<Guid> guids, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class StubLocalRequiredObjectsService : ILocalRequiredObjectsService
