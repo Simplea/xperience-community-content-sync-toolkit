@@ -235,16 +235,22 @@ toolkit version reads them as published (see Publication-state scope).
 - `GET .../web-pages?channelName={name}&languageName={name}` and
   `GET .../content-hub-items?workspaceName={name}&languageName={name}`.
 - Required header: `X-ContentSyncToolkit-Secret`.
-- Response body: `{ SchemaVersion: 3, GeneratedAtUtc, Items: ContentInventoryItem[] }`.
+- Response body: `{ SchemaVersion: 4, GeneratedAtUtc, Items: ContentInventoryItem[] }`.
   `SchemaVersion` is a forward-compatibility hook for a source and target
   running different toolkit versions. `1`: publish dates in server-local time
   without a time zone. `2`: publish dates in UTC, plus `Order` for pages. `3`:
-  plus display names, and the required-objects route below. Readers accept all
-  three; an older reader ignores the fields it doesn't know.
+  plus display names, and the required-objects route below. `4`: the item ID
+  routes below; the inventory itself is unchanged. Readers accept all four; an
+  older reader ignores the fields it doesn't know.
 - `GET .../required-objects` (schema 3): `{ SchemaVersion, GeneratedAtUtc,
   Objects: RequiredObject[] }`, the target's content types, languages, website
   channels and workspaces. See Required objects. A target on schema 2 or
   earlier answers `404`, which the source treats as "not checked".
+- `GET .../web-page-ids` and `GET .../content-item-ids` (schema 4): the
+  target's own IDs for items the source lists as Only on target, so the admin
+  page can link to them on the target. See
+  [Open items on the target](target-item-links.md). A target on schema 3 or
+  earlier answers `404`, and those rows stay without links.
 - Rejection (missing/wrong secret, or Content Sync's `Target.Enabled == false`): a bodiless
   `404`, which the host renders exactly as it renders any unknown URL — see
   Security and privacy.

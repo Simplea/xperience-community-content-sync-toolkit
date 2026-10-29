@@ -5,6 +5,7 @@ using Kentico.Xperience.Admin.Base;
 
 using Microsoft.Extensions.Options;
 
+using XperienceCommunity.ContentSyncToolkit.Http;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 using LoadDataSettings = Kentico.Xperience.Admin.Base.LoadDataSettings;
@@ -97,7 +98,14 @@ internal abstract class ContentSyncStatusTabBase(
     protected abstract Task<IReadOnlyDictionary<Guid, ContentSyncLocalItem>> GetLocalItemsAsync(
         ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken);
 
-    /// <summary>Where an item opens in Xperience's own editor.</summary>
+    /// <summary>The target's IDs for the given items and its ID for the scope, from the target's item ID endpoint.</summary>
+    protected abstract Task<TargetItemIdsFetchResult> GetTargetItemIdsAsync(
+        ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Where an item opens in Xperience's own editor. Also used for the target's editor, with the
+    /// target's IDs: both instances' admin URLs have the same structure.
+    /// </summary>
     protected abstract ContentSyncStatusItemLink GetItemLink(ContentSyncScope scope, string languageName, int itemId);
 
     private bool IsSourceConfigured => settings.Source.TargetUrl is not null;
@@ -233,39 +241,83 @@ internal abstract class ContentSyncStatusTabBase(
     {
         var details = await GetRowDetailsAsync(view, cancellationToken);
 
-        return [.. view.Items.Select(item =>
-        {
-            var (link, hasNewerDraft) = details.GetValueOrDefault(item.Guid);
-            return ToRow(item, link, hasNewerDraft);
-        })];
+        return [.. view.Items.Select(item => ToRow(item, details.GetValueOrDefault(item.Guid)))];
     }
 
-    // Each row's editor link and whether it has a newer draft. Both are conveniences: if the lookup
+    /// <summary>A row's editor link, whether it opens the target, and whether it has a newer draft.</summary>
+    private readonly record struct RowDetails(string? Link, bool OpensOnTarget, bool HasNewerDraft);
+
+    // Each row's editor link and whether it has a newer draft. Both are conveniences: if a lookup
     // fails, rows still render, just without links or draft hints.
-    private async Task<IReadOnlyDictionary<Guid, (string? Link, bool HasNewerDraft)>> GetRowDetailsAsync(
+    private async Task<IReadOnlyDictionary<Guid, RowDetails>> GetRowDetailsAsync(
         ContentSyncStatusView view, CancellationToken cancellationToken)
     {
-        // Only-on-target items don't exist on this instance, so there's nothing to open.
-        var localItems = view.Items.Where(item => item.Local is not null).ToList();
-        if (view.Scope is null || view.LanguageName is null || localItems.Count == 0)
+        var details = new Dictionary<Guid, RowDetails>();
+        if (view.Scope is null || view.LanguageName is null)
         {
-            return new Dictionary<Guid, (string?, bool)>();
+            return details;
         }
 
+        var localItems = view.Items.Where(item => item.Local is not null).ToList();
+        if (localItems.Count > 0)
+        {
+            try
+            {
+                foreach (var (guid, item) in await GetLocalItemsAsync(view.Scope, view.LanguageName, localItems, cancellationToken))
+                {
+                    details[guid] = new RowDetails(
+                        GetItemLink(view.Scope, view.LanguageName, item.Id).GetPath(pageLinkGenerator), OpensOnTarget: false, item.HasNewerDraft);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                EventLogService.LogException(nameof(ContentSyncStatusTabBase), "ITEMLINKS", ex);
+            }
+        }
+
+        // Only-on-target items don't exist on this instance, so they open on the target.
+        var remoteOnlyItems = view.Items.Where(item => item.Local is null).ToList();
+        if (remoteOnlyItems.Count > 0 && settings.Source.TargetAdminUrl is { } targetAdminUrl)
+        {
+            foreach (var (guid, link) in await GetTargetLinksAsync(view.Scope, view.LanguageName, remoteOnlyItems, targetAdminUrl, cancellationToken))
+            {
+                details[guid] = new RowDetails(link, OpensOnTarget: true, HasNewerDraft: false);
+            }
+        }
+
+        return details;
+    }
+
+    // Links to items in the target's administration, built from the target's IDs. A target that
+    // can't answer (an older version, unreachable) leaves the rows without links, as before; the
+    // failure isn't logged, since the page itself reports an unreachable target.
+    private async Task<IReadOnlyDictionary<Guid, string>> GetTargetLinksAsync(
+        ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, Uri targetAdminUrl, CancellationToken cancellationToken)
+    {
         try
         {
-            var items = await GetLocalItemsAsync(view.Scope, view.LanguageName, localItems, cancellationToken);
+            var result = await GetTargetItemIdsAsync(scope, languageName, items, cancellationToken);
+            if (result.Status != ContentInventoryFetchStatus.Success || result.ScopeId is not int targetScopeId)
+            {
+                return new Dictionary<Guid, string>();
+            }
 
-            return items.ToDictionary(
+            var targetScope = scope with { Id = targetScopeId };
+
+            return result.Ids.ToDictionary(
                 item => item.Key,
-                item => ((string?)GetItemLink(view.Scope, view.LanguageName, item.Value.Id).GetPath(pageLinkGenerator), item.Value.HasNewerDraft));
+                item => TargetLink(targetAdminUrl, GetItemLink(targetScope, languageName, item.Value).GetPath(pageLinkGenerator)));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            EventLogService.LogException(nameof(ContentSyncStatusTabBase), "ITEMLINKS", ex);
-            return new Dictionary<Guid, (string?, bool)>();
+            EventLogService.LogException(nameof(ContentSyncStatusTabBase), "TARGETLINKS", ex);
+            return new Dictionary<Guid, string>();
         }
     }
+
+    // An admin path (e.g. /webpages-1/en_68) under the target's administration URL, which ends in a slash.
+    internal static string TargetLink(Uri targetAdminUrl, string adminPath) =>
+        new Uri(targetAdminUrl, adminPath.TrimStart('/')).ToString();
 
     private static ColumnConfiguration SortableColumn(
         string name, string caption, int minWidth, int maxWidth, bool searchable = false, string? tooltip = null, SortTypeEnum? defaultDirection = null) =>
@@ -281,20 +333,45 @@ internal abstract class ContentSyncStatusTabBase(
             TooltipAsHtml = tooltip is not null,
         };
 
-    private static Row ToRow(ContentSyncStatusItem item, string? link, bool hasNewerDraft) =>
+    private static Row ToRow(ContentSyncStatusItem item, RowDetails details) =>
         new()
         {
             Identifier = item.Guid,
-            Action = link is null ? null : new RowAction(ActionType.Link) { Parameter = link },
+            Action = details.Link is null || details.OpensOnTarget ? null : new RowAction(ActionType.Link) { Parameter = details.Link },
             Cells =
             [
-                new StringCell { Value = ContentSyncStatusListingSupport.DisplayName(item) },
+                NameCell(item, details),
                 new StringCell { Value = ContentSyncStatusListingSupport.ContentTypeDisplayName(item) },
-                TagCell(ContentSyncStatusListingSupport.StatusLabel(item), ContentSyncStatusListingSupport.StatusColor(item), ContentSyncStatusListingSupport.StatusTooltip(item, hasNewerDraft)),
+                TagCell(
+                    ContentSyncStatusListingSupport.StatusLabel(item),
+                    ContentSyncStatusListingSupport.StatusColor(item),
+                    ContentSyncStatusListingSupport.StatusTooltip(item, details.HasNewerDraft, details.OpensOnTarget)),
                 // Kentico's own local date-time cell: the browser shows it in the editor's time zone.
                 LocalDateTimeCell(ContentSyncStatusListingSupport.LastPublishedWhen(item)),
             ],
         };
+
+    // An item on the target is opened by a link on its name, which Kentico's link cell opens in a new
+    // tab so the editor keeps this list; the row itself isn't clickable, so there's one way to open
+    // it. A row link can't open a new tab on 31.9.1. See docs/specs/target-item-links.md.
+    private static Cell NameCell(ContentSyncStatusItem item, RowDetails details)
+    {
+        string name = ContentSyncStatusListingSupport.DisplayName(item);
+
+        if (!details.OpensOnTarget || details.Link is null)
+        {
+            return new StringCell { Value = name };
+        }
+
+        return new NamedComponentCell
+        {
+            Name = NamedComponentCellComponentNames.LINK_COMPONENT,
+            ComponentProps = new LinkNamedComponentCellProps { Text = name + TargetLinkMarker, Url = details.Link },
+        };
+    }
+
+    // Marks a link that leaves this instance.
+    private const string TargetLinkMarker = " ↗";
 
     // A single row explaining a state that depends on the selected scope, with a status-style tag
     // so it reads differently from both real rows and Xperience's native empty state.

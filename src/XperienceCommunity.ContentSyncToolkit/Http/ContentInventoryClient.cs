@@ -38,6 +38,33 @@ internal sealed class ContentInventoryClient(HttpClient httpClient) : IContentIn
             : RequiredObjectsFetchResult.Failed(FailureStatus(status));
     }
 
+    public async Task<TargetItemIdsFetchResult> GetWebPageIdsAsync(
+        string channelName, string languageName, IReadOnlyCollection<Guid> guids, CancellationToken cancellationToken)
+    {
+        var (status, body) = await FetchAsync<TargetItemIdsResponse>(
+            $"{ContentSyncToolkitConstants.ControllerRoute}/web-page-ids" +
+            $"?channelName={Uri.EscapeDataString(channelName)}&languageName={Uri.EscapeDataString(languageName)}&guids={string.Join(',', guids)}",
+            cancellationToken);
+
+        return ToItemIdsResult(status, body);
+    }
+
+    public async Task<TargetItemIdsFetchResult> GetContentItemIdsAsync(
+        string workspaceName, string languageName, IReadOnlyCollection<Guid> guids, CancellationToken cancellationToken)
+    {
+        var (status, body) = await FetchAsync<TargetItemIdsResponse>(
+            $"{ContentSyncToolkitConstants.ControllerRoute}/content-item-ids" +
+            $"?workspaceName={Uri.EscapeDataString(workspaceName)}&languageName={Uri.EscapeDataString(languageName)}&guids={string.Join(',', guids)}",
+            cancellationToken);
+
+        return ToItemIdsResult(status, body);
+    }
+
+    private static TargetItemIdsFetchResult ToItemIdsResult(ContentInventoryFetchStatus status, TargetItemIdsResponse? body) =>
+        body?.Items is not null
+            ? TargetItemIdsFetchResult.Success(body.ScopeId, body.Items.DistinctBy(item => item.Guid).ToDictionary(item => item.Guid, item => item.Id))
+            : TargetItemIdsFetchResult.Failed(FailureStatus(status));
+
     private static ContentInventoryFetchResult ToInventoryResult(ContentInventoryFetchStatus status, ContentInventoryResponse? body)
     {
         if (body?.Items is null)

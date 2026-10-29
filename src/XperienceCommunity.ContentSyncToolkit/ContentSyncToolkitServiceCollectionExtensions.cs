@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
+using XperienceCommunity.ContentSyncToolkit.Admin;
 using XperienceCommunity.ContentSyncToolkit.Http;
 using XperienceCommunity.ContentSyncToolkit.Inventory;
 using XperienceCommunity.ContentSyncToolkit.RequiredObjects;
@@ -37,6 +38,9 @@ public static class ContentSyncToolkitServiceCollectionExtensions
         services.TryAddSingleton<IContentScopeLookup, ContentScopeLookup>();
         services.TryAddSingleton<ILocalContentInventoryService, LocalContentInventoryService>();
         services.TryAddSingleton<ILocalRequiredObjectsService, LocalRequiredObjectsService>();
+        // The target's item ID endpoints use the same lookup as the admin page's own links.
+        services.TryAddTransient<IContentSyncItemIdResolver, ContentSyncItemIdResolver>();
+        services.TryAddTransient<IContentItemIdLookup, ContentItemIdLookup>();
         services.TryAddSingleton<IContentSyncTargetSecretValidator, ContentSyncTargetSecretValidator>();
         services.TryAddSingleton<IContentInventoryCache, ContentInventoryCache>();
         services.TryAddScoped<IContentSyncStatusService, ContentSyncStatusService>();
