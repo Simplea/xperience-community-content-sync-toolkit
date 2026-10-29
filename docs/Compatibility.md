@@ -126,6 +126,41 @@ package on two fresh Dancing Goat sites from `Kentico.Xperience.Templates`
 `30.8.0` labels the content item editor's button **Edit content item** where
 `31.9.1` says **Create new version**; that doesn't affect the toolkit.
 
+### Large inventories, languages and target links
+
+Checked after #19 (keyset paging and named columns), #21 (no language
+fallbacks) and #22 (links to items on the target), with `main` packed as a
+package and installed on two fresh Dancing Goat sites from
+`Kentico.Xperience.Templates` `30.8.0` (October 2026):
+
+- **Inventories:** every inventory of both instances (pages and three
+  workspaces, English and Spanish) exported and compared with the released
+  `1.0.0-beta.2` on the same databases. The English ones were field-for-field
+  identical, across every publish state (published, unpublished, never
+  published, unpublished then edited again). The Spanish ones listed only the
+  items with a Spanish variant (6 pages and 2 content hub items per instance,
+  where `1.0.0-beta.2` listed every English item), with Spanish display names.
+  The sites have fewer than 5,000 items per inventory, so each was read in one
+  batch; reading many batches was measured on `31.9.1` with 20,000 items per
+  tab (see the foundation spec's Large inventories).
+- **Target links:** an Only on target content hub item and page each linked to
+  their editor on the target (`content-hub/1/en/all/list/182/content`,
+  `webpages-1/en_9`) and opened it in a new tab, with the status list kept; a
+  row that exists on the source still opened its local editor. The page was
+  made target-only for the test by giving its target copy a new GUID, then
+  restored.
+
+The `30.8.0` template doesn't bind Content Sync's options from configuration,
+so the sites added
+`builder.Services.Configure<ContentSynchronizationOptions>(builder.Configuration.GetSection("ContentSynchronization"))`,
+as the repository's Dancing Goat does; without it the target role stays off
+and the toolkit's endpoints answer `404`.
+
+Non-administrator editors on `31.9.1`, with 20,000 pages: the Pages tab took
+about the same time as for an administrator (0.35–0.55 s per request) for a
+role with Manage permissions on the channel, which sees every page, and about
+0.75–0.8 s when page permissions had to be checked for every page.
+
 ## Updating versions
 
 - Retest and update the latest verified version after every Xperience refresh.
