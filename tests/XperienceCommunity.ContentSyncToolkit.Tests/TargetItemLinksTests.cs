@@ -38,10 +38,12 @@ public class TargetItemLinksTests
             ContentSyncToolkitSettings.ResolveSource(new ContentSyncToolkitOptions { TargetAdminUrl = setting }, ContentSync("https://internal-host")).TargetAdminUrl,
             Is.EqualTo(new Uri(expected)));
 
-    [Test]
-    public void TargetAdminUrl_IgnoresASettingThatIsNotAnAbsoluteUrl() =>
+    // "/admin" parses as an absolute file URI on Linux, so it's checked with an explicit file URI too.
+    [TestCase("/admin")]
+    [TestCase("file:///admin")]
+    public void TargetAdminUrl_IgnoresASettingThatIsNotAnHttpUrl(string setting) =>
         Assert.That(
-            ContentSyncToolkitSettings.ResolveSource(new ContentSyncToolkitOptions { TargetAdminUrl = "/admin" }, ContentSync("https://target.example.com")).TargetAdminUrl,
+            ContentSyncToolkitSettings.ResolveSource(new ContentSyncToolkitOptions { TargetAdminUrl = setting }, ContentSync("https://target.example.com")).TargetAdminUrl,
             Is.EqualTo(new Uri("https://target.example.com/admin/")));
 
     [Test]

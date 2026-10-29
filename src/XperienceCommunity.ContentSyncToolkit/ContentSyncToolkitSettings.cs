@@ -82,8 +82,9 @@ internal sealed class ContentSyncToolkitSettings(
         return new EffectiveTargetSettings(target is not null, NullIfEmpty(target?.Secret));
     }
 
+    // HTTP(S) only: on Linux, a rooted path such as "/admin" also parses as an absolute (file) URI.
     private static Uri? ToAbsoluteUri(string? value) =>
-        Uri.TryCreate(value, UriKind.Absolute, out var uri) ? uri : null;
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp) ? uri : null;
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
 }
