@@ -14,6 +14,7 @@ that compares this instance with its Content Sync target:
 - **Pages** and **Content hub** tabs with one status per item: Incompatible,
   Unpublished, New, Changed, Moved, Reordered, Not published, Only on target, or In sync,
   with a multi-select status filter, search and a link to each item's editor.
+  Items only on the target link to their editor on the target.
 - Explanations of what to sync, including pages moved or reordered without
   being republished.
 - **Incompatible** items, which a sync would fail for because the target is missing
@@ -21,6 +22,8 @@ that compares this instance with its Content Sync target:
   a developer needs to deploy.
 - Kentico's own permissions: editors only see the channels, workspaces and
   pages they can see in Xperience.
+- Built for large sites: a tab of 20,000 pages opens in about a third of a
+  second.
 
 ![Sync status Pages tab listing pages as Incompatible, Unpublished, New, Changed, Moved and Reordered](https://raw.githubusercontent.com/Simplea/xperience-community-content-sync-toolkit/main/docs/images/pages-statuses.jpg)
 
@@ -48,7 +51,7 @@ The project is developed and maintained by Andres Villenas at SimpleA.
 
 | Xperience Version | Library Version |
 | ----------------- | --------------- |
-| 30.8.0 or newer   | 1.0.0-beta.2    |
+| 30.8.0 or newer   | 1.0.0-beta.3    |
 
 Runtime-verified on 30.8.0 and 31.9.1.
 
