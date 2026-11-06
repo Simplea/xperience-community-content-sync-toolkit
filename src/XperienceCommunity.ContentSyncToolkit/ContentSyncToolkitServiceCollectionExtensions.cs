@@ -38,6 +38,7 @@ public static class ContentSyncToolkitServiceCollectionExtensions
         services.TryAddSingleton<IContentScopeLookup, ContentScopeLookup>();
         services.TryAddSingleton<ILocalContentInventoryService, LocalContentInventoryService>();
         services.TryAddSingleton<ILocalRequiredObjectsService, LocalRequiredObjectsService>();
+        services.TryAddSingleton<ILocalContentLinksService, LocalContentLinksService>();
         // The target's item ID endpoints use the same lookup as the admin page's own links.
         services.TryAddTransient<IContentSyncItemIdResolver, ContentSyncItemIdResolver>();
         services.TryAddTransient<IContentItemIdLookup, ContentItemIdLookup>();

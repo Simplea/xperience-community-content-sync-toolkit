@@ -46,7 +46,14 @@ public enum RequiredObjectProblem
 /// <summary>A local object that stops Content Sync from syncing the items that use it.</summary>
 /// <param name="Object">The object as it is on this instance.</param>
 /// <param name="Problem">How the target's copy is missing or different.</param>
-public sealed record RequiredObjectIssue(RequiredObject Object, RequiredObjectProblem Problem);
+public sealed record RequiredObjectIssue(RequiredObject Object, RequiredObjectProblem Problem)
+{
+    /// <summary>
+    /// The display name of the linked item or parent page that needs the object, when the item itself
+    /// doesn't. Content Sync syncs those along with it. <see langword="null"/> when the item needs it.
+    /// </summary>
+    public string? ViaLinkedItem { get; init; }
+}
 
 /// <summary>
 /// The result of comparing this instance's required objects with the target's. When

@@ -236,6 +236,9 @@ internal static class ContentSyncStatusListingSupport
             + (item.RequiredObjectIssues.Count == 1
                 ? " A developer needs to deploy it to the target first. "
                 : " A developer needs to deploy them to the target first. ")
+            + (item.RequiredObjectIssues.Any(issue => issue.ViaLinkedItem is not null)
+                ? "If the target already has the linked item, you can leave it out in Detailed selection instead. "
+                : string.Empty)
             + item.Status switch
             {
                 ContentSyncStatus.New => "Then a sync creates it.",
@@ -252,8 +255,9 @@ internal static class ContentSyncStatusListingSupport
     public static string IssueSentence(RequiredObjectIssue issue)
     {
         string obj = ObjectNoun(issue.Object.Kind) + " " + issue.Object.DisplayName;
+        string via = issue.ViaLinkedItem is null ? string.Empty : "Linked item " + issue.ViaLinkedItem + ": ";
 
-        return issue.Problem switch
+        return via + issue.Problem switch
         {
             RequiredObjectProblem.DefinitionDiffers => obj + " has different field definitions on the source and target instance.",
             RequiredObjectProblem.DifferentGuidOnTarget => obj + " has a different identity on the target instance: it was recreated there instead of deployed.",

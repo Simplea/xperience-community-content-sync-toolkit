@@ -27,8 +27,8 @@ internal static class RequiredObjectsComparer
     }
 
     // The issues that stop an item from syncing: its content type, its language, and the channel
-    // (pages) or workspace (content hub items) it belongs to. Linked items are synced along with it
-    // and can need more, which this doesn't see.
+    // (pages) or workspace (content hub items) it belongs to. Linked items and parent pages are synced
+    // along with it and can need more; see ContentSyncStatusService.
     public static IReadOnlyList<RequiredObjectIssue> IssuesFor(ContentInventoryItem item, IReadOnlyList<RequiredObjectIssue> issues)
     {
         var scopeKind = item.Kind == ContentInventoryItemKind.WebPage ? RequiredObjectKind.WebsiteChannel : RequiredObjectKind.Workspace;
@@ -37,6 +37,33 @@ internal static class RequiredObjectsComparer
             (issue.Object.Kind == RequiredObjectKind.ContentType && SameName(issue.Object.Name, item.ContentTypeName))
             || (issue.Object.Kind == RequiredObjectKind.Language && SameName(issue.Object.Name, item.LanguageName))
             || (issue.Object.Kind == scopeKind && SameName(issue.Object.Name, item.ScopeName)))];
+    }
+
+    // The nearest parent page, among the listed pages, whose content type has an issue: a page is synced
+    // together with its parents.
+    public static ContentInventoryItem? FindParentOfType(
+        ContentInventoryItem page, string contentTypeName, IReadOnlyDictionary<string, ContentInventoryItem> pagesByPath)
+    {
+        string? path = page.TreePath;
+
+        while (ParentPath(path) is { } parentPath)
+        {
+            if (pagesByPath.TryGetValue(parentPath, out var parent) && SameName(parent.ContentTypeName, contentTypeName))
+            {
+                return parent;
+            }
+
+            path = parentPath;
+        }
+
+        return null;
+    }
+
+    private static string? ParentPath(string? treePath)
+    {
+        int separator = treePath?.LastIndexOf('/') ?? -1;
+
+        return separator > 0 ? treePath![..separator] : null;
     }
 
     private static RequiredObjectProblem? ProblemOf(RequiredObject localObject, IReadOnlyList<RequiredObject> remoteOfKind)

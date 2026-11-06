@@ -92,7 +92,9 @@ IContentSyncStatusService                            ContentInventoryController
   target lacks or has differently. The target lists its own on a second
   endpoint, and the source compares them the way Content Sync matches them (by
   GUID, languages by code name, content types also by a hash of their field
-  definition), so editors are warned before a sync would fail.
+  definition), so editors are warned before a sync would fail. An incompatible
+  content type also marks the items that reach it through links or parent pages
+  (`ILocalContentLinksService`), since Content Sync sends those along.
 - **`IContentSyncStatusService`** — the orchestrator both editor-facing features
   call. Ties together the local query, the remote client (with a short cache on
   just the remote fetch, not the whole diff), and the comparer.

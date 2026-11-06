@@ -207,6 +207,12 @@ documentation.
   (pages) or workspace (content hub items) at all.
 - The target has one of them, but it was recreated by hand instead of deployed,
   so it doesn't match.
+- A linked item or parent page has one of these problems with its content type.
+  Content Sync syncs them along with this item, so the whole sync fails. The
+  tooltip names the item, for example "Linked item AeroPress: Content type Image
+  has different field definitions on the source and target instance.", and
+  adds that you can leave it out in **Detailed selection** if the target already
+  has it.
 
 Content Sync doesn't transfer these objects and fails for items that use them,
 so a developer has to deploy them to the target first (CI/CD or a deployment
@@ -214,8 +220,8 @@ package). Incompatible takes the place of the item's other status. Its tooltip
 uses the same message Kentico's Content Sync dialog shows for a compatibility
 error, for example "Content type Image has different field definitions on the
 source and target instance.", then says what a sync will do once it's fixed.
-Linked items, reusable field schemas, image variants, member roles and project
-code aren't checked.
+The languages, channels and workspaces of linked items, reusable field schemas,
+image variants, member roles and project code aren't checked.
 
 ![Tooltip on an Incompatible tag: Content type Image has different field definitions on the source and target instance](images/incompatible-tooltip.png)
 
