@@ -9,7 +9,8 @@ namespace XperienceCommunity.ContentSyncToolkit.Admin;
 /// Whether the latest version is a Draft (New version) of a published item. Content Sync sends the
 /// published version, so the draft isn't compared; the admin page only mentions it.
 /// </param>
-internal sealed record ContentSyncLocalItem(int Id, bool HasNewerDraft);
+/// <param name="ContentItemGuid">The item's <c>ContentItemGUID</c>, which is also a page's underlying content item.</param>
+internal sealed record ContentSyncLocalItem(int Id, bool HasNewerDraft, Guid ContentItemGuid);
 
 /// <summary>
 /// Looks up local item IDs for inventory GUIDs, which admin editor URLs need, and whether each item
@@ -54,7 +55,7 @@ internal sealed class ContentSyncItemIdResolver(IContentQueryExecutor contentQue
 
         var items = await contentQueryExecutor.GetWebPageResult(
             builder,
-            container => (container.WebPageItemGUID, Item: new ContentSyncLocalItem(container.WebPageItemID, IsNewerDraft(container))),
+            container => (container.WebPageItemGUID, Item: new ContentSyncLocalItem(container.WebPageItemID, IsNewerDraft(container), container.ContentItemGUID)),
             options,
             cancellationToken);
 
@@ -79,7 +80,7 @@ internal sealed class ContentSyncItemIdResolver(IContentQueryExecutor contentQue
 
         var items = await contentQueryExecutor.GetResult(
             builder,
-            container => (container.ContentItemGUID, Item: new ContentSyncLocalItem(container.ContentItemID, IsNewerDraft(container))),
+            container => (container.ContentItemGUID, Item: new ContentSyncLocalItem(container.ContentItemID, IsNewerDraft(container), container.ContentItemGUID)),
             options,
             cancellationToken);
 

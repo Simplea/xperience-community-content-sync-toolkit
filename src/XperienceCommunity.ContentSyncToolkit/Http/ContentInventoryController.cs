@@ -58,7 +58,7 @@ public sealed class ContentInventoryController(
     }
 
     private TargetItemIdsResponse ToItemIdsResponse(ContentItemIds ids) =>
-        new(SchemaVersion, timeProvider.GetUtcNow(), ids.ScopeId, [.. ids.Ids.Select(item => new TargetItemId(item.Key, item.Value))]);
+        new(SchemaVersion, timeProvider.GetUtcNow(), ids.ScopeId, [.. ids.Ids.Select(item => new TargetItemId(item.Key, item.Value, ids.ContentItemGuids.GetValueOrDefault(item.Key)))]);
 
     // What Content Sync needs on this instance but doesn't transfer, so the source can warn before a
     // sync fails. Only a caller holding Content Sync's secret, who can already push content here,

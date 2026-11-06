@@ -6,8 +6,9 @@ internal static class ContentSyncToolkitConstants
     public const string SecretHeaderName = "X-ContentSyncToolkit-Secret";
 
     // The wire schema the endpoints send. 2: publish dates in UTC, and page order. 3: display
-    // names, and the required-objects endpoint. 4: the item ID endpoints. See ContentInventoryResponse.
-    public const int SchemaVersion = 4;
+    // names, and the required-objects endpoint. 4: the item ID endpoints. 5: content item GUIDs on the
+    // item ID endpoints. See ContentInventoryResponse.
+    public const int SchemaVersion = 5;
 
     // The most GUIDs one item ID request may ask about; the source sends one listing page.
     public const int MaxItemIdGuids = 100;

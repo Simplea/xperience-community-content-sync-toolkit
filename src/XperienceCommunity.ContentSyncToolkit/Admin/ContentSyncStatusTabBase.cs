@@ -28,6 +28,7 @@ internal abstract class ContentSyncStatusTabBase(
     IContentSyncStatusService syncStatusService,
     IContentSyncFilterOptionsProvider filterOptionsProvider,
     ContentSyncStatusRefreshRequestStore refreshRequestStore,
+    IContentSyncRecycleBinLookup recycleBinLookup,
     IPageLinkGenerator pageLinkGenerator)
     : ListingPageBase<ListingConfiguration, ListingTemplateClientProperties>
 {
@@ -45,6 +46,7 @@ internal abstract class ContentSyncStatusTabBase(
         + "<strong>Moved</strong> / <strong>Reordered</strong>: change its place in the page tree.<br>"
         + "<strong>Not published</strong>: nothing yet; it has no published version here. Publish it to sync.<br>"
         + "<strong>Only on target</strong>: nothing; Content Sync can't delete, so delete it there.<br>"
+        + "<strong>Deleted here</strong>: the same, for an item still in this instance's recycle bin.<br>"
         + "<strong>In sync</strong>: nothing; it's the same on both.";
 
     private const string LastPublishedTooltip =
@@ -101,6 +103,12 @@ internal abstract class ContentSyncStatusTabBase(
     /// <summary>The target's IDs for the given items and its ID for the scope, from the target's item ID endpoint.</summary>
     protected abstract Task<TargetItemIdsFetchResult> GetTargetItemIdsAsync(
         ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether a row's GUID is its <c>ContentItemGUID</c>. A page's isn't: it needs the target's answer
+    /// to find the content item the recycle bin knows it by.
+    /// </summary>
+    protected abstract bool RowGuidsAreContentItemGuids { get; }
 
     /// <summary>
     /// Where an item opens in Xperience's own editor. Also used for the target's editor, with the
@@ -244,8 +252,8 @@ internal abstract class ContentSyncStatusTabBase(
         return [.. view.Items.Select(item => ToRow(item, details.GetValueOrDefault(item.Guid)))];
     }
 
-    /// <summary>A row's editor link, whether it opens the target, and whether it has a newer draft.</summary>
-    private readonly record struct RowDetails(string? Link, bool OpensOnTarget, bool HasNewerDraft);
+    /// <summary>A row's editor link, whether it opens the target, whether it has a newer draft, and its recycle bin entry.</summary>
+    private readonly record struct RowDetails(string? Link, bool OpensOnTarget, bool HasNewerDraft, ContentSyncDeletedItem? DeletedItem = null);
 
     // Each row's editor link and whether it has a newer draft. Both are conveniences: if a lookup
     // fails, rows still render, just without links or draft hints.
@@ -279,39 +287,62 @@ internal abstract class ContentSyncStatusTabBase(
         var remoteOnlyItems = view.Items.Where(item => item.Local is null).ToList();
         if (remoteOnlyItems.Count > 0 && settings.Source.TargetAdminUrl is { } targetAdminUrl)
         {
-            foreach (var (guid, link) in await GetTargetLinksAsync(view.Scope, view.LanguageName, remoteOnlyItems, targetAdminUrl, cancellationToken))
+            var (links, contentItemGuids) = await GetTargetDetailsAsync(view.Scope, view.LanguageName, remoteOnlyItems, targetAdminUrl, cancellationToken);
+            var rowContentItems = remoteOnlyItems.ToDictionary(item => item.Guid, item => ContentItemGuidOf(item, contentItemGuids));
+            var deletedItems = await recycleBinLookup.GetDeletedItemsAsync(
+                view.LanguageName, [.. rowContentItems.Values.OfType<Guid>()], cancellationToken);
+
+            foreach (var (guid, contentItem) in rowContentItems)
             {
-                details[guid] = new RowDetails(link, OpensOnTarget: true, HasNewerDraft: false);
+                string? link = links.GetValueOrDefault(guid);
+                var deletedItem = contentItem is Guid contentItemGuid ? deletedItems.GetValueOrDefault(contentItemGuid) : null;
+
+                details[guid] = new RowDetails(link, OpensOnTarget: link is not null, HasNewerDraft: false, deletedItem);
             }
         }
 
         return details;
     }
 
+    private Guid? ContentItemGuidOf(ContentSyncStatusItem item, IReadOnlyDictionary<Guid, Guid> contentItemGuids)
+    {
+        if (RowGuidsAreContentItemGuids)
+        {
+            return item.Guid;
+        }
+
+        return contentItemGuids.TryGetValue(item.Guid, out var contentItemGuid) ? contentItemGuid : null;
+    }
+
     // Links to items in the target's administration, built from the target's IDs. A target that
     // can't answer (an older version, unreachable) leaves the rows without links, as before; the
     // failure isn't logged, since the page itself reports an unreachable target.
-    private async Task<IReadOnlyDictionary<Guid, string>> GetTargetLinksAsync(
+    private async Task<(IReadOnlyDictionary<Guid, string> Links, IReadOnlyDictionary<Guid, Guid> ContentItemGuids)> GetTargetDetailsAsync(
         ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, Uri targetAdminUrl, CancellationToken cancellationToken)
     {
+        var noLinks = new Dictionary<Guid, string>();
+        var noContentItems = new Dictionary<Guid, Guid>();
+
         try
         {
             var result = await GetTargetItemIdsAsync(scope, languageName, items, cancellationToken);
             if (result.Status != ContentInventoryFetchStatus.Success || result.ScopeId is not int targetScopeId)
             {
-                return new Dictionary<Guid, string>();
+                return (noLinks, noContentItems);
             }
 
             var targetScope = scope with { Id = targetScopeId };
 
-            return result.Ids.ToDictionary(
-                item => item.Key,
-                item => TargetLink(targetAdminUrl, GetItemLink(targetScope, languageName, item.Value).GetPath(pageLinkGenerator)));
+            return (
+                result.Ids.ToDictionary(
+                    item => item.Key,
+                    item => TargetLink(targetAdminUrl, GetItemLink(targetScope, languageName, item.Value).GetPath(pageLinkGenerator))),
+                result.ContentItemGuids);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             EventLogService.LogException(nameof(ContentSyncStatusTabBase), "TARGETLINKS", ex);
-            return new Dictionary<Guid, string>();
+            return (noLinks, noContentItems);
         }
     }
 
@@ -343,13 +374,29 @@ internal abstract class ContentSyncStatusTabBase(
                 NameCell(item, details),
                 new StringCell { Value = ContentSyncStatusListingSupport.ContentTypeDisplayName(item) },
                 TagCell(
-                    ContentSyncStatusListingSupport.StatusLabel(item),
+                    ContentSyncStatusListingSupport.StatusLabel(item, details.DeletedItem),
                     ContentSyncStatusListingSupport.StatusColor(item),
-                    ContentSyncStatusListingSupport.StatusTooltip(item, details.HasNewerDraft, details.OpensOnTarget)),
-                // Kentico's own local date-time cell: the browser shows it in the editor's time zone.
-                LocalDateTimeCell(ContentSyncStatusListingSupport.LastPublishedWhen(item)),
+                    ContentSyncStatusListingSupport.StatusTooltip(item, details.HasNewerDraft, details.OpensOnTarget, details.DeletedItem)),
+                LastPublishedCell(item, details),
             ],
         };
+
+    // Kentico's own local date-time cell: the browser shows it in the editor's time zone. An item in the
+    // recycle bin links there instead: the target's publish date says less about it than where it went.
+    private static Cell LastPublishedCell(ContentSyncStatusItem item, RowDetails details) =>
+        details.DeletedItem is null
+            ? LocalDateTimeCell(ContentSyncStatusListingSupport.LastPublishedWhen(item))
+            : new NamedComponentCell
+            {
+                Name = NamedComponentCellComponentNames.LINK_COMPONENT,
+                ComponentProps = new LinkNamedComponentCellProps { Text = "In recycle bin" + TargetLinkMarker, Url = RecycleBinUrl },
+            };
+
+    // The Recycle bin application, added in 30.12.0, so its page type doesn't exist on the toolkit's
+    // minimum version. A link cell needs the whole path, unlike a row action.
+#pragma warning disable S1075 // Xperience's administration path, the same on every instance.
+    private const string RecycleBinUrl = "/admin/recycle-bin/list";
+#pragma warning restore S1075
 
     // An item on the target is opened by a link on its name, which Kentico's link cell opens in a new
     // tab so the editor keeps this list; the row itself isn't clickable, so there's one way to open
@@ -370,7 +417,7 @@ internal abstract class ContentSyncStatusTabBase(
         };
     }
 
-    // Marks a link that leaves this instance.
+    // Marks a link that opens in a new tab.
     private const string TargetLinkMarker = " ↗";
 
     // A single row explaining a state that depends on the selected scope, with a status-style tag

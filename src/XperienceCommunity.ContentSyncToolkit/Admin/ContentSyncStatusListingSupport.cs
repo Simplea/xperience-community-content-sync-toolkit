@@ -1,4 +1,6 @@
 
+using System.Globalization;
+
 using Kentico.Xperience.Admin.Base;
 
 using XperienceCommunity.ContentSyncToolkit.Inventory;
@@ -208,6 +210,21 @@ internal static class ContentSyncStatusListingSupport
     private const string OpenOnTargetHint =
         " Open it there with the link on its name: Content Sync can't delete content, so delete or unpublish it on the target.";
 
+    // An item only on the target, deleted here but still in the recycle bin. See
+    // docs/specs/recycle-bin-hints.md.
+    private static string DeletedHere(ContentSyncDeletedItem deleted) =>
+        "Deleted here on " + FormatDate(deleted.DeletedWhen)
+            + (string.IsNullOrEmpty(deleted.DeletedBy) ? string.Empty : " by " + deleted.DeletedBy);
+
+    private static string RestoreHint(ContentSyncDeletedItem deleted) =>
+        " Content Sync can't delete it: delete it on the target, or restore it from the recycle bin"
+            + (deleted.ExpiresWhen is DateTime expires ? " (until " + FormatDate(expires) + ")" : string.Empty)
+            + ", publish and unpublish it, and sync it.";
+
+    public const string DeletedHereLabel = "Deleted here";
+
+    private static string FormatDate(DateTime value) => value.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
+
     public const string IncompatibleLabel = "Incompatible";
 
     // An incompatible item's tooltip: each compatibility error in the words of Kentico's own Content
@@ -280,10 +297,14 @@ internal static class ContentSyncStatusListingSupport
     // otherwise read In sync as "my changes are on the target".
     //
     // opensOnTarget (an Only on target row linking to the item on the target) says the row opens it.
-    public static string? StatusTooltip(ContentSyncStatusItem item, bool hasNewerDraft = false, bool opensOnTarget = false)
+    //
+    // deletedItem (an Only on target item still in this instance's recycle bin) says so, and how to take
+    // it off the target without signing in there.
+    public static string? StatusTooltip(
+        ContentSyncStatusItem item, bool hasNewerDraft = false, bool opensOnTarget = false, ContentSyncDeletedItem? deletedItem = null)
     {
         bool showDraft = hasNewerDraft && item.Local is not null && !ContentInventoryVersionStatus.IsUnpublished(item.Local.VersionStatus);
-        string? tooltip = StatusOnlyTooltip(item, opensOnTarget);
+        string? tooltip = StatusOnlyTooltip(item, opensOnTarget, deletedItem);
 
         if (!showDraft)
         {
@@ -295,7 +316,7 @@ internal static class ContentSyncStatusListingSupport
             : tooltip + " " + NewerDraftHint;
     }
 
-    private static string? StatusOnlyTooltip(ContentSyncStatusItem item, bool opensOnTarget)
+    private static string? StatusOnlyTooltip(ContentSyncStatusItem item, bool opensOnTarget, ContentSyncDeletedItem? deletedItem)
     {
         if (item.HasCompatibilityIssues)
         {
@@ -317,6 +338,10 @@ internal static class ContentSyncStatusListingSupport
             ContentSyncStatus.NotPublished =>
                 (item.Local is not null && ContentInventoryVersionStatus.IsNeverPublished(item.Local.VersionStatus) ? NeverPublishedTooltip : UnpublishedDraftTooltip)
                 + " " + TargetState(item.Remote is not null, remoteUnpublished),
+            ContentSyncStatus.OnlyOnTarget when deletedItem is not null && remoteUnpublished =>
+                DeletedHere(deletedItem) + ", and unpublished on the target. Content Sync can't delete it, so delete it there if it shouldn't be there.",
+            ContentSyncStatus.OnlyOnTarget when deletedItem is not null =>
+                DeletedHere(deletedItem) + ", but still on the target." + RestoreHint(deletedItem),
             ContentSyncStatus.OnlyOnTarget when remoteUnpublished => "Unpublished on the target, and not on this instance." + (opensOnTarget ? OpenOnTargetHint : CannotDeleteHint),
             ContentSyncStatus.OnlyOnTarget => "Only on the target." + (opensOnTarget ? OpenOnTargetHint : CannotDeleteHint),
             ContentSyncStatus.InSync when localUnpublished => "Unpublished on both instances.",
@@ -421,6 +446,11 @@ internal static class ContentSyncStatusListingSupport
 
     /// <summary>The item's tag: Incompatible for an incompatible item, its status otherwise.</summary>
     public static string StatusLabel(ContentSyncStatusItem item) => item.HasCompatibilityIssues ? IncompatibleLabel : StatusLabel(item.Status);
+
+    // The label of an item only on the target that's in this instance's recycle bin. It's still Only on
+    // target: the label says why, and the row links to the recycle bin.
+    public static string StatusLabel(ContentSyncStatusItem item, ContentSyncDeletedItem? deletedItem) =>
+        deletedItem is not null && item.Status == ContentSyncStatus.OnlyOnTarget ? DeletedHereLabel : StatusLabel(item);
 
     public static string StatusLabel(ContentSyncStatus status) => status switch
     {

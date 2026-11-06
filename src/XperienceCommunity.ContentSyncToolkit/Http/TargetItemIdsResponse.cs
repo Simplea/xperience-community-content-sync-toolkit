@@ -19,7 +19,13 @@ public sealed record TargetItemIdsResponse(
     IReadOnlyList<TargetItemId> Items);
 
 /// <summary>One item's ID on the target.</summary>
-public sealed record TargetItemId(Guid Guid, int Id);
+/// <param name="Guid">The item's GUID, as in the inventory.</param>
+/// <param name="Id">The target's <c>WebPageItemID</c> or <c>ContentItemID</c>.</param>
+/// <param name="ContentItemGuid">
+/// The item's <c>ContentItemGUID</c> (schema version 5), which is how the source's recycle bin
+/// identifies it; null from an older target.
+/// </param>
+public sealed record TargetItemId(Guid Guid, int Id, Guid? ContentItemGuid = null);
 
 /// <summary>
 /// Result of a source-side request for target item IDs. As with
@@ -28,6 +34,9 @@ public sealed record TargetItemId(Guid Guid, int Id);
 /// </summary>
 public sealed record TargetItemIdsFetchResult(ContentInventoryFetchStatus Status, int? ScopeId, IReadOnlyDictionary<Guid, int> Ids)
 {
+    /// <summary>The <c>ContentItemGUID</c> of each item; empty from a target on schema version 4 or earlier.</summary>
+    public IReadOnlyDictionary<Guid, Guid> ContentItemGuids { get; init; } = new Dictionary<Guid, Guid>();
+
     public static TargetItemIdsFetchResult Success(int? scopeId, IReadOnlyDictionary<Guid, int> ids) =>
         new(ContentInventoryFetchStatus.Success, scopeId, ids);
 

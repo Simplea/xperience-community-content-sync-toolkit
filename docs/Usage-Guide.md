@@ -303,6 +303,16 @@ unpublish it, or schedule the unpublish. You need an account on the target;
 sign in there if asked. The link needs the target on this toolkit version or
 later; with an older target, the name is plain text.
 
+If the item was deleted here and is still in the recycle bin (Xperience 30.12.0
+and later), its status reads **Deleted here**, the tooltip says who deleted it
+and until when it can be restored, and **In recycle bin ↗** replaces its date,
+opening the **Recycle bin** application in a new tab. To take it off the target
+without signing in there: restore it, publish it, unpublish it with a redirect,
+and sync it; the target unpublishes it and redirects its URL. You see this for
+items you could find in the Recycle bin application: the ones you deleted, or
+everyone's with **Manage recycle bin**. The **Only on target** filter includes
+these rows.
+
 **In sync**
 
 - The target has the same published version, publish state and position.

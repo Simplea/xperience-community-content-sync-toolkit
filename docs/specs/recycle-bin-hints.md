@@ -1,6 +1,6 @@
 # Feature specification: Recycle bin hints for items only on the target
 
-Status: **proposal**, not scheduled. Nothing here is built yet.
+Status: **implemented**.
 
 ## Context
 
@@ -88,19 +88,23 @@ editor so, and how to take it off the target with Content Sync, without
 production access. The toolkit doesn't restore, publish, unpublish or sync
 anything itself.
 
-## Proposed design
+## Design
 
 ### What the editor sees
 
-- **Tooltip.** On an Only on target row found in the recycle bin:
-  "Deleted here on 29 Oct by Ana Pérez; it's in the recycle bin until 28 Nov.
-  To remove it from the target with Content Sync: restore it, publish it,
-  unpublish it (choose a redirect), and sync it. Or open it on the target (↗)."
-- **Link to the recycle bin.** The Recycle bin application, searched by the
-  item's name if its URL allows it. The ↗ link to the target stays.
-- **No new status.** The row stays **Only on target**; the hint is extra
-  information for the rows on the page being shown. A status would have to be
-  known for every row before filtering, sorting and paging (see Performance).
+- **Status label.** The tag reads **Deleted here** instead of **Only on target**,
+  in the same grey. The status is still Only on target, so its filter and sort
+  position are unchanged: the label is worked out for the rows on the page being
+  shown, which is why it isn't a status of its own (see Performance).
+- **Link to the recycle bin.** **In recycle bin ↗** replaces the row's date, a
+  link cell opening the Recycle bin application in a new tab. The target's publish
+  date says little about a deleted item, and a new column would be empty on almost
+  every row. The application has no link to a single item, so it opens the list.
+- **Tooltip.** Short, for the details: "Deleted here on Oct 29, 2026 by Ana Pérez,
+  but still on the target. Content Sync can't delete it: delete it on the target,
+  or restore it from the recycle bin (until Nov 28, 2026), publish and unpublish
+  it, and sync it." When the target already has it unpublished, the restore steps are left out.
+- **The ↗ link on the name** still opens the item on the target.
 
 ### Lookup
 
@@ -111,7 +115,7 @@ anything itself.
 - **Content item GUIDs for pages.** The target's item ID routes
   (`web-page-ids`, see [Open items on the target](target-item-links.md)), which
   the page already calls for these rows, also return each page's
-  `ContentItemGUID` (a schema bump). The source then queries by that GUID, the
+  `ContentItemGUID` (schema version 5). The source then queries by that GUID, the
   table's key. Reading the page GUID out of the serialized data instead would
   mean loading 9–16 KB of XML per bin row.
 - **Access.** Through `ObjectQuery` by object type name and column names, as
@@ -137,10 +141,6 @@ anything itself.
 
 - **Deleted parent.** Restoring a page whose parent was also deleted: does
   Kentico restore the parent, refuse, or put the page elsewhere? Not tested.
-- **Several deletions of one item.** The same item deleted, restored and
-  deleted again leaves one row per deletion? Show the latest.
-- **Language variants.** Deleting one language variant leaves the page in the
-  others; the hint must match the selected language only.
 - **Content hub items.** The flow is the same, but an unpublish only reaches
   the target when the target has the item published (Kentico's rule); confirm
   live.
@@ -150,6 +150,17 @@ anything itself.
 - **One-click restore and unpublish.** A later step could run the restore,
   publish and unpublish on the source through Kentico's APIs. It changes
   content on the source and has to respect workflows; out of scope here.
+
+## Verification results (live two-instance rig, 31.9.1)
+
+- A page and a content hub item deleted on the source each showed the hint,
+  with who deleted them, when, and the expiry date from the 30-day setting.
+- An Only on target item that was never on the source (created on the target)
+  kept the usual tooltip.
+- Unit tests cover the access rule (View, Manage recycle bin, own deletions),
+  an item deleted twice (the latest counts), the retention setting, the tooltip
+  variants, and an older target (no content item GUIDs, so no hint on pages).
+- Not run live: a non-administrator, and a version before 30.12.0.
 
 ## Out of scope
 

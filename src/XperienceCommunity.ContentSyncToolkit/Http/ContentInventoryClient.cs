@@ -60,10 +60,22 @@ internal sealed class ContentInventoryClient(HttpClient httpClient) : IContentIn
         return ToItemIdsResult(status, body);
     }
 
-    private static TargetItemIdsFetchResult ToItemIdsResult(ContentInventoryFetchStatus status, TargetItemIdsResponse? body) =>
-        body?.Items is not null
-            ? TargetItemIdsFetchResult.Success(body.ScopeId, body.Items.DistinctBy(item => item.Guid).ToDictionary(item => item.Guid, item => item.Id))
-            : TargetItemIdsFetchResult.Failed(FailureStatus(status));
+    private static TargetItemIdsFetchResult ToItemIdsResult(ContentInventoryFetchStatus status, TargetItemIdsResponse? body)
+    {
+        if (body?.Items is null)
+        {
+            return TargetItemIdsFetchResult.Failed(FailureStatus(status));
+        }
+
+        var items = body.Items.DistinctBy(item => item.Guid).ToList();
+
+        return TargetItemIdsFetchResult.Success(body.ScopeId, items.ToDictionary(item => item.Guid, item => item.Id)) with
+        {
+            ContentItemGuids = items
+                .Where(item => item.ContentItemGuid is not null)
+                .ToDictionary(item => item.Guid, item => item.ContentItemGuid!.Value),
+        };
+    }
 
     private static ContentInventoryFetchResult ToInventoryResult(ContentInventoryFetchStatus status, ContentInventoryResponse? body)
     {

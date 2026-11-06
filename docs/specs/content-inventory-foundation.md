@@ -235,12 +235,13 @@ toolkit version reads them as published (see Publication-state scope).
 - `GET .../web-pages?channelName={name}&languageName={name}` and
   `GET .../content-hub-items?workspaceName={name}&languageName={name}`.
 - Required header: `X-ContentSyncToolkit-Secret`.
-- Response body: `{ SchemaVersion: 4, GeneratedAtUtc, Items: ContentInventoryItem[] }`.
+- Response body: `{ SchemaVersion: 5, GeneratedAtUtc, Items: ContentInventoryItem[] }`.
   `SchemaVersion` is a forward-compatibility hook for a source and target
   running different toolkit versions. `1`: publish dates in server-local time
   without a time zone. `2`: publish dates in UTC, plus `Order` for pages. `3`:
   plus display names, and the required-objects route below. `4`: the item ID
-  routes below; the inventory itself is unchanged. Readers accept all four; an
+  routes below; the inventory itself is unchanged. `5`: content item GUIDs on
+  those routes. Readers accept all five; an
   older reader ignores the fields it doesn't know.
 - `GET .../required-objects` (schema 3): `{ SchemaVersion, GeneratedAtUtc,
   Objects: RequiredObject[] }`, the target's content types, languages, website

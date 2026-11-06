@@ -29,6 +29,7 @@ internal sealed class ContentSyncStatusPagesTab(
     IContentSyncItemIdResolver itemIdResolver,
     IContentInventoryClient inventoryClient,
     ContentSyncStatusRefreshRequestStore refreshRequestStore,
+    IContentSyncRecycleBinLookup recycleBinLookup,
     IPageLinkGenerator pageLinkGenerator)
     : ContentSyncStatusTabBase(
         new ContentSyncStatusPagesFilterModel(),
@@ -38,11 +39,14 @@ internal sealed class ContentSyncStatusPagesTab(
         syncStatusService,
         filterOptionsProvider,
         refreshRequestStore,
+        recycleBinLookup,
         pageLinkGenerator)
 {
     protected override string TabKey => "pages";
 
     protected override string ScopeFilterFieldName => nameof(ContentSyncStatusPagesFilterModel.Channel);
+
+    protected override bool RowGuidsAreContentItemGuids => false;
 
     protected override string ScopeNoun => "channel";
 
