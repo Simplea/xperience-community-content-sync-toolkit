@@ -14,6 +14,9 @@ namespace XperienceCommunity.ContentSyncToolkit.Inventory;
 public sealed record ContentItemIds(int? ScopeId, IReadOnlyDictionary<Guid, int> Ids)
 {
     public static ContentItemIds None { get; } = new(null, new Dictionary<Guid, int>());
+
+    /// <summary>The <c>ContentItemGUID</c> of each GUID found, which is how the recycle bin identifies items.</summary>
+    public IReadOnlyDictionary<Guid, Guid> ContentItemGuids { get; init; } = new Dictionary<Guid, Guid>();
 }
 
 /// <summary>
@@ -57,7 +60,7 @@ internal sealed class ContentItemIdLookup(
 
         var items = await itemIdResolver.GetWebPageItemsAsync(channelName, languageName, guids, cancellationToken);
 
-        return new ContentItemIds(websiteChannel.WebsiteChannelID, items.ToDictionary(item => item.Key, item => item.Value.Id));
+        return ToItemIds(websiteChannel.WebsiteChannelID, items);
     }
 
     public async Task<ContentItemIds> GetContentItemIdsAsync(
@@ -86,8 +89,14 @@ internal sealed class ContentItemIdLookup(
 
         var items = await itemIdResolver.GetContentItemsAsync(workspaceName, languageName, reusableTypes, guids, cancellationToken);
 
-        return new ContentItemIds(workspace.WorkspaceID, items.ToDictionary(item => item.Key, item => item.Value.Id));
+        return ToItemIds(workspace.WorkspaceID, items);
     }
+
+    private static ContentItemIds ToItemIds(int scopeId, IReadOnlyDictionary<Guid, ContentSyncLocalItem> items) =>
+        new(scopeId, items.ToDictionary(item => item.Key, item => item.Value.Id))
+        {
+            ContentItemGuids = items.ToDictionary(item => item.Key, item => item.Value.ContentItemGuid),
+        };
 
     // GUIDs come comma-separated in the query string from a remote caller: values that aren't GUIDs
     // are skipped, and at most MaxItemIdGuids are looked up.

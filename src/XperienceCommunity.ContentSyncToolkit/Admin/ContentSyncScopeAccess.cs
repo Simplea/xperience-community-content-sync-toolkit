@@ -30,6 +30,9 @@ internal interface IContentSyncScopeAccess
     /// </summary>
     public Task<ContentSyncPageVisibility> GetPageVisibilityAsync(
         ContentSyncScope websiteChannel, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken);
+
+    /// <summary>What the user can see in the Recycle bin application.</summary>
+    public Task<ContentSyncRecycleBinAccess> GetRecycleBinAccessAsync(CancellationToken cancellationToken);
 }
 
 internal sealed class ContentSyncScopeAccess(
@@ -137,6 +140,32 @@ internal sealed class ContentSyncScopeAccess(
             .Select(page => (page.Guid, page.TreePath, visibleById[pageIds[page.Guid]])));
     }
 
+    // The Recycle bin application was added in 30.12.0, so its identifier and permission aren't
+    // available as constants on the toolkit's minimum version.
+    private const string RecycleBinApplicationIdentifier = "Kentico.Xperience.Application.RecycleBin";
+    private const string ManageRecycleBinPermission = "ManageRecycleBin";
+
+    public async Task<ContentSyncRecycleBinAccess> GetRecycleBinAccessAsync(CancellationToken cancellationToken)
+    {
+        var user = await GetCurrentUserAsync(cancellationToken);
+        if (user is null)
+        {
+            return ContentSyncRecycleBinAccess.None;
+        }
+
+        if (user.IsAdministrator())
+        {
+            return new ContentSyncRecycleBinAccess(true, true, user.UserID);
+        }
+
+        var roleIds = await GetRoleIdsAsync(user, cancellationToken);
+
+        return new ContentSyncRecycleBinAccess(
+            await HasApplicationPermissionAsync(RecycleBinApplicationIdentifier, SystemPermissions.VIEW, roleIds, cancellationToken),
+            await HasApplicationPermissionAsync(RecycleBinApplicationIdentifier, ManageRecycleBinPermission, roleIds, cancellationToken),
+            user.UserID);
+    }
+
     private const string AclMappingObjectType = "cms.webpageaclmapping";
     private const string AclMappingPageColumn = "WebPageAclMappingWebPageItemID";
     private const string AclMappingAclColumn = "WebPageAclMappingWebPageAclID";
@@ -212,8 +241,12 @@ internal sealed class ContentSyncScopeAccess(
             .GetEnumerableTypedResultAsync(cancellationToken: cancellationToken))
             .Select(userRole => userRole.RoleID)];
 
-    private async Task<bool> HasChannelPermissionAsync(
-        Guid websiteChannelGuid, string permissionName, IReadOnlyList<int> roleIds, CancellationToken cancellationToken)
+    private Task<bool> HasChannelPermissionAsync(
+        Guid websiteChannelGuid, string permissionName, IReadOnlyList<int> roleIds, CancellationToken cancellationToken) =>
+        HasApplicationPermissionAsync(WebsiteChannelApplicationIdentifier(websiteChannelGuid), permissionName, roleIds, cancellationToken);
+
+    private async Task<bool> HasApplicationPermissionAsync(
+        string applicationIdentifier, string permissionName, IReadOnlyList<int> roleIds, CancellationToken cancellationToken)
     {
         if (roleIds.Count == 0)
         {
@@ -221,7 +254,7 @@ internal sealed class ContentSyncScopeAccess(
         }
 
         var permissions = await applicationPermissionInfoProvider.Get()
-            .WhereEquals(nameof(ApplicationPermissionInfo.ApplicationName), WebsiteChannelApplicationIdentifier(websiteChannelGuid))
+            .WhereEquals(nameof(ApplicationPermissionInfo.ApplicationName), applicationIdentifier)
             .WhereEquals(nameof(ApplicationPermissionInfo.PermissionName), permissionName)
             .WhereIn(nameof(ApplicationPermissionInfo.RoleID), roleIds.ToList())
             .TopN(1)

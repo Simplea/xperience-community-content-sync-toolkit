@@ -18,6 +18,7 @@ public static class ContentSyncToolkitAdminServiceCollectionExtensions
         // Scoped: which channels and workspaces are listed depends on the signed-in user.
         services.TryAddScoped<IContentSyncScopeAccess, ContentSyncScopeAccess>();
         services.TryAddScoped<IContentSyncScopeProvider, ContentSyncScopeProvider>();
+        services.TryAddScoped<IContentSyncRecycleBinLookup, ContentSyncRecycleBinLookup>();
         services.TryAddSingleton<IContentSyncFilterOptionsProvider, ContentSyncFilterOptionsProvider>();
         services.TryAddTransient<IContentSyncItemIdResolver, ContentSyncItemIdResolver>();
         services.TryAddSingleton<ContentSyncStatusRefreshRequestStore>();

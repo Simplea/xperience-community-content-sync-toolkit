@@ -34,6 +34,25 @@ public class ContentSyncStatusServiceTests
         }
     }
 
+    private sealed class StubContentLinksService : ILocalContentLinksService
+    {
+        public int GraphCallCount { get; private set; }
+
+        public ContentLinkGraph Graph { get; set; } = ContentLinkGraph.Empty;
+
+        public IReadOnlyDictionary<int, string> DisplayNames { get; set; } = new Dictionary<int, string>();
+
+        public Task<ContentLinkGraph> GetLinkGraphAsync(string languageName, ContentInventoryItemKind kind, CancellationToken cancellationToken)
+        {
+            GraphCallCount++;
+            return Task.FromResult(Graph);
+        }
+
+        public Task<IReadOnlyDictionary<int, string>> GetDisplayNamesAsync(
+            string languageName, IReadOnlyCollection<int> contentItemIds, CancellationToken cancellationToken) =>
+            Task.FromResult(DisplayNames);
+    }
+
     private sealed class StubContentInventoryClient : IContentInventoryClient
     {
         public int WebPageCallCount { get; private set; }
@@ -90,10 +109,12 @@ public class ContentSyncStatusServiceTests
         StubLocalContentInventoryService local,
         StubContentInventoryClient client,
         ContentInventoryCache cache,
-        StubLocalRequiredObjectsService? localRequiredObjects = null) =>
+        StubLocalRequiredObjectsService? localRequiredObjects = null,
+        StubContentLinksService? contentLinks = null) =>
         new ContentSyncStatusService(
             local,
             localRequiredObjects ?? new StubLocalRequiredObjectsService(),
+            contentLinks ?? new StubContentLinksService(),
             client,
             cache,
             Options.Create(new ContentSyncToolkitOptions { InventoryCacheDuration = TimeSpan.FromSeconds(90) }));
@@ -128,6 +149,91 @@ public class ContentSyncStatusServiceTests
         Assert.That(missing.RequiredObjectIssues.Single().Object, Is.EqualTo(articleType));
         Assert.That(missing.RequiredObjectIssues.Single().Problem, Is.EqualTo(RequiredObjectProblem.MissingOnTarget));
         Assert.That(result.Items.Single(item => item.Guid == inSyncGuid).RequiredObjectIssues, Is.Empty);
+    }
+
+    // Content Sync refuses the sync because of what the page links to, so the page must say so.
+    [Test]
+    public async Task GetWebPageSyncStatusAsync_AttachesTheIssueOfALinkedItem()
+    {
+        var pageGuid = Guid.NewGuid();
+        var links = new StubContentLinksService
+        {
+            Graph = new ContentLinkGraph(
+                new Dictionary<Guid, int> { [pageGuid] = 1 },
+                new Dictionary<int, string> { [1] = "DG.Product", [2] = "DG.Article" },
+                new Dictionary<int, IReadOnlyCollection<int>> { [1] = [2] }),
+            DisplayNames = new Dictionary<int, string> { [2] = "Brewing tips" },
+        };
+        var service = CreateService(
+            new StubLocalContentInventoryService { WebPages = [Page(pageGuid, "DG.Product", null)] },
+            new StubContentInventoryClient(),
+            new ContentInventoryCache(TimeProvider.System),
+            new() { Objects = [articleType] },
+            links);
+
+        var result = await service.GetWebPageSyncStatusAsync("Channel", "en", CancellationToken.None);
+
+        var issue = result.Items.Single().RequiredObjectIssues.Single();
+        Assert.That(issue.Object, Is.EqualTo(articleType));
+        Assert.That(issue.ViaLinkedItem, Is.EqualTo("Brewing tips"));
+    }
+
+    [Test]
+    public async Task GetWebPageSyncStatusAsync_AttachesTheIssueOfAParentPage()
+    {
+        var parent = Page(Guid.NewGuid(), "DG.Article", null) with { TreePath = "/parent", DisplayName = "Parent" };
+        var child = Page(Guid.NewGuid(), "DG.Product", null) with { TreePath = "/parent/child" };
+        var service = CreateService(
+            new StubLocalContentInventoryService { WebPages = [parent, child] },
+            new StubContentInventoryClient(),
+            new ContentInventoryCache(TimeProvider.System),
+            new() { Objects = [articleType] });
+
+        var result = await service.GetWebPageSyncStatusAsync("Channel", "en", CancellationToken.None);
+
+        Assert.That(result.Items.Single(item => item.Guid == child.Guid).RequiredObjectIssues.Single().ViaLinkedItem, Is.EqualTo("Parent"));
+    }
+
+    // Its own issue says it all: a link to another item of the same type adds nothing.
+    [Test]
+    public async Task GetWebPageSyncStatusAsync_DoesNotRepeatAnIssueTheItemHasItself()
+    {
+        var pageGuid = Guid.NewGuid();
+        var links = new StubContentLinksService
+        {
+            Graph = new ContentLinkGraph(
+                new Dictionary<Guid, int> { [pageGuid] = 1 },
+                new Dictionary<int, string> { [1] = "DG.Article", [2] = "DG.Article" },
+                new Dictionary<int, IReadOnlyCollection<int>> { [1] = [2] }),
+        };
+        var service = CreateService(
+            new StubLocalContentInventoryService { WebPages = [Page(pageGuid, "DG.Article", null)] },
+            new StubContentInventoryClient(),
+            new ContentInventoryCache(TimeProvider.System),
+            new() { Objects = [articleType] },
+            links);
+
+        var result = await service.GetWebPageSyncStatusAsync("Channel", "en", CancellationToken.None);
+
+        Assert.That(result.Items.Single().RequiredObjectIssues.Single().ViaLinkedItem, Is.Null);
+    }
+
+    // The usual case: nothing is incompatible, so links aren't read at all.
+    [Test]
+    public async Task GetWebPageSyncStatusAsync_DoesNotReadLinks_WhenNoContentTypeIsIncompatible()
+    {
+        var links = new StubContentLinksService();
+        var client = new StubContentInventoryClient { RequiredObjectsResult = RequiredObjectsFetchResult.Success([articleType]) };
+        var service = CreateService(
+            new StubLocalContentInventoryService { WebPages = [Page(Guid.NewGuid(), "DG.Article", null)] },
+            client,
+            new ContentInventoryCache(TimeProvider.System),
+            new() { Objects = [articleType] },
+            links);
+
+        await service.GetWebPageSyncStatusAsync("Channel", "en", CancellationToken.None);
+
+        Assert.That(links.GraphCallCount, Is.Zero);
     }
 
     // The check is an addition: a target that can't answer it (e.g. an older toolkit version) still

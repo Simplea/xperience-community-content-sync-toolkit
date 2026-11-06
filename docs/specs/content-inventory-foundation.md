@@ -235,12 +235,13 @@ toolkit version reads them as published (see Publication-state scope).
 - `GET .../web-pages?channelName={name}&languageName={name}` and
   `GET .../content-hub-items?workspaceName={name}&languageName={name}`.
 - Required header: `X-ContentSyncToolkit-Secret`.
-- Response body: `{ SchemaVersion: 4, GeneratedAtUtc, Items: ContentInventoryItem[] }`.
+- Response body: `{ SchemaVersion: 5, GeneratedAtUtc, Items: ContentInventoryItem[] }`.
   `SchemaVersion` is a forward-compatibility hook for a source and target
   running different toolkit versions. `1`: publish dates in server-local time
   without a time zone. `2`: publish dates in UTC, plus `Order` for pages. `3`:
   plus display names, and the required-objects route below. `4`: the item ID
-  routes below; the inventory itself is unchanged. Readers accept all four; an
+  routes below; the inventory itself is unchanged. `5`: content item GUIDs on
+  those routes. Readers accept all five; an
   older reader ignores the fields it doesn't know.
 - `GET .../required-objects` (schema 3): `{ SchemaVersion, GeneratedAtUtc,
   Objects: RequiredObject[] }`, the target's content types, languages, website
@@ -295,10 +296,26 @@ public sealed record RequiredObject(RequiredObjectKind Kind, Guid Guid, string N
   channel (pages) or workspace (content hub items). They only ask the target
   when some item needs a push. A failed or unsupported check never fails the
   status: items are compared as before, without issues.
-- Not checked: linked items and their types (they're synced along with an
-  item), reusable field schemas, image variant definitions, member roles, the
-  channels a reusable item is used in, and project code (Page Builder
-  components, routing). Kentico's documentation lists these too.
+- Content Sync sends an item with everything it links to, at any depth, and a
+  page with its parents, and refuses the whole sync if any of them has an
+  incompatible content type. So when a content type has an issue, the status
+  methods also attach it to each pushed item that reaches an item of that type,
+  with `RequiredObjectIssue.ViaLinkedItem` naming the linked item or parent page.
+  An issue the item has itself isn't repeated.
+- `ILocalContentLinksService` reads the links into a `ContentLinkGraph`, and
+  `FindItemsLinkingTo` walks them backwards from the items of the type, so one
+  pass per incompatible type covers every item, cycles included. It reads
+  content item references (`cms.contentitemreference`) of the published and
+  unpublished versions in the language, which is what a sync sends. Links are
+  only read when a content type has an issue and an item needs a push, so a
+  compatible target costs nothing. If reading them fails, the error is logged
+  and items are checked by their own objects only.
+- Parents are found by tree path among the listed pages
+  (`RequiredObjectsComparer.FindParentOfType`), so they need no query.
+- Not checked: the languages, channels and workspaces of linked items, reusable
+  field schemas, image variant definitions, member roles, the channels a
+  reusable item is used in, and project code (Page Builder components, routing).
+  Kentico's documentation lists these too.
 
 Verified live on the rig (31.7.2): with the target's Image content type
 definition changed and its Events workspace given another GUID, the Content
@@ -306,6 +323,16 @@ hub tab showed both in the banner, and the Image item missing on the target
 said in its Status tooltip that it can't sync yet; restoring the values
 cleared both. Since 1.0.0-beta.2 there's no banner: such items show the
 Incompatible status, with each object in the tooltip.
+
+Linked items, verified live on the rig (31.9.1). `/Products/Clone_AeroPress`
+links to the AeroPress product, which links to the AeroPress image. With a field
+caption of the Image content type changed on the source in the admin UI, that
+page, `/Products/AeroPress` and the AeroPress product in the Content hub showed
+Incompatible, each saying "Linked item AeroPress: Content type Image has
+different field definitions on the source and target instance.", and
+`/Products/AeroPress_Filters`, already in sync, stayed In sync: only items a
+sync would change are checked. With matching definitions, **Sync this page** on
+`/Products/Clone_AeroPress` finished and the page reached the target.
 
 ## Local inventory behavior
 
@@ -1024,9 +1051,9 @@ using the Dancing Goat integration host:
 - Secret rotation tooling beyond a configuration change and restart.
 - A "discover all channels/workspaces" convenience method; callers always pass
   an explicit scope name.
-- Checking everything Content Sync needs on the target: linked items' types,
-  reusable field schemas, image variants, member roles and project code aren't
-  checked (see Required objects).
+- Checking everything Content Sync needs on the target: the languages, channels
+  and workspaces of linked items, reusable field schemas, image variants, member
+  roles and project code aren't checked (see Required objects).
 - Triggering an actual Content Sync operation from the diff result — this
   foundation is read-only visibility. Initiating a sync remains Xperience's
   own **Sync this page**/**Sync with all subpages**/Content hub **Sync**

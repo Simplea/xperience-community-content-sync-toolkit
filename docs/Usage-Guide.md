@@ -207,6 +207,12 @@ documentation.
   (pages) or workspace (content hub items) at all.
 - The target has one of them, but it was recreated by hand instead of deployed,
   so it doesn't match.
+- A linked item or parent page has one of these problems with its content type.
+  Content Sync syncs them along with this item, so the whole sync fails. The
+  tooltip names the item, for example "Linked item AeroPress: Content type Image
+  has different field definitions on the source and target instance.", and
+  adds that you can leave it out in **Detailed selection** if the target already
+  has it.
 
 Content Sync doesn't transfer these objects and fails for items that use them,
 so a developer has to deploy them to the target first (CI/CD or a deployment
@@ -214,8 +220,8 @@ package). Incompatible takes the place of the item's other status. Its tooltip
 uses the same message Kentico's Content Sync dialog shows for a compatibility
 error, for example "Content type Image has different field definitions on the
 source and target instance.", then says what a sync will do once it's fixed.
-Linked items, reusable field schemas, image variants, member roles and project
-code aren't checked.
+The languages, channels and workspaces of linked items, reusable field schemas,
+image variants, member roles and project code aren't checked.
 
 ![Tooltip on an Incompatible tag: Content type Image has different field definitions on the source and target instance](images/incompatible-tooltip.png)
 
@@ -302,6 +308,16 @@ it in the target's administration in a new tab, where you can delete it,
 unpublish it, or schedule the unpublish. You need an account on the target;
 sign in there if asked. The link needs the target on this toolkit version or
 later; with an older target, the name is plain text.
+
+If the item was deleted here and is still in the recycle bin (Xperience 30.12.0
+and later), its status reads **Deleted here**, the tooltip says who deleted it
+and until when it can be restored, and **In recycle bin ↗** replaces its date,
+opening the **Recycle bin** application in a new tab. To take it off the target
+without signing in there: restore it, publish it, unpublish it with a redirect,
+and sync it; the target unpublishes it and redirects its URL. You see this for
+items you could find in the Recycle bin application: the ones you deleted, or
+everyone's with **Manage recycle bin**. The **Only on target** filter includes
+these rows.
 
 **In sync**
 

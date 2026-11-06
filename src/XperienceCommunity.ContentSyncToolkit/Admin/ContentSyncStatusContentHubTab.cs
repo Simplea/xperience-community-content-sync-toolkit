@@ -28,6 +28,7 @@ internal sealed class ContentSyncStatusContentHubTab(
     IContentSyncItemIdResolver itemIdResolver,
     IContentInventoryClient inventoryClient,
     ContentSyncStatusRefreshRequestStore refreshRequestStore,
+    IContentSyncRecycleBinLookup recycleBinLookup,
     IPageLinkGenerator pageLinkGenerator)
     : ContentSyncStatusTabBase(
         new ContentSyncStatusContentHubFilterModel(),
@@ -37,11 +38,14 @@ internal sealed class ContentSyncStatusContentHubTab(
         syncStatusService,
         filterOptionsProvider,
         refreshRequestStore,
+        recycleBinLookup,
         pageLinkGenerator)
 {
     protected override string TabKey => "content-hub";
 
     protected override string ScopeFilterFieldName => nameof(ContentSyncStatusContentHubFilterModel.Workspace);
+
+    protected override bool RowGuidsAreContentItemGuids => true;
 
     protected override string ScopeNoun => "workspace";
 
