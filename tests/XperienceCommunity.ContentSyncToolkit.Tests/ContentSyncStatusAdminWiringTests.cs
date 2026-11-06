@@ -6,6 +6,8 @@ using CMS.Membership;
 using Kentico.Xperience.Admin.Base;
 using Kentico.Xperience.Admin.Base.UIPages;
 
+using Microsoft.Extensions.Options;
+
 using XperienceCommunity.ContentSyncToolkit.Admin;
 
 namespace XperienceCommunity.ContentSyncToolkit.Tests;
@@ -194,7 +196,7 @@ public class ContentSyncStatusAdminWiringTests
     [Test]
     public async Task StatusFilterOptions_AreSearchable_AndShowUnknownSelectionsAsInvalid()
     {
-        var provider = new ContentSyncStatusFilterOptionsDataProvider();
+        var provider = new ContentSyncStatusFilterOptionsDataProvider(Options.Create(new ContentSyncToolkitOptions { ComparePageOrder = true }));
 
         var all = await provider.GetItemsAsync(string.Empty, 0, CancellationToken.None);
         var searched = await provider.GetItemsAsync("on", 0, CancellationToken.None);
@@ -203,6 +205,27 @@ public class ContentSyncStatusAdminWiringTests
         Assert.That(all.Items.Select(item => item.Value), Is.EqualTo(ContentSyncStatusListingSupport.StatusFilterOptions.Select(option => option.Value)));
         Assert.That(searched.Items.Select(item => item.Text), Is.EqualTo(new[] { "Only on target" }));
         Assert.That(selected.Select(item => (item.Text, item.IsValid)), Is.EqualTo(new[] { ("Incompatible", true), ("PublishPending", false) }));
+    }
+
+    // Nothing can be Reordered when page order isn't compared, so it isn't offered, and a filter
+    // remembered from before shows as invalid.
+    [Test]
+    public async Task StatusFilterOptions_LeaveOutReordered_ByDefault()
+    {
+        var provider = new ContentSyncStatusFilterOptionsDataProvider(Options.Create(new ContentSyncToolkitOptions()));
+
+        var all = await provider.GetItemsAsync(string.Empty, 0, CancellationToken.None);
+        var selected = (await provider.GetSelectedItemsAsync(["Reordered"], CancellationToken.None)).Single();
+
+        Assert.That(all.Items.Select(item => item.Value), Does.Not.Contain("Reordered").And.Contain("Moved"));
+        Assert.That(selected.IsValid, Is.False);
+    }
+
+    [Test]
+    public void StatusLegend_MentionsReordered_OnlyWhenPageOrderIsCompared()
+    {
+        Assert.That(ContentSyncStatusListingSupport.StatusLegend(comparePageOrder: true), Does.Contain("<strong>Reordered</strong>"));
+        Assert.That(ContentSyncStatusListingSupport.StatusLegend(comparePageOrder: false), Does.Not.Contain("Reordered").And.Contain("<strong>Moved</strong>"));
     }
 
     [TestCase(true, true)]

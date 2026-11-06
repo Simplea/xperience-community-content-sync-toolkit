@@ -70,7 +70,7 @@ public class ContentSyncStatusListingSupportTests
     public void StatusTooltip_ForAMovedPage_SaysWhichLevelsToSync() =>
         Assert.That(
             ContentSyncStatusListingSupport.StatusTooltip(CreateStatusItem(ContentSyncStatus.Moved, local: Versioned("Published"), remote: Versioned("Published"))),
-            Does.Contain("sync all pages on its old and new level"));
+            Does.Contain("A sync moves it."));
 
     // Content Sync can't delete, so an item only on the target always says how to remove it.
     [TestCase("Published", "Only on the target.")]
@@ -130,7 +130,7 @@ public class ContentSyncStatusListingSupportTests
     [TestCase(ContentSyncStatus.New, "Then a sync creates it.")]
     [TestCase(ContentSyncStatus.Changed, "Then a sync updates it.")]
     [TestCase(ContentSyncStatus.Unpublished, "Then a sync unpublishes it there.")]
-    [TestCase(ContentSyncStatus.Moved, "Then sync all pages on its old and new level to move it.")]
+    [TestCase(ContentSyncStatus.Moved, "Then a sync moves it.")]
     [TestCase(ContentSyncStatus.Reordered, "Then sync all pages on its level to fix the order.")]
     public void StatusTooltip_ForAnIncompatibleItem_SaysWhatTheTargetNeeds_ThenWhatASyncDoes(ContentSyncStatus status, string end) =>
         Assert.That(

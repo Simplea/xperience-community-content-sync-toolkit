@@ -24,10 +24,13 @@ public enum ContentSyncStatus
     /// <summary>Unpublished on this instance, still published on the target. A sync unpublishes it there.</summary>
     Unpublished,
 
-    /// <summary>A page at a different place in the tree on the target. Syncing its old and new levels moves it.</summary>
+    /// <summary>A page at a different place in the tree on the target. Syncing it, or a parent that moved with it, moves it.</summary>
     Moved,
 
-    /// <summary>A page on a level whose order differs on the target. Syncing the whole level reorders it.</summary>
+    /// <summary>
+    /// A page out of place among its siblings on the target. Syncing the whole level reorders it.
+    /// Only used with <see cref="ContentSyncToolkitOptions.ComparePageOrder"/> on.
+    /// </summary>
     Reordered,
 
     /// <summary>On the target only. Content Sync can't delete, so it has to be deleted on the target by hand.</summary>

@@ -78,7 +78,7 @@ internal sealed class ContentSyncStatusService(
         // Local is always re-queried fresh, even when the remote half came from cache — an editor
         // who just published locally should see that reflected immediately.
         var localItems = await getLocal(cancellationToken);
-        var items = ContentSyncStatusComparer.Compare(localItems, remoteItems);
+        var items = ContentSyncStatusComparer.Compare(localItems, remoteItems, options.Value.ComparePageOrder);
 
         return new ContentSyncStatusResult(true, await AddRequiredObjectIssuesAsync(items, forceRefresh, cancellationToken));
     }

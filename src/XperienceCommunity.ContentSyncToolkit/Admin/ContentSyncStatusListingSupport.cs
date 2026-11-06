@@ -54,6 +54,26 @@ internal static class ContentSyncStatusListingSupport
         .. statusOrder.Select(status => (status.ToString(), StatusLabel(status))),
     ];
 
+    /// <summary>
+    /// The options an editor can pick: Reordered only when page order is compared
+    /// (<see cref="ContentSyncToolkitOptions.ComparePageOrder"/>), since nothing has that status otherwise.
+    /// </summary>
+    public static IEnumerable<(string Value, string Text)> AvailableStatusFilterOptions(bool comparePageOrder) =>
+        StatusFilterOptions.Where(option => comparePageOrder || option.Value != nameof(ContentSyncStatus.Reordered));
+
+    /// <summary>The Status column's tooltip: what each tag means. Its markup is HTML.</summary>
+    public static string StatusLegend(bool comparePageOrder) =>
+        "<strong>Incompatible</strong>: a compatibility error; a sync would fail until a developer updates the target. Hover it for details.<br>"
+        + "What a sync from here would do on the target:<br>"
+        + "<strong>Unpublished</strong>: unpublish it there.<br>"
+        + "<strong>New</strong>: create it.<br>"
+        + "<strong>Changed</strong>: update it to the version published here.<br>"
+        + (comparePageOrder ? "<strong>Moved</strong> / <strong>Reordered</strong>" : "<strong>Moved</strong>") + ": change its place in the page tree.<br>"
+        + "<strong>Not published</strong>: nothing yet; it has no published version here. Publish it to sync.<br>"
+        + "<strong>Only on target</strong>: nothing; Content Sync can't delete, so delete it there.<br>"
+        + "<strong>Deleted here</strong>: the same, for an item still in this instance's recycle bin.<br>"
+        + "<strong>In sync</strong>: nothing; it's the same on both.";
+
     // Items in sync are left out unless the editor asked for them: with Show items in sync, by selecting
     // a status, or by searching, since "is this item synced?" must not come back empty.
     public static bool HidesInSync(ContentSyncStatusFilter filter, string? searchTerm) =>
@@ -248,7 +268,7 @@ internal static class ContentSyncStatusListingSupport
             {
                 ContentSyncStatus.New => "Then a sync creates it.",
                 ContentSyncStatus.Unpublished => "Then a sync unpublishes it there.",
-                ContentSyncStatus.Moved => "Then sync all pages on its old and new level to move it.",
+                ContentSyncStatus.Moved => "Then a sync moves it.",
                 ContentSyncStatus.Reordered => "Then sync all pages on its level to fix the order.",
                 // Only statuses a sync would change can be incompatible; the rest update.
                 ContentSyncStatus.Changed or ContentSyncStatus.OnlyOnTarget or ContentSyncStatus.InSync or ContentSyncStatus.NotPublished => "Then a sync updates it.",
@@ -342,7 +362,7 @@ internal static class ContentSyncStatusListingSupport
             ContentSyncStatus.Changed when remoteUnpublished => "Published here, unpublished on the target. A sync publishes it there.",
             ContentSyncStatus.Changed => "Published here after the target's copy. A sync updates it.",
             ContentSyncStatus.Unpublished => "Unpublished here, still published on the target. A sync unpublishes it there.",
-            ContentSyncStatus.Moved => "At a different place in the tree on the target. To move it, sync all pages on its old and new level.",
+            ContentSyncStatus.Moved => "At a different place in the tree on the target. A sync moves it. If a parent page moved too, syncing the parent also moves this page.",
             ContentSyncStatus.Reordered => ReorderTooltip(item.Reorder),
             ContentSyncStatus.NotPublished =>
                 (item.Local is not null && ContentInventoryVersionStatus.IsNeverPublished(item.Local.VersionStatus) ? NeverPublishedTooltip : UnpublishedDraftTooltip)

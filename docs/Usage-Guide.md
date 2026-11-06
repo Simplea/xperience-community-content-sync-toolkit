@@ -41,7 +41,7 @@ builder.Services.AddContentSyncToolkit();
 builder.Services.Configure<ContentSyncToolkitOptions>(
     builder.Configuration.GetSection("ContentSyncToolkit"));
 
-// Optional: RequestTimeout and InventoryCacheDuration (see below).
+// Optional: RequestTimeout, InventoryCacheDuration and ComparePageOrder (see below).
 ```
 
 The target's inventory endpoint is an attribute-routed controller under
@@ -73,14 +73,15 @@ works as it does without the toolkit. If it isn't configured as a target, the
 target rejects inventory requests. The toolkit has no purpose without Content
 Sync.
 
-Three optional toolkit settings, all on the source:
+Four optional toolkit settings, all on the source:
 
 ```json
 {
   "ContentSyncToolkit": {
     "RequestTimeout": "00:00:30",
     "InventoryCacheDuration": "00:01:30",
-    "TargetAdminUrl": "https://prod.example.com/admin"
+    "TargetAdminUrl": "https://prod.example.com/admin",
+    "ComparePageOrder": true
   }
 }
 ```
@@ -90,6 +91,7 @@ Three optional toolkit settings, all on the source:
 | `RequestTimeout` | 30 seconds | Timeout for requests to the target. |
 | `InventoryCacheDuration` | 90 seconds | How long the target's inventory is cached on the source. The source's own content is never cached. |
 | `TargetAdminUrl` | `{TargetUrl}/admin` | Where **Only on target** rows open the target's administration. Set it when Content Sync's `TargetUrl` isn't an address editors' browsers can reach, such as an internal host name. |
+| `ComparePageOrder` | `false` | Whether pages in a different position among their siblings on the target show as **Reordered**. Turn it on if your site displays pages in page tree order, such as a menu built from the tree. Without it, those pages show as **In sync** and **Reordered** isn't offered. Pages under a different parent always show as **Moved**. |
 
 ## Give editors access
 
@@ -156,7 +158,7 @@ the list says **Nothing is pending: everything is in sync.**
   shows); press Enter to apply.
 - **Sort** by clicking a column header. The list starts sorted by **Status**,
   in the order of the [statuses table](#statuses): Incompatible first, then Unpublished, New,
-  Changed, Moved, Reordered, Not published, Only on target, and In sync. Within each status,
+  Changed, Moved, Reordered (when compared), Not published, Only on target, and In sync. Within each status,
   the most recently published items come first. Click **Status** to reverse
   the order.
   The page doesn't remember a different sort: it starts sorted by Status again
@@ -197,8 +199,8 @@ Hover the ⓘ next to **Status** for the same summary in the application:
 | **Unpublished** | Orange | Unpublished here, still published on the target. | Sync it to unpublish it there. |
 | **New** | Orange | Not on the target yet. | Sync it to create it (unpublished, if it's unpublished here). |
 | **Changed** | Orange | The target has an older copy, or has it unpublished. | Sync it to update it. |
-| **Moved** | Orange | At a different place in the page tree on the target. | Sync all pages on its old and new level. |
-| **Reordered** | Orange | The pages on this level are in a different order on the target. | Use **Sync with all subpages** on the level's parent. |
+| **Moved** | Orange | At a different place in the page tree on the target. | Sync it, or the parent page that moved with it. |
+| **Reordered** | Orange | Out of place among the pages on its level on the target. Only with `ComparePageOrder` on. | Use **Sync with all subpages** on the level's parent. |
 | **Not published** | Grey | No published version here (unpublished, then edited again; or never published while the target has it). | Publish it; Content Sync can't sync it until then. |
 | **Only on target** | Grey | On the target but not on this instance. | Nothing to sync: Content Sync can't delete. Open it on the target with the link on its name, and delete it there if it shouldn't be there. |
 | **In sync** | Green | The target has the same published version. | Nothing. |
@@ -272,28 +274,43 @@ version (see In sync).
 **Moved**
 
 - You moved a page to another place in the page tree here. Moving doesn't
-  republish a page, so this is found by comparing the page's position. To sync
-  it, sync all pages on both its old and its new level; the tooltip says so.
+  republish a page, so this is found by comparing the page's full path.
+- You moved one of its parents. All the pages under it are listed, because their
+  paths changed too. **Sync this page** on the parent moves them all on the
+  target.
+
+Renaming a page doesn't move it: its path stays the same, and it shows as
+**Changed** once published.
+
+Syncing the page moves it on the target, but the pages it left and joined keep
+their positions there. If your site depends on page order, follow Kentico's
+advice and sync all pages on both levels.
+
+Content hub folders aren't compared, because they only organize the
+administration and don't affect what the site shows. An item moved to another
+folder stays **In sync**. If you sync it, Content Sync moves it to that folder
+on the target, creating the folder if needed; the old folder stays there.
 
 **Reordered**
 
-- The pages on a level are in a different order on the target, for example
-  after you reordered pages here, or after syncing only some pages of the
-  level.
+Only checked with `ComparePageOrder` on (see
+[Configure source and target](#configure-source-and-target)).
+
+- A page is out of place among the pages on its level on the target, for
+  example after you reordered pages here, or after syncing only some pages of
+  the level.
 
 Content Sync sends each synced page's position with it, but pages you don't
 include keep their old positions on the target. So syncing only some pages of
 a level, such as a single new page, can leave the level in a different order
-there. The status page then marks every page on the level, because Content
-Sync only transfers an order change when the whole level is synced.
+there. The status page marks the pages out of place, but Content Sync only
+transfers an order change when the whole level is synced.
 
 ![Tooltip on a Reordered tag naming the page out of place and the level to sync](images/reordered-tooltip.png)
 
 - Hover the tag: it names the page or pages that are out of place.
 - To fix it, open the page tree, and on the level's parent page use **Sync with
   all subpages**.
-- If your site never shows pages in page tree order (for example, a listing
-  sorted by date), the difference has no visible effect and you can ignore it.
 
 **Not published**
 

@@ -27,4 +27,12 @@ public sealed class ContentSyncToolkitOptions
     /// when that address isn't one editors' browsers can reach.
     /// </summary>
     public string? TargetAdminUrl { get; set; }
+
+    /// <summary>
+    /// Whether pages in a different position among their siblings on the target show as Reordered.
+    /// Off by default: the order only matters on a site that displays pages in tree order, such as
+    /// a menu built from the page tree, and a partial sync often changes it. Turn it on for such a
+    /// site. A page under a different parent always shows as Moved.
+    /// </summary>
+    public bool ComparePageOrder { get; set; }
 }

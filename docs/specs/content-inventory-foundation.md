@@ -450,7 +450,7 @@ the target, so consumers don't need a second field to explain it:
 | `Unpublished` | Unpublished on the source, still published on the target; a sync unpublishes it. |
 | `Changed` | The target's copy is out of date: published on the source after it, or unpublished on the target while published on the source; a sync updates (and publishes) it. |
 | `Moved` | A page at a different tree path on the target. |
-| `Reordered` | A page whose level is in a different order on the target. |
+| `Reordered` | A page out of place among its siblings on the target; only with `ComparePageOrder` on. |
 | `NotPublished` | No published version on the source (unpublished, then edited again; or never published while the target has it); Content Sync can't sync it until it's published. |
 | `OnlyOnTarget` | Only on the target; Content Sync can't delete it. |
 | `InSync` | Nothing to do. |
@@ -482,14 +482,19 @@ date (position lives on the page record, `WebPageItemTreePath` and
 
 - **Moved:** both sides have the page, the table says `InSync`, but
   the tree paths differ (case-insensitively) → `Moved`.
-- **Reordered:** for each parent level, the pages present on both sides are
-  compared by their **relative** order. If it differs, every `InSync` page on
-  that level becomes `Reordered`. Order values can't be compared
-  directly: a page that exists on only one side shifts every later sibling's
-  value. The whole level is marked because Kentico's
+- **Reordered:** only with `ContentSyncToolkitOptions.ComparePageOrder` on (off
+  by default: the order only matters on a site that displays pages in tree
+  order, and a partial sync often changes it). For each parent level, the pages
+  present on both sides are compared by their **relative** order. If it differs,
+  the `InSync` pages out of place become `Reordered`; the rest of the level stays
+  `InSync`, so one difference doesn't list a whole level. Order values can't be
+  compared directly: a page that exists on only one side shifts every later
+  sibling's value. Kentico's
   [Content sync](https://docs.kentico.com/documentation/business-users/content-sync#sync-moved-or-reordered-pages)
   documentation says reordered or moved pages need **all** pages on the level
-  synced. Skipped when either side has no `Order` (a schema 1 target).
+  synced, so the tooltip says to sync the level. A page out of place that's
+  already pending keeps its status. Skipped when either side has no `Order` (a
+  schema 1 target).
   Each marked page also carries a `ContentSyncReorder`: the level's parent path
   (and the parent page, when it's in the inventory, for its display name) and
   the **pages out of place**, the fewest pages whose removal leaves the rest of
@@ -512,8 +517,24 @@ order on this level changed here. To reorder the target, sync all pages on this
 level."; `/Articles/Clone_Coffee_processing_techniques`, which exists only on
 the source, stayed `MissingOnTarget`. Before the reorder the same level was
 `InSync`, which also confirmed that a page present on only one side doesn't
-cause a false reorder. The move rule isn't verified live (no page was moved to
-another parent); it's covered by unit tests.
+cause a false reorder.
+
+The move rule, verified live on 31.9.1 by dragging pages in the source's tree:
+moving `Grinders` from `/Navigation_menu/Store` to `/Navigation_menu` changed its
+tree path and left its publish date and version count unchanged, and it showed as
+`Moved`. **Sync this page** on it alone moved it on the target and cleared the
+row. Moving `Store` with its 4 child pages under `/Navigation_menu/Articles`
+listed all 5 as `Moved`; **Sync this page** on `Store` alone moved all 5 on the
+target. Renaming a page changes its display name but not `WebPageItemTreePath`
+or `WebPageItemName`, so there's no false `Moved`: it shows `Changed` once
+published. Sibling order on the target isn't fixed by such a sync.
+
+Content folders aren't compared. Verified live on 31.9.1: moving a content item
+to another folder changes only `ContentItemContentFolderID` (no new version, no
+new publish or modified date), so the item stays `InSync`. A sync of that item
+does create the folder on the target and moves the item into it; the old folder
+stays there, empty. Kentico documents folders as a way to organize the admin that
+can't control content delivery, so nothing on the site differs.
 
 Also seen on the rig: syncing only some articles moved them to their source
 positions on the target, but `Coffee Beverages Explained`, not in that sync,

@@ -13,11 +13,11 @@ synchronization** application (under **Configuration**), which compare this
 instance with its Content Sync target and open on what's still pending:
 
 - **Pages** and **Content hub** tabs with one status per item: Incompatible,
-  Unpublished, New, Changed, Moved, Reordered, Not published, Only on target, or In sync,
+  Unpublished, New, Changed, Moved, Not published, Only on target, or In sync
+  (plus Reordered, if you turn on the page order check),
   with a multi-select status filter, search and a link to each item's editor.
   Items only on the target link to their editor on the target.
-- Explanations of what to sync, including pages moved or reordered without
-  being republished.
+- Explanations of what to sync, including pages moved without being republished.
 - **Incompatible** items, which a sync would fail for because the target is missing
   a content type, language, channel or workspace this instance has, with what
   a developer needs to deploy.
@@ -34,12 +34,12 @@ dialog:
 
 ![Tooltip on an Incompatible tag: Content type Image has different field definitions on the source and target instance; a developer needs to deploy it to the target first](https://raw.githubusercontent.com/Simplea/xperience-community-content-sync-toolkit/main/docs/images/incompatible-tooltip.png)
 
-A reordered level names the page that's out of place and how to fix it:
+With the optional page order check, a reordered page says what's out of place and how to fix it:
 
 ![Tooltip on a Reordered tag: page order on this level differs on the target, Grinders is in a different position; use Sync with all subpages on Store](https://raw.githubusercontent.com/Simplea/xperience-community-content-sync-toolkit/main/docs/images/reordered-tooltip.png)
 
-It's configured entirely by Xperience's own Content Sync settings, so there's
-nothing extra to set up. Inline indicators in Xperience's page tree and Content
+It uses Xperience's own Content Sync settings, so there's nothing extra to set
+up. Inline indicators in Xperience's page tree and Content
 hub are planned.
 
 This is a **beta**: APIs and behavior may change before `1.0.0`.

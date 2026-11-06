@@ -63,19 +63,50 @@ public class ContentSyncStatusComparerTests
         Assert.That(result.Single().Status, Is.EqualTo(ContentSyncStatus.InSync));
     }
 
-    // Kentico needs every page on the level synced to transfer an order change, so all in-sync
-    // pages on that level are marked.
+    private static IReadOnlyList<ContentSyncStatusItem> CompareWithOrder(
+        IReadOnlyList<ContentInventoryItem> local, IReadOnlyList<ContentInventoryItem> remote) =>
+        ContentSyncStatusComparer.Compare(local, remote, comparePageOrder: true);
+
+    // Off by default: a site that doesn't show pages in tree order has nothing to sync here.
     [Test]
-    public void Compare_SiblingsInADifferentOrder_MarksTheWholeLevelAsReordered()
+    public void Compare_ByDefault_IgnoresPageOrder()
+    {
+        Guid a = Guid.NewGuid(), b = Guid.NewGuid();
+
+        var result = ContentSyncStatusComparer.Compare(
+            [Page(a, "/Articles/A", 1), Page(b, "/Articles/B", 2)],
+            [Page(a, "/Articles/A", 2), Page(b, "/Articles/B", 1)]);
+
+        Assert.That(result.Select(item => item.Status), Is.All.EqualTo(ContentSyncStatus.InSync));
+        Assert.That(result.Select(item => item.Reorder), Is.All.Null);
+    }
+
+    // A move is checked whatever the order setting says.
+    [Test]
+    public void Compare_ByDefault_StillReportsAMove()
+    {
+        var guid = Guid.NewGuid();
+
+        var result = ContentSyncStatusComparer.Compare([Page(guid, "/Store/Coffee", 2)], [Page(guid, "/Articles/Coffee", 1)]);
+
+        Assert.That(result.Single().Status, Is.EqualTo(ContentSyncStatus.Moved));
+    }
+
+    // One difference doesn't list the whole level: only the page out of place is marked.
+    [Test]
+    public void Compare_SiblingsInADifferentOrder_MarksOnlyThePageOutOfPlace()
     {
         Guid a = Guid.NewGuid(), b = Guid.NewGuid(), c = Guid.NewGuid(), other = Guid.NewGuid();
 
-        var result = ContentSyncStatusComparer.Compare(
+        var result = CompareWithOrder(
             [Page(a, "/Articles/A", 1), Page(b, "/Articles/B", 2), Page(c, "/Articles/C", 3), Page(other, "/Store/X", 1)],
             [Page(a, "/Articles/A", 2), Page(b, "/Articles/B", 1), Page(c, "/Articles/C", 3), Page(other, "/Store/X", 1)]);
 
         var byGuid = result.ToDictionary(item => item.Guid);
-        Assert.That(new[] { a, b, c }.Select(guid => byGuid[guid].Status), Is.All.EqualTo(ContentSyncStatus.Reordered));
+        var marked = result.Where(item => item.Status == ContentSyncStatus.Reordered).ToList();
+        Assert.That(marked, Has.Count.EqualTo(1));
+        Assert.That(marked.Single().Guid, Is.AnyOf(a, b));
+        Assert.That(byGuid[c].Status, Is.EqualTo(ContentSyncStatus.InSync), "a page in place on the level");
         Assert.That(byGuid[other].Status, Is.EqualTo(ContentSyncStatus.InSync), "another level is unaffected");
     }
 
@@ -86,7 +117,7 @@ public class ContentSyncStatusComparerTests
     {
         Guid a = Guid.NewGuid(), extra = Guid.NewGuid(), b = Guid.NewGuid(), c = Guid.NewGuid();
 
-        var result = ContentSyncStatusComparer.Compare(
+        var result = CompareWithOrder(
             [Page(a, "/Articles/A", 1), Page(extra, "/Articles/New", 2), Page(b, "/Articles/B", 3), Page(c, "/Articles/C", 4)],
             [Page(a, "/Articles/A", 1), Page(b, "/Articles/B", 2), Page(c, "/Articles/C", 3)]);
 
@@ -95,19 +126,20 @@ public class ContentSyncStatusComparerTests
         Assert.That(byGuid[extra].Status, Is.EqualTo(ContentSyncStatus.New));
     }
 
-    // A level that's reordered keeps a page's more specific reason: it's already out of date.
+    // A page out of place that's already pending keeps its more specific reason.
     [Test]
     public void Compare_Reorder_DoesNotOverrideAMoreSpecificStatus()
     {
         Guid a = Guid.NewGuid(), b = Guid.NewGuid();
 
-        var result = ContentSyncStatusComparer.Compare(
+        var result = CompareWithOrder(
             [Page(a, "/Articles/A", 1, later), Page(b, "/Articles/B", 2)],
             [Page(a, "/Articles/A", 2), Page(b, "/Articles/B", 1)]);
 
         var byGuid = result.ToDictionary(item => item.Guid);
         Assert.That(byGuid[a].Status, Is.EqualTo(ContentSyncStatus.Changed));
-        Assert.That(byGuid[b].Status, Is.EqualTo(ContentSyncStatus.Reordered));
+        Assert.That(byGuid[a].Reorder, Is.Null);
+        Assert.That(byGuid[b].Status, Is.EqualTo(ContentSyncStatus.InSync), "the page in place");
     }
 
     // The case seen on the rig: a partial sync left one page at its old position on the target. Only
@@ -118,15 +150,16 @@ public class ContentSyncStatusComparerTests
         Guid parent = Guid.NewGuid(), processing = Guid.NewGuid(), clone = Guid.NewGuid(), beverages = Guid.NewGuid(), donate = Guid.NewGuid();
         var articles = Page(parent, "/Articles", 1) with { DisplayName = "Articles" };
 
-        var result = ContentSyncStatusComparer.Compare(
+        var result = CompareWithOrder(
             [articles, Page(processing, "/Articles/Processing", 2), Page(clone, "/Articles/Clone", 3), Page(beverages, "/Articles/Beverages", 4), Page(donate, "/Articles/Donate", 5)],
             [articles, Page(beverages, "/Articles/Beverages", 1), Page(processing, "/Articles/Processing", 2), Page(clone, "/Articles/Clone", 3), Page(donate, "/Articles/Donate", 4)]);
 
-        var reorder = result.Single(item => item.Guid == donate).Reorder!;
+        var reorder = result.Single(item => item.Guid == beverages).Reorder!;
         Assert.That(reorder.MisplacedPages.Select(page => page.Guid), Is.EqualTo(new[] { beverages }));
         Assert.That(reorder.ParentPath, Is.EqualTo("/Articles"));
         Assert.That(reorder.Parent!.Guid, Is.EqualTo(parent));
-        Assert.That(result.Where(item => item.Status == ContentSyncStatus.Reordered).Select(item => item.Reorder), Is.All.SameAs(reorder));
+        Assert.That(result.Single(item => item.Status == ContentSyncStatus.Reordered).Guid, Is.EqualTo(beverages));
+        Assert.That(result.Single(item => item.Guid == donate).Reorder, Is.Null, "a page in place");
         Assert.That(result.Single(item => item.Guid == parent).Reorder, Is.Null, "the parent's own level is in order");
     }
 
@@ -138,8 +171,8 @@ public class ContentSyncStatusComparerTests
         ContentInventoryItem[] local = [Page(a, "/L/A", 1), Page(b, "/L/B", 2), Page(c, "/L/C", 3)];
         ContentInventoryItem[] remote = [Page(a, "/L/A", 2), Page(b, "/L/B", 1), Page(c, "/L/C", 3)];
 
-        var first = ContentSyncStatusComparer.Compare(local, remote)[0].Reorder!.MisplacedPages;
-        var second = ContentSyncStatusComparer.Compare(local, remote)[0].Reorder!.MisplacedPages;
+        var first = CompareWithOrder(local, remote).Single(item => item.Reorder is not null).Reorder!.MisplacedPages;
+        var second = CompareWithOrder(local, remote).Single(item => item.Reorder is not null).Reorder!.MisplacedPages;
 
         Assert.That(first, Has.Count.EqualTo(1));
         Assert.That(first.Single().Guid, Is.EqualTo(second.Single().Guid));
@@ -151,11 +184,13 @@ public class ContentSyncStatusComparerTests
         Guid a = Guid.NewGuid(), b = Guid.NewGuid(), c = Guid.NewGuid(), d = Guid.NewGuid(), e = Guid.NewGuid();
 
         // Here: A B C D E. Target: D A E B C — keeping A B C in order leaves D and E out of place.
-        var result = ContentSyncStatusComparer.Compare(
+        var result = CompareWithOrder(
             [Page(a, "/L/A", 1), Page(b, "/L/B", 2), Page(c, "/L/C", 3), Page(d, "/L/D", 4), Page(e, "/L/E", 5)],
             [Page(d, "/L/D", 1), Page(a, "/L/A", 2), Page(e, "/L/E", 3), Page(b, "/L/B", 4), Page(c, "/L/C", 5)]);
 
-        Assert.That(result[0].Reorder!.MisplacedPages.Select(page => page.Guid), Is.EqualTo(new[] { d, e }));
+        var marked = result.Where(item => item.Status == ContentSyncStatus.Reordered).ToList();
+        Assert.That(marked.Select(item => item.Guid), Is.EquivalentTo(new[] { d, e }));
+        Assert.That(marked[0].Reorder!.MisplacedPages.Select(page => page.Guid), Is.EqualTo(new[] { d, e }));
     }
 
     [Test]
@@ -177,13 +212,13 @@ public class ContentSyncStatusComparerTests
     {
         Guid which = Guid.NewGuid(), processing = Guid.NewGuid(), clone = Guid.NewGuid(), donate = Guid.NewGuid();
 
-        var result = ContentSyncStatusComparer.Compare(
+        var result = CompareWithOrder(
             [Page(which, "/Articles/Which", 2), Page(processing, "/Articles/Processing", 3), Page(clone, "/Articles/Clone", 4), Page(donate, "/Articles/Donate", 6)],
             [Page(which, "/Articles/Which", 2), Page(processing, "/Articles/Processing", 3), Page(clone, "/Articles/Clone", 3), Page(donate, "/Articles/Donate", 5)]);
 
-        Assert.That(result.Select(item => item.Status), Is.All.EqualTo(ContentSyncStatus.Reordered));
-        Assert.That(result[0].Reorder!.MisplacedPages, Has.Count.EqualTo(1), "one page of the tied pair");
-        Assert.That(result[0].Reorder!.MisplacedPages.Single().Guid, Is.AnyOf(processing, clone));
+        var marked = result.Single(item => item.Status == ContentSyncStatus.Reordered);
+        Assert.That(marked.Guid, Is.AnyOf(processing, clone), "one page of the tied pair");
+        Assert.That(marked.Reorder!.MisplacedPages.Single().Guid, Is.EqualTo(marked.Guid));
     }
 
     // A target on schema version 1 sends no order, so a level can't be compared.
@@ -192,7 +227,7 @@ public class ContentSyncStatusComparerTests
     {
         Guid a = Guid.NewGuid(), b = Guid.NewGuid();
 
-        var result = ContentSyncStatusComparer.Compare(
+        var result = CompareWithOrder(
             [Page(a, "/Articles/A", 1), Page(b, "/Articles/B", 2)],
             [Page(a, "/Articles/A", null), Page(b, "/Articles/B", null)]);
 

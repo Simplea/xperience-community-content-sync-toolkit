@@ -33,18 +33,6 @@ internal abstract class ContentSyncStatusTabBase(
     IPageLinkGenerator pageLinkGenerator)
     : ListingPageBase<ListingConfiguration, ListingTemplateClientProperties>
 {
-    private const string StatusTooltip =
-        "<strong>Incompatible</strong>: a compatibility error; a sync would fail until a developer updates the target. Hover it for details.<br>"
-        + "What a sync from here would do on the target:<br>"
-        + "<strong>Unpublished</strong>: unpublish it there.<br>"
-        + "<strong>New</strong>: create it.<br>"
-        + "<strong>Changed</strong>: update it to the version published here.<br>"
-        + "<strong>Moved</strong> / <strong>Reordered</strong>: change its place in the page tree.<br>"
-        + "<strong>Not published</strong>: nothing yet; it has no published version here. Publish it to sync.<br>"
-        + "<strong>Only on target</strong>: nothing; Content Sync can't delete, so delete it there.<br>"
-        + "<strong>Deleted here</strong>: the same, for an item still in this instance's recycle bin.<br>"
-        + "<strong>In sync</strong>: nothing; it's the same on both.";
-
     private const string LastPublishedTooltip =
         "When the item was last published on this instance, in your time zone. For items only on the target, when it was published there.";
 
@@ -61,7 +49,7 @@ internal abstract class ContentSyncStatusTabBase(
             SortableColumn(ContentSyncStatusListingSupport.NameColumn, nameColumnCaption, minWidth: 40, maxWidth: 100, searchable: true),
             SortableColumn(ContentSyncStatusListingSupport.ContentTypeColumn, "Content type", minWidth: 18, maxWidth: 32),
             // The default sort, so the header shows it; see ContentSyncStatusListingSupport.ApplySort.
-            SortableColumn(ContentSyncStatusListingSupport.StatusColumn, "Status", minWidth: 17, maxWidth: 24, tooltip: StatusTooltip, defaultDirection: SortTypeEnum.Asc),
+            SortableColumn(ContentSyncStatusListingSupport.StatusColumn, "Status", minWidth: 17, maxWidth: 24, tooltip: ContentSyncStatusListingSupport.StatusLegend(options.Value.ComparePageOrder), defaultDirection: SortTypeEnum.Asc),
             SortableColumn(ContentSyncStatusListingSupport.LastPublishedColumn, "Last published", minWidth: 18, maxWidth: 24, tooltip: LastPublishedTooltip),
         ],
         PageSizes = [10, 25, 50],

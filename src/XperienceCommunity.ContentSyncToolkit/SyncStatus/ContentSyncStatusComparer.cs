@@ -9,8 +9,14 @@ namespace XperienceCommunity.ContentSyncToolkit.SyncStatus;
 /// </summary>
 public static class ContentSyncStatusComparer
 {
+    /// <param name="local">This instance's inventory.</param>
+    /// <param name="remote">The target's inventory.</param>
+    /// <param name="comparePageOrder">
+    /// Whether pages in a different position among their siblings are marked
+    /// <see cref="ContentSyncStatus.Reordered"/>; see <see cref="ContentSyncToolkitOptions.ComparePageOrder"/>.
+    /// </param>
     public static IReadOnlyList<ContentSyncStatusItem> Compare(
-        IReadOnlyList<ContentInventoryItem> local, IReadOnlyList<ContentInventoryItem> remote)
+        IReadOnlyList<ContentInventoryItem> local, IReadOnlyList<ContentInventoryItem> remote, bool comparePageOrder = false)
     {
         var localByGuid = ToLookup(local);
         var remoteByGuid = ToLookup(remote);
@@ -45,7 +51,7 @@ public static class ContentSyncStatusComparer
             }
         }
 
-        return MarkReorderedSiblings(results);
+        return comparePageOrder ? MarkReorderedPages(results) : results;
     }
 
     // Null means the item is left out: there's nothing Content Sync would do with it.
@@ -112,16 +118,16 @@ public static class ContentSyncStatusComparer
 
     // Reordering pages doesn't change their publish dates either. Order values themselves can't be
     // compared directly: a page that exists on only one side shifts every later sibling's value. So
-    // for each parent, the pages present on both sides are compared by their relative order, and if
-    // it differs, every in-sync page on that level is marked — Content Sync needs all pages on the
-    // level synced to transfer the order. Each marked page also says which pages are out of place,
-    // so editors see what changed. Order is null from targets on schema version 1.
+    // for each parent, the pages present on both sides are compared by their relative order, and
+    // only the in-sync pages out of place are marked, so one difference doesn't list a whole level.
+    // Content Sync still needs all pages on the level synced to transfer the order, which the marked
+    // pages' tooltip says. Order is null from targets on schema version 1.
     //
     // Pages sharing an order value on the target count as out of order: a partial sync leaves such
     // ties (each synced page brings its own value, the others keep theirs), and Kentico then shows
     // them in whatever order the database returns them (seen on the rig: two tied pages showed in
     // the opposite order to the source). A GUID tie-break would hide that.
-    private static List<ContentSyncStatusItem> MarkReorderedSiblings(List<ContentSyncStatusItem> results)
+    private static List<ContentSyncStatusItem> MarkReorderedPages(List<ContentSyncStatusItem> results)
     {
         var levels = results
             .Where(item => item.Local is { Kind: ContentInventoryItemKind.WebPage, TreePath: not null, Order: not null }
@@ -152,7 +158,7 @@ public static class ContentSyncStatusComparer
             {
                 Parent = namesByPath.GetValueOrDefault(level.Key),
             };
-            foreach (var item in level.Where(item => item.Status == ContentSyncStatus.InSync))
+            foreach (var item in misplaced.Where(item => item.Status == ContentSyncStatus.InSync))
             {
                 reordered[item.Guid] = reorder;
             }
