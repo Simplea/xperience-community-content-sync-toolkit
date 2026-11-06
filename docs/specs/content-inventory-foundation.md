@@ -44,8 +44,8 @@ shipped SDK confirm:
   applied by a "Content sync restoration" scheduled task on the target that
   runs every 30 seconds.
 - The only sync-visibility UI — the **Content synchronization** application —
-  exists only on the target instance and shows completed/scheduled sync tasks,
-  not a diff of what's missing.
+  lists the completed/scheduled syncs an instance has received, not a diff of
+  what's missing.
 - No documented public REST or Management API exists for a third party to query
   whether a given content item GUID exists on a target instance.
   `Kentico.Xperience.ManagementApi` (currently preview) was checked and only

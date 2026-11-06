@@ -46,6 +46,10 @@ public static class ContentSyncToolkitServiceCollectionExtensions
         services.TryAddSingleton<IContentInventoryCache, ContentInventoryCache>();
         services.TryAddScoped<IContentSyncStatusService, ContentSyncStatusService>();
 
+        // The sync status pages are part of Kentico's Content synchronization application, which opens on
+        // them on every instance, so their services can't depend on the instance's role.
+        services.AddContentSyncToolkitAdmin();
+
         services.AddHttpClient<IContentInventoryClient, ContentInventoryClient>((serviceProvider, client) =>
         {
             var source = serviceProvider.GetRequiredService<IContentSyncToolkitSettings>().Source;

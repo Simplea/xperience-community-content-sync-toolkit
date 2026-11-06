@@ -8,8 +8,9 @@ Xperience Community Content Sync Toolkit is an open-source toolkit that helps
 content editors work with Xperience by Kentico's Content Sync feature. Content
 Sync lets editors push pages and content hub items to a target instance, but it
 gives no visibility into what is still missing there. This toolkit adds that
-visibility with a **Sync status** application (under **Content management**)
-that compares this instance with its Content Sync target:
+visibility with **sync status** pages in Xperience's own **Content
+synchronization** application (under **Configuration**), which compare this
+instance with its Content Sync target and open on what's still pending:
 
 - **Pages** and **Content hub** tabs with one status per item: Incompatible,
   Unpublished, New, Changed, Moved, Reordered, Not published, Only on target, or In sync,
@@ -75,11 +76,8 @@ Then register it in `Program.cs`:
 
 ```csharp
 using XperienceCommunity.ContentSyncToolkit;
-using XperienceCommunity.ContentSyncToolkit.Admin;
 
 builder.Services.AddContentSyncToolkit();
-// On the source instance: adds the Sync status application.
-builder.Services.AddContentSyncToolkitAdmin();
 ```
 
 Both instances must run the same Xperience version (a Content Sync
@@ -88,7 +86,7 @@ requirement) and the same toolkit version.
 ## Full Instructions
 
 View the [Usage Guide](https://github.com/Simplea/xperience-community-content-sync-toolkit/blob/main/docs/Usage-Guide.md) for setup, configuration, and
-how to use the Sync status admin application.
+how to use the sync status pages.
 
 ## Contributing
 

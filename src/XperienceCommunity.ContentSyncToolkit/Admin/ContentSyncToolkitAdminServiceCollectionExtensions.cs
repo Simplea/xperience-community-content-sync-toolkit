@@ -6,10 +6,9 @@ namespace XperienceCommunity.ContentSyncToolkit.Admin;
 public static class ContentSyncToolkitAdminServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the sync status admin page's own services (filter options and item links).
-    /// Call in addition to <c>AddContentSyncToolkit()</c>, not instead of it —
-    /// kept separate because this is admin-UI-only surface, not something every source/target
-    /// installation needs regardless of role the way the foundation's own registration is.
+    /// Registers the sync status pages' own services (filter options and item links).
+    /// <c>AddContentSyncToolkit()</c> already calls this, so projects don't need to; calling it again
+    /// changes nothing.
     /// </summary>
     public static IServiceCollection AddContentSyncToolkitAdmin(this IServiceCollection services)
     {

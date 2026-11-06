@@ -15,7 +15,8 @@ Install the toolkit on **both** instances:
   items' identities and publish timestamps. No field values leave the
   instance.
 - The **source** compares its own content with the target's inventory and
-  shows the result in the **Sync status** admin application.
+  shows the result in the **sync status** pages of the **Content synchronization**
+  application.
 
 An instance can be a source, a target, or both. Content Sync itself requires
 source and target to run the same Xperience version; run the same toolkit
@@ -35,15 +36,12 @@ In `Program.cs` on each instance:
 
 ```csharp
 using XperienceCommunity.ContentSyncToolkit;
-using XperienceCommunity.ContentSyncToolkit.Admin;
 
 builder.Services.AddContentSyncToolkit();
 builder.Services.Configure<ContentSyncToolkitOptions>(
     builder.Configuration.GetSection("ContentSyncToolkit"));
 
 // Optional: RequestTimeout and InventoryCacheDuration (see below).
-// Source instances only: adds the Sync status admin application.
-builder.Services.AddContentSyncToolkitAdmin();
 ```
 
 The target's inventory endpoint is an attribute-routed controller under
@@ -69,9 +67,11 @@ the same secret. That adds no exposure: whoever holds the secret can already
 push content to the target. Content Sync requires the target on HTTPS with a
 trusted certificate, so the toolkit's requests use HTTPS too.
 
-If Content Sync isn't configured as a source, the status page shows a banner
-saying so; if it isn't configured as a target, the target rejects inventory
-requests. The toolkit has no purpose without Content Sync.
+If Content Sync isn't configured as a source, the instance has nothing to
+compare, so the sync status pages stay hidden and **Content synchronization**
+works as it does without the toolkit. If it isn't configured as a target, the
+target rejects inventory requests. The toolkit has no purpose without Content
+Sync.
 
 Three optional toolkit settings, all on the source:
 
@@ -93,15 +93,23 @@ Three optional toolkit settings, all on the source:
 
 ## Give editors access
 
-The **Sync status** application (under **Content management**) uses
-Xperience's standard **View** permission. Administrators have it
-automatically. For other users, open **Role management**, edit a role,
-**Add permission set**, and choose **For** *Sync status* **allow users
-to** *View*. Users without it don't see the application, and direct
-navigation to it is refused.
+The sync status pages are part of Xperience's **Content synchronization**
+application (under **Configuration**), so they use its **View** permission.
+Administrators have it automatically. For other users, open **Role
+management**, edit a role, **Add permission set**, and choose **For** *Content
+synchronization* **allow users to** *View*. Users without it don't see the
+application, and direct navigation to it is refused. The permission also lets
+them see **List of content synchronizations**; deleting a synchronization needs
+the separate **Delete** permission.
 
-Within the application, editors only see what they could open in Xperience
-itself:
+**Upgrading from 1.0.0-beta.3 or earlier:** the separate **Sync status**
+application is gone, and so is its permission. Grant **View** on *Content
+synchronization* to the roles that had it, or their users get Access Denied. The
+address changes from `/admin/content-sync-status` to `/admin/content-sync`.
+`AddContentSyncToolkitAdmin()` is no longer needed, because
+`AddContentSyncToolkit()` includes it; leaving the call in changes nothing.
+
+On these pages, editors only see what they could open in Xperience itself:
 
 - **Pages** lists only website channels whose Pages application they can view.
 - **Content hub** lists only workspaces whose content items they can view.
@@ -112,13 +120,18 @@ itself:
   on the channel see every page, as in the page tree.
 
 So a role with access to one workspace sees only that workspace here, even
-with View on Sync status, and an editor who can't see a section of the page
-tree doesn't see it here either.
+with View on Content synchronization, and an editor who can't see a section of
+the page tree doesn't see it here either.
 
-## Use the Sync status application
+## Use the sync status pages
 
-The application has two tabs: **Pages** (one website channel at a time) and
-**Content hub** (one workspace at a time).
+Open **Configuration → Content synchronization**. On a source instance it opens
+on what's still pending, with two pages in its navigation: **Pages** (one website
+channel at a time) and **Content hub** (one workspace at a time). Xperience's own
+**List of content synchronizations** stays below them.
+
+Items in sync aren't listed unless you ask for them, and when nothing is pending
+the list says **Nothing is pending: everything is in sync.**
 
 ![Sync status Pages tab with Hide items in sync applied, listing pages as Incompatible, Unpublished, New, Changed, Moved and Reordered](images/pages-statuses.jpg)
 
@@ -127,8 +140,10 @@ The application has two tabs: **Pages** (one website channel at a time) and
     the first one is shown.
   - **Language**. Without a selection, the instance's default content language
     is compared.
-  - **Hide items in sync**: shows only what differs, Incompatible and Only on
-    target included.
+  - **Show items in sync**: lists them too. Without it, you see only what
+    differs, Incompatible and Only on target included. Selecting a **Status** or
+    searching looks at every item without it, so you can still find an item
+    that's in sync.
   - **Status**: choose one or more of the [statuses](#statuses); the list shows items
     matching any of them. Each option matches the tag shown, so an incompatible item
     only matches **Incompatible**.
@@ -351,9 +366,9 @@ outside the current view:
 
 ### Other states
 
-- **A warning banner saying the application isn't configured**: Content Sync
-  isn't configured as a source on this instance (`Source:Enabled` with a
-  `Source:TargetUrl`).
+- **Content synchronization shows only Xperience's list**: Content Sync isn't
+  configured as a source on this instance (`Source:Enabled` with a
+  `Source:TargetUrl`), so there's nothing to compare.
 - **A "Target unavailable" row**: the target couldn't be reached, rejected the
   secret, or doesn't have Content Sync's target role enabled.
 - **No rows**: the channel or workspace has no published content in the

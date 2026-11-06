@@ -8,9 +8,9 @@ a target instance, but it gives no visibility into what's missing on the target
 before or after a sync. Confirmed via documentation research:
 
 - There is no per-item sync status shown in the content tree or content hub.
-- The only monitoring UI — the **Content synchronization** application — exists
-  only on the *target* instance and shows sync history (completed/scheduled
-  tasks), not sync gaps.
+- The only monitoring UI — the **Content synchronization** application — lists
+  the syncs an instance has received (completed/scheduled tasks), so it's empty
+  on a source, and it doesn't show sync gaps.
 - No documented REST or Management API lets a third party query whether a given
   content item exists on a target instance.
 

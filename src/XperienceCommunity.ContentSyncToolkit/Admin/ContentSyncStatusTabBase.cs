@@ -2,6 +2,7 @@ using CMS.Core;
 using CMS.Membership;
 
 using Kentico.Xperience.Admin.Base;
+using Kentico.Xperience.Admin.Base.UIPages;
 
 using Microsoft.Extensions.Options;
 
@@ -32,11 +33,6 @@ internal abstract class ContentSyncStatusTabBase(
     IPageLinkGenerator pageLinkGenerator)
     : ListingPageBase<ListingConfiguration, ListingTemplateClientProperties>
 {
-#pragma warning disable S1075 // A fixed link to the public documentation, not an environment-specific path.
-    private const string UsageGuideUrl =
-        "https://github.com/Simplea/xperience-community-content-sync-toolkit/blob/main/docs/Usage-Guide.md";
-#pragma warning restore S1075
-
     private const string StatusTooltip =
         "<strong>Incompatible</strong>: a compatibility error; a sync would fail until a developer updates the target. Hover it for details.<br>"
         + "What a sync from here would do on the target:<br>"
@@ -128,36 +124,33 @@ internal abstract class ContentSyncStatusTabBase(
         PageConfiguration.HeaderActions.Single(action => action.Name == nameof(Refresh)).Title =
             ContentSyncStatusListingSupport.RefreshTooltip(options.Value.InventoryCacheDuration);
 
-        if (!IsSourceConfigured)
+        if (IsSourceConfigured && (await GetScopesAsync(CancellationToken.None)).Count == 0)
         {
             PageConfiguration.Callouts.Add(new CalloutConfiguration
             {
-                Type = CalloutType.FriendlyWarning,
+                Type = CalloutType.QuickTip,
                 Placement = CalloutPlacement.OnDesk,
-                Headline = "Sync status isn't configured on this instance",
-                Content = "This page compares against Xperience's Content Sync target. Configure Content Sync "
-                    + "with this instance as the source (<code>ContentSynchronization:Source</code>: "
-                    + "<code>Enabled</code>, <code>TargetUrl</code>, <code>Secret</code>). "
-                    + $"See the <a href=\"{UsageGuideUrl}\" target=\"_blank\" rel=\"noopener noreferrer\">Usage Guide</a>.",
-                ContentAsHtml = true,
+                Headline = NoScopesHeadline,
+                Content = NoScopesGuidance,
             });
-        }
-        else
-        {
-            var scopes = await GetScopesAsync(CancellationToken.None);
-            if (scopes.Count == 0)
-            {
-                PageConfiguration.Callouts.Add(new CalloutConfiguration
-                {
-                    Type = CalloutType.QuickTip,
-                    Placement = CalloutPlacement.OnDesk,
-                    Headline = NoScopesHeadline,
-                    Content = NoScopesGuidance,
-                });
-            }
         }
 
         await base.ConfigurePage();
+    }
+
+    // Without a target to compare with, this instance has nothing to show here, and the application
+    // opens on this page, so it hands over to Kentico's own list. ContentSyncApplicationExtender hides
+    // the entry; this is the only way to change where the application opens, as DefaultRoute is read-only.
+    public override async Task<ListingTemplateClientProperties> ConfigureTemplateProperties(ListingTemplateClientProperties properties)
+    {
+        properties = await base.ConfigureTemplateProperties(properties);
+
+        if (!IsSourceConfigured)
+        {
+            properties.RedirectUrl = pageLinkGenerator.GetPath(typeof(SynchronizationsList));
+        }
+
+        return properties;
     }
 
     // Header actions ignore a command's result, so the documented way to refresh the listing is
@@ -192,7 +185,7 @@ internal abstract class ContentSyncStatusTabBase(
             return MessageRow(
                 "Sync status couldn't be loaded. Try Refresh; details are in the event log.",
                 "Error",
-                nameof(Color.AlertBackgroundHighEmphasis));
+                Enum.Parse<Color>(nameof(Color.AlertBackgroundHighEmphasis)));
         }
 
         return view.Kind switch
@@ -205,15 +198,19 @@ internal abstract class ContentSyncStatusTabBase(
             ContentSyncStatusViewKind.TargetUnavailable => MessageRow(
                 "The target instance couldn't be reached or rejected the request, so sync status can't be determined.",
                 "Target unavailable",
-                nameof(Color.AlertBackgroundHighEmphasis)),
+                Enum.Parse<Color>(nameof(Color.AlertBackgroundHighEmphasis))),
+            ContentSyncStatusViewKind.AllInSync => MessageRow(
+                "Nothing is pending: everything is in sync.",
+                ContentSyncStatusListingSupport.StatusLabel(ContentSyncStatus.InSync),
+                ContentSyncStatusListingSupport.StatusColor(ContentSyncStatus.InSync)),
             ContentSyncStatusViewKind.ScopeNotFound => MessageRow(
                 $"The selected {ScopeNoun} no longer exists. Clear the filter or choose another {ScopeNoun}.",
                 "Not available",
-                nameof(Color.BackgroundTagGrey)),
+                Enum.Parse<Color>(nameof(Color.BackgroundTagGrey))),
             ContentSyncStatusViewKind.LanguageNotFound => MessageRow(
                 "The selected language no longer exists. Clear the Language filter or choose another language.",
                 "Not available",
-                nameof(Color.BackgroundTagGrey)),
+                Enum.Parse<Color>(nameof(Color.BackgroundTagGrey))),
 
             // Not configured and no scopes are explained by the banner; no items uses Xperience's
             // native empty state.
@@ -237,7 +234,7 @@ internal abstract class ContentSyncStatusTabBase(
                 ContentSyncStatusFilterValueExtractor.ExtractStringParameter(where, ContentTypeFilterFieldName),
                 ContentSyncStatusFilterValueExtractor.ExtractDateParameter(where, nameof(ContentSyncStatusFilterModelBase.PublishedFrom)),
                 ContentSyncStatusFilterValueExtractor.ExtractDateParameter(where, nameof(ContentSyncStatusFilterModelBase.PublishedTo)),
-                ContentSyncStatusFilterValueExtractor.ExtractBoolParameter(where, nameof(ContentSyncStatusFilterModelBase.HideInSync)) == true),
+                ContentSyncStatusFilterValueExtractor.ExtractBoolParameter(where, nameof(ContentSyncStatusFilterModelBase.ShowInSync)) == true),
             settings.SearchTerm,
             settings.SortBy,
             settings.SortType == SortTypeEnum.Desc,
@@ -422,7 +419,7 @@ internal abstract class ContentSyncStatusTabBase(
 
     // A single row explaining a state that depends on the selected scope, with a status-style tag
     // so it reads differently from both real rows and Xperience's native empty state.
-    private static LoadDataResult MessageRow(string message, string tagLabel, string colorName) =>
+    private static LoadDataResult MessageRow(string message, string tagLabel, Color color) =>
         new()
         {
             TotalCount = 1,
@@ -435,7 +432,7 @@ internal abstract class ContentSyncStatusTabBase(
                     [
                         new StringCell { Value = message },
                         new StringCell { Value = string.Empty },
-                        TagCell(tagLabel, Enum.Parse<Color>(colorName)),
+                        TagCell(tagLabel, color),
                         new StringCell { Value = string.Empty },
                     ],
                 },

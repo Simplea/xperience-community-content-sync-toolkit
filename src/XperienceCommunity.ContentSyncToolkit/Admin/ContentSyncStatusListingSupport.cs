@@ -54,7 +54,12 @@ internal static class ContentSyncStatusListingSupport
         .. statusOrder.Select(status => (status.ToString(), StatusLabel(status))),
     ];
 
-    // "Hide items in sync" leaves everything that differs, Incompatible and Only on target included,
+    // Items in sync are left out unless the editor asked for them: with Show items in sync, by selecting
+    // a status, or by searching, since "is this item synced?" must not come back empty.
+    public static bool HidesInSync(ContentSyncStatusFilter filter, string? searchTerm) =>
+        !filter.ShowInSync && ParseStatusFilter(filter.Status) is null && string.IsNullOrWhiteSpace(searchTerm);
+
+    // Hiding items in sync leaves everything that differs, Incompatible and Only on target included,
     // so an item never disappears just because it can't be synced yet.
     public static IReadOnlyList<ContentSyncStatusItem> ApplyHideInSync(IReadOnlyList<ContentSyncStatusItem> items, bool hideInSync) =>
         hideInSync ? [.. items.Where(item => item.HasCompatibilityIssues || item.Status != ContentSyncStatus.InSync)] : items;
