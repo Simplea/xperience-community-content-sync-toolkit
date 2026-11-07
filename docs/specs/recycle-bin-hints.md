@@ -145,8 +145,8 @@ anything itself.
   the target when the target has the item published (Kentico's rule); confirm
   live.
 - **Done items.** An item deleted here and unpublished on the target stays
-  Only on target for good. Should **Hide items in sync** also hide "only on
-  target and unpublished there"?
+  Only on target for good. Should the default view also hide "only on target
+  and unpublished there"?
 - **One-click restore and unpublish.** A later step could run the restore,
   publish and unpublish on the source through Kentico's APIs. It changes
   content on the source and has to respect workflows; out of scope here.

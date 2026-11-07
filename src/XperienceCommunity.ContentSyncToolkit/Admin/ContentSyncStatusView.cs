@@ -10,6 +10,7 @@ internal enum ContentSyncStatusViewKind
     LanguageNotFound,
     TargetUnavailable,
     Empty,
+    AllInSync,
     Items,
 }
 
@@ -35,13 +36,13 @@ internal sealed record ContentSyncStatusView(
 /// <param name="ContentTypeName">A content type code name.</param>
 /// <param name="PublishedFrom">First day to include, from a date input (midnight).</param>
 /// <param name="PublishedTo">Last day to include, from a date input (midnight).</param>
-/// <param name="HideInSync">Whether to leave out items in sync.</param>
+/// <param name="ShowInSync">Whether to list items in sync; see <see cref="ContentSyncStatusListingSupport.HidesInSync"/>.</param>
 internal sealed record ContentSyncStatusFilter(
     string? Status = null,
     string? ContentTypeName = null,
     DateTime? PublishedFrom = null,
     DateTime? PublishedTo = null,
-    bool HideInSync = false);
+    bool ShowInSync = false);
 
 // RequestedScopeName/RequestedLanguageName come from the filter, or are null when not applied.
 // PageIndex is zero-based, as LoadDataSettings.SelectedPage provides it.
@@ -113,7 +114,13 @@ internal static class ContentSyncStatusViewBuilder
         }
 
         var filter = request.Filter;
-        var items = ContentSyncStatusListingSupport.ApplyHideInSync(result.Items, filter.HideInSync);
+        bool hideInSync = ContentSyncStatusListingSupport.HidesInSync(filter, request.SearchTerm);
+        var items = ContentSyncStatusListingSupport.ApplyHideInSync(result.Items, hideInSync);
+        if (hideInSync && items.Count == 0)
+        {
+            return ContentSyncStatusView.Of(ContentSyncStatusViewKind.AllInSync);
+        }
+
         items = ContentSyncStatusListingSupport.ApplyStatusFilter(items, ContentSyncStatusListingSupport.ParseStatusFilter(filter.Status));
         items = ContentSyncStatusListingSupport.ApplyContentTypeFilter(items, filter.ContentTypeName);
         items = ContentSyncStatusListingSupport.ApplyPublishedFilter(items, filter.PublishedFrom, filter.PublishedTo);

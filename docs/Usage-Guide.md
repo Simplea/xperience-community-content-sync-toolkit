@@ -15,7 +15,8 @@ Install the toolkit on **both** instances:
   items' identities and publish timestamps. No field values leave the
   instance.
 - The **source** compares its own content with the target's inventory and
-  shows the result in the **Sync status** admin application.
+  shows the result in the **sync status** pages of the **Content synchronization**
+  application.
 
 An instance can be a source, a target, or both. Content Sync itself requires
 source and target to run the same Xperience version; run the same toolkit
@@ -35,15 +36,12 @@ In `Program.cs` on each instance:
 
 ```csharp
 using XperienceCommunity.ContentSyncToolkit;
-using XperienceCommunity.ContentSyncToolkit.Admin;
 
 builder.Services.AddContentSyncToolkit();
 builder.Services.Configure<ContentSyncToolkitOptions>(
     builder.Configuration.GetSection("ContentSyncToolkit"));
 
-// Optional: RequestTimeout and InventoryCacheDuration (see below).
-// Source instances only: adds the Sync status admin application.
-builder.Services.AddContentSyncToolkitAdmin();
+// Optional: RequestTimeout, InventoryCacheDuration and ComparePageOrder (see below).
 ```
 
 The target's inventory endpoint is an attribute-routed controller under
@@ -69,18 +67,21 @@ the same secret. That adds no exposure: whoever holds the secret can already
 push content to the target. Content Sync requires the target on HTTPS with a
 trusted certificate, so the toolkit's requests use HTTPS too.
 
-If Content Sync isn't configured as a source, the status page shows a banner
-saying so; if it isn't configured as a target, the target rejects inventory
-requests. The toolkit has no purpose without Content Sync.
+If Content Sync isn't configured as a source, the instance has nothing to
+compare, so the sync status pages stay hidden and **Content synchronization**
+works as it does without the toolkit. If it isn't configured as a target, the
+target rejects inventory requests. The toolkit has no purpose without Content
+Sync.
 
-Three optional toolkit settings, all on the source:
+Four optional toolkit settings, all on the source:
 
 ```json
 {
   "ContentSyncToolkit": {
     "RequestTimeout": "00:00:30",
     "InventoryCacheDuration": "00:01:30",
-    "TargetAdminUrl": "https://prod.example.com/admin"
+    "TargetAdminUrl": "https://prod.example.com/admin",
+    "ComparePageOrder": true
   }
 }
 ```
@@ -90,18 +91,27 @@ Three optional toolkit settings, all on the source:
 | `RequestTimeout` | 30 seconds | Timeout for requests to the target. |
 | `InventoryCacheDuration` | 90 seconds | How long the target's inventory is cached on the source. The source's own content is never cached. |
 | `TargetAdminUrl` | `{TargetUrl}/admin` | Where **Only on target** rows open the target's administration. Set it when Content Sync's `TargetUrl` isn't an address editors' browsers can reach, such as an internal host name. |
+| `ComparePageOrder` | `false` | Whether pages in a different position among their siblings on the target show as **Reordered**. Turn it on if your site displays pages in page tree order, such as a menu built from the tree. Without it, those pages show as **In sync** and **Reordered** isn't offered. Pages under a different parent always show as **Moved**. |
 
 ## Give editors access
 
-The **Sync status** application (under **Content management**) uses
-Xperience's standard **View** permission. Administrators have it
-automatically. For other users, open **Role management**, edit a role,
-**Add permission set**, and choose **For** *Sync status* **allow users
-to** *View*. Users without it don't see the application, and direct
-navigation to it is refused.
+The sync status pages are part of Xperience's **Content synchronization**
+application (under **Configuration**), so they use its **View** permission.
+Administrators have it automatically. For other users, open **Role
+management**, edit a role, **Add permission set**, and choose **For** *Content
+synchronization* **allow users to** *View*. Users without it don't see the
+application, and direct navigation to it is refused. The permission also lets
+them see **List of content synchronizations**; deleting a synchronization needs
+the separate **Delete** permission.
 
-Within the application, editors only see what they could open in Xperience
-itself:
+**Upgrading from 1.0.0-beta.3 or earlier:** the separate **Sync status**
+application is gone, and so is its permission. Grant **View** on *Content
+synchronization* to the roles that had it, or their users get Access Denied. The
+address changes from `/admin/content-sync-status` to `/admin/content-sync`.
+`AddContentSyncToolkitAdmin()` is no longer needed, because
+`AddContentSyncToolkit()` includes it; leaving the call in changes nothing.
+
+On these pages, editors only see what they could open in Xperience itself:
 
 - **Pages** lists only website channels whose Pages application they can view.
 - **Content hub** lists only workspaces whose content items they can view.
@@ -112,13 +122,18 @@ itself:
   on the channel see every page, as in the page tree.
 
 So a role with access to one workspace sees only that workspace here, even
-with View on Sync status, and an editor who can't see a section of the page
-tree doesn't see it here either.
+with View on Content synchronization, and an editor who can't see a section of
+the page tree doesn't see it here either.
 
-## Use the Sync status application
+## Use the sync status pages
 
-The application has two tabs: **Pages** (one website channel at a time) and
-**Content hub** (one workspace at a time).
+Open **Configuration → Content synchronization**. On a source instance it opens
+on what's still pending, with two pages in its navigation: **Pages** (one website
+channel at a time) and **Content hub** (one workspace at a time). Xperience's own
+**List of content synchronizations** stays below them.
+
+Items in sync aren't listed unless you ask for them, and when nothing is pending
+the list says **Nothing is pending: everything is in sync.**
 
 ![Sync status Pages tab with Hide items in sync applied, listing pages as Incompatible, Unpublished, New, Changed, Moved and Reordered](images/pages-statuses.jpg)
 
@@ -127,8 +142,10 @@ The application has two tabs: **Pages** (one website channel at a time) and
     the first one is shown.
   - **Language**. Without a selection, the instance's default content language
     is compared.
-  - **Hide items in sync**: shows only what differs, Incompatible and Only on
-    target included.
+  - **Show items in sync**: lists them too. Without it, you see only what
+    differs, Incompatible and Only on target included. Selecting a **Status** or
+    searching looks at every item without it, so you can still find an item
+    that's in sync.
   - **Status**: choose one or more of the [statuses](#statuses); the list shows items
     matching any of them. Each option matches the tag shown, so an incompatible item
     only matches **Incompatible**.
@@ -141,7 +158,7 @@ The application has two tabs: **Pages** (one website channel at a time) and
   shows); press Enter to apply.
 - **Sort** by clicking a column header. The list starts sorted by **Status**,
   in the order of the [statuses table](#statuses): Incompatible first, then Unpublished, New,
-  Changed, Moved, Reordered, Not published, Only on target, and In sync. Within each status,
+  Changed, Moved, Reordered (when compared), Not published, Only on target, and In sync. Within each status,
   the most recently published items come first. Click **Status** to reverse
   the order.
   The page doesn't remember a different sort: it starts sorted by Status again
@@ -182,8 +199,8 @@ Hover the ⓘ next to **Status** for the same summary in the application:
 | **Unpublished** | Orange | Unpublished here, still published on the target. | Sync it to unpublish it there. |
 | **New** | Orange | Not on the target yet. | Sync it to create it (unpublished, if it's unpublished here). |
 | **Changed** | Orange | The target has an older copy, or has it unpublished. | Sync it to update it. |
-| **Moved** | Orange | At a different place in the page tree on the target. | Sync all pages on its old and new level. |
-| **Reordered** | Orange | The pages on this level are in a different order on the target. | Use **Sync with all subpages** on the level's parent. |
+| **Moved** | Orange | At a different place in the page tree on the target. | Sync it, or the parent page that moved with it. |
+| **Reordered** | Orange | Out of place among the pages on its level on the target. Only with `ComparePageOrder` on. | Use **Sync with all subpages** on the level's parent. |
 | **Not published** | Grey | No published version here (unpublished, then edited again; or never published while the target has it). | Publish it; Content Sync can't sync it until then. |
 | **Only on target** | Grey | On the target but not on this instance. | Nothing to sync: Content Sync can't delete. Open it on the target with the link on its name, and delete it there if it shouldn't be there. |
 | **In sync** | Green | The target has the same published version. | Nothing. |
@@ -257,28 +274,43 @@ version (see In sync).
 **Moved**
 
 - You moved a page to another place in the page tree here. Moving doesn't
-  republish a page, so this is found by comparing the page's position. To sync
-  it, sync all pages on both its old and its new level; the tooltip says so.
+  republish a page, so this is found by comparing the page's full path.
+- You moved one of its parents. All the pages under it are listed, because their
+  paths changed too. **Sync this page** on the parent moves them all on the
+  target.
+
+Renaming a page doesn't move it: its path stays the same, and it shows as
+**Changed** once published.
+
+Syncing the page moves it on the target, but the pages it left and joined keep
+their positions there. If your site depends on page order, follow Kentico's
+advice and sync all pages on both levels.
+
+Content hub folders aren't compared, because they only organize the
+administration and don't affect what the site shows. An item moved to another
+folder stays **In sync**. If you sync it, Content Sync moves it to that folder
+on the target, creating the folder if needed; the old folder stays there.
 
 **Reordered**
 
-- The pages on a level are in a different order on the target, for example
-  after you reordered pages here, or after syncing only some pages of the
-  level.
+Only checked with `ComparePageOrder` on (see
+[Configure source and target](#configure-source-and-target)).
+
+- A page is out of place among the pages on its level on the target, for
+  example after you reordered pages here, or after syncing only some pages of
+  the level.
 
 Content Sync sends each synced page's position with it, but pages you don't
 include keep their old positions on the target. So syncing only some pages of
 a level, such as a single new page, can leave the level in a different order
-there. The status page then marks every page on the level, because Content
-Sync only transfers an order change when the whole level is synced.
+there. The status page marks the pages out of place, but Content Sync only
+transfers an order change when the whole level is synced.
 
 ![Tooltip on a Reordered tag naming the page out of place and the level to sync](images/reordered-tooltip.png)
 
 - Hover the tag: it names the page or pages that are out of place.
 - To fix it, open the page tree, and on the level's parent page use **Sync with
   all subpages**.
-- If your site never shows pages in page tree order (for example, a listing
-  sorted by date), the difference has no visible effect and you can ignore it.
 
 **Not published**
 
@@ -351,9 +383,9 @@ outside the current view:
 
 ### Other states
 
-- **A warning banner saying the application isn't configured**: Content Sync
-  isn't configured as a source on this instance (`Source:Enabled` with a
-  `Source:TargetUrl`).
+- **Content synchronization shows only Xperience's list**: Content Sync isn't
+  configured as a source on this instance (`Source:Enabled` with a
+  `Source:TargetUrl`), so there's nothing to compare.
 - **A "Target unavailable" row**: the target couldn't be reached, rejected the
   secret, or doesn't have Content Sync's target role enabled.
 - **No rows**: the channel or workspace has no published content in the

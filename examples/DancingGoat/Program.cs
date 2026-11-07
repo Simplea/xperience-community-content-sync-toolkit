@@ -77,7 +77,6 @@ builder.Services.AddSingleton<IEmailActivityTrackingEvaluator, EmailActivityTrac
 // packaged sample. Every value comes from configuration (environment variables at launch time), so
 // no secret or URL is ever hardcoded here — see docs/specs/content-inventory-foundation.md.
 builder.Services.AddContentSyncToolkit();
-builder.Services.AddContentSyncToolkitAdmin();
 builder.Services.Configure<ContentSyncToolkitOptions>(builder.Configuration.GetSection("ContentSyncToolkit"));
 
 // Xperience's own Content Sync between the two rig instances, so a sync can be checked end to end.

@@ -1,6 +1,7 @@
 using CMS.Membership;
 
 using Kentico.Xperience.Admin.Base;
+using Kentico.Xperience.Admin.Base.UIPages;
 
 using Microsoft.Extensions.Options;
 
@@ -8,13 +9,15 @@ using XperienceCommunity.ContentSyncToolkit.Admin;
 using XperienceCommunity.ContentSyncToolkit.Http;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
+// A page of Kentico's Content synchronization application, before its own list (order 100), so the
+// application opens on what's still pending. See docs/specs/sync-status-admin-page.md.
 [assembly: UIPage(
-    typeof(ContentSyncStatusApplication),
-    "pages",
+    typeof(ContentSynchronizationApplication),
+    ContentSyncApplicationExtender.PagesSlug,
     typeof(ContentSyncStatusPagesTab),
     "Pages",
     TemplateNames.LISTING,
-    100)]
+    10)]
 
 namespace XperienceCommunity.ContentSyncToolkit.Admin;
 

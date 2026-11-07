@@ -4,6 +4,9 @@ using CMS.DataEngine;
 using CMS.Membership;
 
 using Kentico.Xperience.Admin.Base;
+using Kentico.Xperience.Admin.Base.UIPages;
+
+using Microsoft.Extensions.Options;
 
 using XperienceCommunity.ContentSyncToolkit.Admin;
 
@@ -15,16 +18,59 @@ public class ContentSyncStatusAdminWiringTests
     private static DateTime Day(int year, int month, int day, int hour = 0, int minute = 0) =>
         new(year, month, day, hour, minute, 0, DateTimeKind.Unspecified);
 
-    // Without UIPermission(VIEW) on the application, Role management can't grant VIEW for it, and
-    // the listing template requires VIEW, so only administrators could ever open the page.
+    // The tabs are pages of Kentico's application, so its View permission is what a role is granted.
+    // Without it, only administrators could ever open them.
     [Test]
-    public void Application_DeclaresTheViewPermission()
+    public void KenticosApplication_DeclaresTheViewPermission()
     {
-        var declared = typeof(ContentSyncStatusApplication).GetCustomAttributesData()
+        var declared = typeof(ContentSynchronizationApplication).GetCustomAttributesData()
             .Where(attribute => attribute.AttributeType == typeof(UIPermissionAttribute))
             .Select(attribute => attribute.ConstructorArguments[0].Value as string);
 
         Assert.That(declared, Does.Contain(SystemPermissions.VIEW));
+    }
+
+    // Before Kentico's own list (order 100): the application opens on its first page.
+    [TestCase(typeof(ContentSyncStatusPagesTab), "pages", 10)]
+    [TestCase(typeof(ContentSyncStatusContentHubTab), "content-hub", 20)]
+    public void EveryTab_IsAPageOfKenticosApplication_BeforeItsList(Type tabType, string slug, int order)
+    {
+        var registration = typeof(ContentSyncStatusTabBase).Assembly.GetCustomAttributes<UIPageAttribute>()
+            .Single(page => page.Type == tabType);
+
+        Assert.That(registration.ParentType, Is.EqualTo(typeof(ContentSynchronizationApplication)));
+        Assert.That(registration.Slug, Is.EqualTo(slug));
+        Assert.That(registration.Order, Is.EqualTo(order));
+    }
+
+    [TestCase("pages", true)]
+    [TestCase("/pages", true)]
+    [TestCase("content-hub/", true)]
+    [TestCase("synchronizations", false)]
+    [TestCase(null, false)]
+    public void Extender_RecognizesTheStatusPages(string? path, bool expected) =>
+        Assert.That(ContentSyncApplicationExtender.IsStatusPage(path), Is.EqualTo(expected));
+
+    // Kentico's list stays, so an instance that isn't a source keeps the application as it was.
+    [Test]
+    public void Extender_LeavesOnlyKenticosListInTheNavigation()
+    {
+        var properties = new TemplateClientProperties
+        {
+            Navigation = new Navigation
+            {
+                Items =
+                [
+                    new NavigationItem { Path = "pages" },
+                    new NavigationItem { Path = "content-hub" },
+                    new NavigationItem { Path = "synchronizations" },
+                ],
+            },
+        };
+
+        ContentSyncApplicationExtender.HideStatusPages(properties);
+
+        Assert.That(properties.Navigation.Items.Select(item => item.Path), Is.EqualTo(new[] { "synchronizations" }));
     }
 
     // Enforced on every tab, so direct navigation is refused, not just the menu entry hidden.
@@ -121,7 +167,7 @@ public class ContentSyncStatusAdminWiringTests
     [TestCase(typeof(ContentSyncStatusContentHubFilterModel), "Workspace")]
     public void FilterModels_ExposeTheFieldsLoadDataReads(Type filterModelType, string scopeField)
     {
-        string[] expected = [scopeField, "Language", "HideInSync", "Status", "ContentType", "PublishedFrom", "PublishedTo"];
+        string[] expected = [scopeField, "Language", "ShowInSync", "Status", "ContentType", "PublishedFrom", "PublishedTo"];
 
         Assert.That(filterModelType.GetProperties().Select(property => property.Name), Is.EquivalentTo(expected));
     }
@@ -150,7 +196,7 @@ public class ContentSyncStatusAdminWiringTests
     [Test]
     public async Task StatusFilterOptions_AreSearchable_AndShowUnknownSelectionsAsInvalid()
     {
-        var provider = new ContentSyncStatusFilterOptionsDataProvider();
+        var provider = new ContentSyncStatusFilterOptionsDataProvider(Options.Create(new ContentSyncToolkitOptions { ComparePageOrder = true }));
 
         var all = await provider.GetItemsAsync(string.Empty, 0, CancellationToken.None);
         var searched = await provider.GetItemsAsync("on", 0, CancellationToken.None);
@@ -161,12 +207,33 @@ public class ContentSyncStatusAdminWiringTests
         Assert.That(selected.Select(item => (item.Text, item.IsValid)), Is.EqualTo(new[] { ("Incompatible", true), ("PublishPending", false) }));
     }
 
+    // Nothing can be Reordered when page order isn't compared, so it isn't offered, and a filter
+    // remembered from before shows as invalid.
+    [Test]
+    public async Task StatusFilterOptions_LeaveOutReordered_ByDefault()
+    {
+        var provider = new ContentSyncStatusFilterOptionsDataProvider(Options.Create(new ContentSyncToolkitOptions()));
+
+        var all = await provider.GetItemsAsync(string.Empty, 0, CancellationToken.None);
+        var selected = (await provider.GetSelectedItemsAsync(["Reordered"], CancellationToken.None)).Single();
+
+        Assert.That(all.Items.Select(item => item.Value), Does.Not.Contain("Reordered").And.Contain("Moved"));
+        Assert.That(selected.IsValid, Is.False);
+    }
+
+    [Test]
+    public void StatusLegend_MentionsReordered_OnlyWhenPageOrderIsCompared()
+    {
+        Assert.That(ContentSyncStatusListingSupport.StatusLegend(comparePageOrder: true), Does.Contain("<strong>Reordered</strong>"));
+        Assert.That(ContentSyncStatusListingSupport.StatusLegend(comparePageOrder: false), Does.Not.Contain("Reordered").And.Contain("<strong>Moved</strong>"));
+    }
+
     [TestCase(true, true)]
     [TestCase(false, false)]
     [TestCase("True", true)]
     public void FilterValueExtractor_ReadsACheckbox(object value, bool expected) =>
         Assert.That(
-            ContentSyncStatusFilterValueExtractor.ExtractBoolParameter(new WhereCondition().WhereEquals("HideInSync", value), "HideInSync"),
+            ContentSyncStatusFilterValueExtractor.ExtractBoolParameter(new WhereCondition().WhereEquals("ShowInSync", value), "ShowInSync"),
             Is.EqualTo(expected));
 
     [Test]

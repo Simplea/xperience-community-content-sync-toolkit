@@ -73,6 +73,9 @@ public class ContentSyncToolkitServiceCollectionExtensionsTests
 
         using var scope = provider.CreateScope();
         Assert.That(scope.ServiceProvider.GetRequiredService<IContentSyncStatusService>(), Is.Not.Null);
+
+        // Kentico's Content synchronization application opens on the status pages on every instance.
+        Assert.That(services.Any(service => service.ServiceType == typeof(Admin.IContentSyncScopeProvider)), Is.True);
     }
 }
 

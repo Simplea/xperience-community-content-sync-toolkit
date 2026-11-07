@@ -27,10 +27,9 @@ configured target, backed by the
 ## Research findings
 
 Xperience by Kentico's own comparable UI is the **Content synchronization**
-application, but it only exists on a target instance and only shows a history
-of completed/scheduled sync tasks — not a diff of current state. There is no
-existing product page this feature extends; it is a new admin application, not
-a page extender on an existing one.
+application. It's on every instance, but it only shows a history of the
+completed/scheduled syncs that instance has received — not a diff of current
+state — so on a source it's empty. These pages live inside it (see below).
 
 Two structurally different content scopes are relevant: website channel pages
 (tree-structured, identified by tree path) and content-hub items (grouped by
@@ -50,21 +49,39 @@ know Xperience's internal sync mechanics.
 
 ## Entry point and interaction
 
-Add a new top-level administration application, **Sync status**, in the
-**Content management** category, with its own icon and a permission-gated menu
-entry (see Security and privacy).
+Add two pages to Kentico's own **Content synchronization** application
+(**Configuration**): **Pages** and **Content hub**. Short names in Kentico's own
+terms, since the application's name already gives the context.
 
-Name and place: an earlier version was **Content sync status** under
-**Configuration**, next to Kentico's own **Content synchronization**
-application, which lists the syncs a *target* has received. Similar names side
-by side suggested the two were related. This application answers a different
-question for editors on the *source* ("what still needs syncing?"), and covers
-pages and content hub items alike, so it's **Sync status** and sits with the
-other content tools. Its identifier and the `content-sync-status` URL segment
-didn't change, so bookmarks and granted permissions keep working. Its icon is
-`Icons.ClipboardChecklist`: a constant, because an icon name that doesn't exist
-(the first version used `xp-refresh`) renders nothing, without an error. The
-application has two sub-pages, matching the two scopes the foundation
+Name and place: until `1.0.0-beta.3` this was a separate **Sync status**
+application under **Content management**, because two applications with similar
+names side by side suggested they were related. Feedback from a demo was that
+one place for everything about Content Sync is clearer, and that on a source
+Kentico's application is an empty list. So the pages are registered under
+`ContentSynchronizationApplication`, a public class in `UIPages` on the minimum
+`30.8.0` too, whose section layout adds them to its navigation.
+
+- **Order.** An application opens on its first page. The pages use orders 10
+  and 20, before Kentico's list (100), so a source opens on what's pending.
+- **Instances that aren't a source.** Nothing should change there, but
+  `TemplateClientProperties.DefaultRoute` and `VisibleRoutes` are read-only and
+  `RemoveRouteFromNavigation` is in an `Internal` namespace. So the tab sets
+  `RedirectUrl` to Kentico's list, and `ContentSyncApplicationExtender` removes
+  the two entries from `Navigation.Items`, both public on `30.8.0`. Verified live
+  on a target: it opens on Kentico's list without the two entries, and direct
+  navigation to a tab redirects there. There's no "not configured" banner any
+  more, since such an instance never shows the page.
+- **Services.** The tab opens first on every instance, so its services can't
+  depend on the instance's role: `AddContentSyncToolkit()` includes
+  `AddContentSyncToolkitAdmin()`. The extender resolves the settings optionally,
+  so a project that hasn't registered the toolkit doesn't break Kentico's page.
+- **Permission.** The tabs use Kentico's View permission, which also shows the
+  list. Its Delete permission stays separate. Roles that had View on the old
+  application need the new one: verified live, a role with only the old grant
+  gets Access Denied, and with View on Content synchronization it opens the
+  pages.
+
+The application has two sub-pages of ours, matching the two scopes the foundation
 supports, presented as Xperience's native section sub-navigation — a small
 vertical list within the section (confirmed against a live instance: this is
 how Xperience's own built-in Forms application presents its "List of forms"
@@ -138,15 +155,15 @@ live: Xperience omits it from the compiled filter entirely).
 | Filter | Component | Values and behavior |
 | --- | --- | --- |
 | **Language** | Dropdown of the instance's content languages | No selection compares the instance's **default** content language. A language deleted after the filter was applied shows a "no longer exists" row, like a deleted channel/workspace. Each language is compared separately; there is no "all languages" view. |
-| **Hide items in sync** | Checkbox | Leaves out In sync items; everything else stays, Incompatible and Only on target included, so an item never disappears just because it can't be synced yet. Combines with Status like every other field (AND). Read back as a `bool` parameter; unchecked adds no condition and no "Applied filters" chip (confirmed live on 31.9.1). Two drafts were dropped: a *Needs sync* option in the Status list (a group mixed in with statuses), and a *Show* dropdown with *Not in sync* and *Ready to sync*, which differ only for Incompatible and Only on target items, so most of the time they showed the same list. |
-| **Status** | General selector (multi-select with search): *Incompatible*, then each status in the sort order (placeholder *All*) | Items matching **any** selected option. *Incompatible* = items whose required objects the target lacks. Each status option matches the tag shown, so an incompatible item matches *Incompatible* only. Kentico's general selector returns the selected values as a list, so `ContentSyncStatusMultiValueConditionBuilder` (the field's `FilterCondition` builder) compiles them into one parameter, comma-separated, which is read back like the other fields. Its options come from `ContentSyncStatusFilterOptionsDataProvider`. Verified live on 31.9.1, and the general selector, its data provider interface and `FilterCondition` exist in 30.8.0 (the library compiles against it). |
+| **Show items in sync** | Checkbox | The page is about what's pending, so In sync items are left out by default; everything else stays, Incompatible and Only on target included, so an item never disappears just because it can't be synced yet. Unchecked is the default rather than a pre-checked *Hide items in sync*, so the default view doesn't depend on how a form's initial value reaches the first load, and Clear all keeps it (confirmed live on 31.9.1). A Status selection or a search looks at every item, so selecting In sync or searching for an item in sync never comes back empty. Xperience remembers the applied filter per browser. Read back as a `bool` parameter; unchecked adds no condition and no "Applied filters" chip. When everything is hidden because it's all in sync, a row says "Nothing is pending: everything is in sync." instead of the empty state; it's short because the cell cuts longer text off. Two drafts were dropped: a *Needs sync* option in the Status list (a group mixed in with statuses), and a *Show* dropdown with *Not in sync* and *Ready to sync*, which differ only for Incompatible and Only on target items, so most of the time they showed the same list. |
+| **Status** | General selector (multi-select with search): *Incompatible*, then each status in the sort order (placeholder *All*) | Items matching **any** selected option. *Incompatible* = items whose required objects the target lacks. Each status option matches the tag shown, so an incompatible item matches *Incompatible* only. Kentico's general selector returns the selected values as a list, so `ContentSyncStatusMultiValueConditionBuilder` (the field's `FilterCondition` builder) compiles them into one parameter, comma-separated, which is read back like the other fields. Its options come from `ContentSyncStatusFilterOptionsDataProvider`, which leaves out *Reordered* unless `ComparePageOrder` is on (the Status column's legend does too). Verified live on 31.9.1, and the general selector, its data provider interface and `FilterCondition` exist in 30.8.0 (the library compiles against it). |
 | **Content type** | Dropdown of website content types (Pages) or reusable content types (Content hub) | Lists every type of that kind, not only the ones present in the selected scope, because an options provider can't see the selected channel/workspace. Options show the type's display name; the value is its code name. |
 | **Published from** / **Published to** | Two date inputs | Filter on the date in the Last published column (the local date, or the target's for Only on target). Both bounds are inclusive whole days, taken in the **server's** time zone: the date inputs carry no time zone and the server can't see the editor's, so near midnight a day boundary can differ from the column, which shows the editor's time zone. Items without a publish date are excluded while either bound is set. |
 
 Every filter value is read back from `LoadDataSettings.FilterWhereCondition`
 the same way as the channel/workspace (see Server workflow): each field
 compiles to a named parameter, strings as `string`, dates as `DateTime` and
-the Hide items in sync checkbox as `bool`; the Status selector's values arrive
+the Show items in sync checkbox as `bool`; the Status selector's values arrive
 as one comma-separated string (see the Status row above).
 Filtering, like search, runs in memory on the classified result before sorting
 and paging.
@@ -220,7 +237,7 @@ do for that item, and what to do where Content Sync needs something unusual:
 | Unpublished | "Unpublished here, still published on the target. A sync unpublishes it there." |
 | New | "Not on the target yet. A sync creates it." / "Not on the target yet. It's unpublished here, so a sync creates it unpublished." |
 | Changed | "Published here after the target's copy. A sync updates it." / "Published here, unpublished on the target. A sync publishes it there." |
-| Moved | "At a different place in the tree on the target. To move it, sync all pages on its old and new level." |
+| Moved | "At a different place in the tree on the target. A sync moves it. If a parent page moved too, syncing the parent also moves this page." |
 | Reordered | "Page order on this level differs on the target: Coffee Beverages Explained is in a different position there. This usually happens when only some pages of a level are synced. To fix it, use Sync with all subpages on Articles." It names up to 3 out-of-place pages, then "and N more", by display name; on the channel's top level it says to sync all pages on the level. Positions aren't given as numbers, because the page tree also shows drafts, which aren't compared. |
 | Not published | "Unpublished here, then edited again, so it has no published version. Content Sync can't sync it until it's published again." or, for an item never published here that the target has, "Never published here: only a draft exists on this instance. Content Sync can't sync it until it's published.", followed by "The target still has it published.", "The target has it unpublished." or "The target doesn't have it." |
 | Only on target | "Only on the target. Content Sync can't delete content: if it was deleted here, delete it on the target." |
@@ -312,7 +329,7 @@ before the table loads can be banners. On `30.8.0` callouts offer two styles,
 
 | State | Known before the table loads? | Presentation |
 | --- | --- | --- |
-| **Not configured as a source** (Content Sync's source role not enabled with a target URL) | Yes | `FriendlyWarning` banner explaining that the toolkit isn't configured as a source, linking to the [Usage Guide](../Usage-Guide.md). The table loads no rows and no fetch is attempted. |
+| **Not configured as a source** (Content Sync's source role not enabled with a target URL) | No | The pages are hidden and redirect to Kentico's list (see Name and place). No fetch is attempted. |
 | **No channels or workspaces** (a brand-new instance, or none the user can access) | Yes | `QuickTip` banner pointing to **Configuration → Channel management** or **Workspaces**, as plain text. Kentico's admin URLs aren't a public API, so the banner doesn't hardcode a link. |
 | **Target is missing objects Content Sync needs** (see the foundation's [Required objects](content-inventory-foundation.md#required-objects)) | No | The affected items show the Incompatible status (see Statuses), sort first, and can be filtered. |
 | **Target unavailable** (`TargetAvailable = false`) | No — depends on the selected scope | A single table row with a red "Target unavailable" status tag and an explanation. The table must not fall back to showing local content as if it were unclassified. |
@@ -349,7 +366,7 @@ requires VIEW — so a role granted only a custom permission still gets Access
 Denied (confirmed live). The implementation therefore:
 
 - declares `[UIPermission(SystemPermissions.VIEW)]` on the application, so
-  Role management offers **Sync status → View**;
+  Role management offers **Content synchronization → View**;
 - enforces it with `[UIEvaluatePermission(SystemPermissions.VIEW)]` on each
   tab page, so direct navigation is refused, not just the menu entry hidden;
 - sets `Permission = SystemPermissions.VIEW` on the `Refresh` page command.
@@ -441,7 +458,7 @@ not usable by third-party code — ruled out, not merely deprioritized.
   integration) for menu visibility, every tab page, and every server command;
   do not rely on menu-hiding alone.
 - List only channels and workspaces the signed-in user can access in
-  Xperience itself. View on Sync status alone would otherwise show the
+  Xperience itself. View on Content synchronization alone would otherwise show the
   names and paths of every channel's pages and every workspace's items, leaking
   past Xperience's own channel and workspace permissions. `IContentSyncScopeAccess`
   decides, per request:

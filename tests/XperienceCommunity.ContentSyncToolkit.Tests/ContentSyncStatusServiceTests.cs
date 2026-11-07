@@ -110,14 +110,15 @@ public class ContentSyncStatusServiceTests
         StubContentInventoryClient client,
         ContentInventoryCache cache,
         StubLocalRequiredObjectsService? localRequiredObjects = null,
-        StubContentLinksService? contentLinks = null) =>
+        StubContentLinksService? contentLinks = null,
+        bool comparePageOrder = false) =>
         new ContentSyncStatusService(
             local,
             localRequiredObjects ?? new StubLocalRequiredObjectsService(),
             contentLinks ?? new StubContentLinksService(),
             client,
             cache,
-            Options.Create(new ContentSyncToolkitOptions { InventoryCacheDuration = TimeSpan.FromSeconds(90) }));
+            Options.Create(new ContentSyncToolkitOptions { InventoryCacheDuration = TimeSpan.FromSeconds(90), ComparePageOrder = comparePageOrder }));
 
     private static readonly RequiredObject articleType =
         new(RequiredObjectKind.ContentType, Guid.NewGuid(), "DG.Article", "Article") { DefinitionHash = "A" };
@@ -149,6 +150,26 @@ public class ContentSyncStatusServiceTests
         Assert.That(missing.RequiredObjectIssues.Single().Object, Is.EqualTo(articleType));
         Assert.That(missing.RequiredObjectIssues.Single().Problem, Is.EqualTo(RequiredObjectProblem.MissingOnTarget));
         Assert.That(result.Items.Single(item => item.Guid == inSyncGuid).RequiredObjectIssues, Is.Empty);
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task GetWebPageSyncStatusAsync_ComparesPageOrder_OnlyWhenConfigured(bool comparePageOrder)
+    {
+        Guid first = Guid.NewGuid(), second = Guid.NewGuid();
+        var published = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        ContentInventoryItem Sibling(Guid guid, string path, int order) =>
+            Page(guid, "DG.Article", published) with { TreePath = path, Order = order };
+        var local = new StubLocalContentInventoryService { WebPages = [Sibling(first, "/A/First", 1), Sibling(second, "/A/Second", 2)] };
+        var client = new StubContentInventoryClient
+        {
+            WebPageResult = ContentInventoryFetchResult.Success([Sibling(first, "/A/First", 2), Sibling(second, "/A/Second", 1)]),
+        };
+        var service = CreateService(local, client, new ContentInventoryCache(TimeProvider.System), comparePageOrder: comparePageOrder);
+
+        var result = await service.GetWebPageSyncStatusAsync("Channel", "en", CancellationToken.None);
+
+        Assert.That(result.Items.Any(item => item.Status == ContentSyncStatus.Reordered), Is.EqualTo(comparePageOrder));
     }
 
     // Content Sync refuses the sync because of what the page links to, so the page must say so.

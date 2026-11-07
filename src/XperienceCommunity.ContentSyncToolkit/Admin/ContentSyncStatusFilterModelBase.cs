@@ -14,9 +14,10 @@ internal abstract class ContentSyncStatusFilterModelBase
     [DropDownComponent(DataProviderType = typeof(ContentSyncStatusLanguageOptionsProvider), Label = "Language", Placeholder = "Default language", Order = 10)]
     public string? Language { get; set; }
 
-    // The common view in one click; combines with Status like every other field (AND).
-    [CheckBoxComponent(Label = "Hide items in sync", Order = 15)]
-    public bool HideInSync { get; set; }
+    // Unchecked is the default view, what's still pending, so Clear filter keeps it too. A Status
+    // selection or a search looks at every item; see ContentSyncStatusListingSupport.HidesInSync.
+    [CheckBoxComponent(Label = "Show items in sync", Order = 15)]
+    public bool ShowInSync { get; set; }
 
     // Several statuses can be selected; the listing shows items matching any of them.
     [GeneralSelectorComponent(dataProviderType: typeof(ContentSyncStatusFilterOptionsDataProvider), Label = "Status", Placeholder = "All", Order = 20)]

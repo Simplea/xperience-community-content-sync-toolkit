@@ -1,6 +1,7 @@
 using CMS.Membership;
 
 using Kentico.Xperience.Admin.Base;
+using Kentico.Xperience.Admin.Base.UIPages;
 
 using Microsoft.Extensions.Options;
 
@@ -9,12 +10,12 @@ using XperienceCommunity.ContentSyncToolkit.Http;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 [assembly: UIPage(
-    typeof(ContentSyncStatusApplication),
-    "content-hub",
+    typeof(ContentSynchronizationApplication),
+    ContentSyncApplicationExtender.ContentHubSlug,
     typeof(ContentSyncStatusContentHubTab),
     "Content hub",
     TemplateNames.LISTING,
-    200)]
+    20)]
 
 namespace XperienceCommunity.ContentSyncToolkit.Admin;
 
