@@ -141,7 +141,11 @@ the list says **Nothing is pending: everything is in sync.**
   - **Channel** (Pages) or **Workspace** (Content hub). Without a selection,
     the first one is shown.
   - **Language**. Without a selection, the instance's default content language
-    is compared.
+    is compared. **All languages** (on an instance with more than one) lists
+    every language version together, one row each, so nothing pending in
+    another language goes unnoticed. With more than one language, a
+    **Language** column says which version each row is, and clicking a row
+    opens that version.
   - **Show items in sync**: lists them too. Without it, you see only what
     differs, Incompatible and Only on target included. Selecting a **Status** or
     searching looks at every item without it, so you can still find an item
@@ -381,8 +385,8 @@ outside the current view:
   Sync dialog greys them out. Publish it to see it here, as **New**. (If the
   target already has it, it shows as **Not published** instead.)
 - An unpublished content hub item the target doesn't have.
-- Items in another language, website channel or workspace than the one
-  selected in the filter.
+- Items in another language (unless **All languages** is selected), website
+  channel or workspace than the one selected in the filter.
 - Items not translated into the selected language, even when the language
   falls back to another. Content Sync syncs each language version separately.
 - Pages you can't see in the page tree, and channels or workspaces you have no
@@ -419,5 +423,9 @@ outside the current view:
     recommends editing only on the source; a sync overwrites target edits.
   - **Scheduled publish or unpublish dates.** Content Sync doesn't transfer
     them, and no status reflects them.
-- **One language at a time.** The default content language unless you choose
-  another with the Language filter.
+- **One language at a time, or all of them.** The default content language
+  unless you choose another, or **All languages**, with the Language filter.
+  Each language version is compared on its own, as Content Sync syncs them, so
+  an item can be **In sync** in one language and **Changed** in another. All
+  languages asks the target for each language in turn, so it takes longer the
+  first time on a site with many languages.

@@ -112,6 +112,17 @@ internal abstract class ContentSyncStatusTabBase(
         PageConfiguration.HeaderActions.Single(action => action.Name == nameof(Refresh)).Title =
             ContentSyncStatusListingSupport.RefreshTooltip(options.Value.InventoryCacheDuration);
 
+        // LoadData adds the matching cell; see ContentSyncStatusListingSupport.ShowsLanguageColumn.
+        var languages = await filterOptionsProvider.GetContentLanguagesAsync(CancellationToken.None);
+        if (ContentSyncStatusListingSupport.ShowsLanguageColumn(languages.Count)
+            && !PageConfiguration.ColumnConfigurations.Any(column => column.Name == ContentSyncStatusListingSupport.LanguageColumn))
+        {
+            // Its width comes out of the name's, so the columns still fit a 1440px-wide window.
+            const int languageMinWidth = 10;
+            PageConfiguration.ColumnConfigurations[0].MinWidth -= languageMinWidth;
+            PageConfiguration.ColumnConfigurations.Insert(1, SortableColumn(ContentSyncStatusListingSupport.LanguageColumn, "Language", minWidth: languageMinWidth, maxWidth: 20));
+        }
+
         if (IsSourceConfigured && (await GetScopesAsync(CancellationToken.None)).Count == 0)
         {
             PageConfiguration.Callouts.Add(new CalloutConfiguration
@@ -155,14 +166,19 @@ internal abstract class ContentSyncStatusTabBase(
         var request = CreateRequest(settings);
 
         ContentSyncStatusView view;
+        IReadOnlyList<ContentSyncLanguage> languages = [];
         try
         {
+            // Loaded once: they decide both what's compared and whether rows have a Language cell.
+            languages = await filterOptionsProvider.GetContentLanguagesAsync(cancellationToken);
+            showsLanguage = ContentSyncStatusListingSupport.ShowsLanguageColumn(languages.Count);
+
             // GetCurrentContentLanguage() on ListingPageBase is private, so the admin's own language
             // switcher isn't reachable here; the Language filter (default language when unset) is.
             view = await ContentSyncStatusViewBuilder.BuildAsync(
                 request,
                 GetScopesAsync,
-                filterOptionsProvider.GetContentLanguagesAsync,
+                _ => Task.FromResult(languages),
                 GetStatusAsync,
                 cancellationToken);
         }
@@ -230,11 +246,34 @@ internal abstract class ContentSyncStatusTabBase(
             settings.SelectedPage);
     }
 
+    // Whether this instance has several languages, so rows carry a Language cell; set by LoadData.
+    private bool showsLanguage;
+
     private async Task<IEnumerable<Row>> ToRowsAsync(ContentSyncStatusView view, CancellationToken cancellationToken)
     {
-        var details = await GetRowDetailsAsync(view, cancellationToken);
+        var languageDisplayNames = ContentSyncStatusViewBuilder.LanguageDisplayNames(view.Languages);
+        var details = new Dictionary<(Guid, string), RowDetails>();
 
-        return [.. view.Items.Select(item => ToRow(item, details.GetValueOrDefault(item.Guid)))];
+        // Links, drafts and lookups are per language variant, so they're fetched for each language on the page.
+        if (view.Scope is not null)
+        {
+            foreach (var group in view.Items.GroupBy(ContentSyncStatusListingSupport.LanguageName, StringComparer.OrdinalIgnoreCase))
+            {
+                foreach (var (guid, rowDetails) in await GetRowDetailsAsync(view.Scope, group.Key, [.. group], cancellationToken))
+                {
+                    details[(guid, group.Key)] = rowDetails;
+                }
+            }
+        }
+
+        return [.. view.Items.Select(item =>
+        {
+            string language = ContentSyncStatusListingSupport.LanguageName(item);
+            return ToRow(
+                item,
+                details.GetValueOrDefault((item.Guid, language)),
+                showsLanguage ? ContentSyncStatusListingSupport.LanguageDisplayName(item, languageDisplayNames) : null);
+        })];
     }
 
     /// <summary>A row's editor link, whether it opens the target, whether it has a newer draft, its recycle bin entry, and where it moved to.</summary>
@@ -244,23 +283,19 @@ internal abstract class ContentSyncStatusTabBase(
     // Each row's editor link and whether it has a newer draft. Both are conveniences: if a lookup
     // fails, rows still render, just without links or draft hints.
     private async Task<IReadOnlyDictionary<Guid, RowDetails>> GetRowDetailsAsync(
-        ContentSyncStatusView view, CancellationToken cancellationToken)
+        ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken)
     {
         var details = new Dictionary<Guid, RowDetails>();
-        if (view.Scope is null || view.LanguageName is null)
-        {
-            return details;
-        }
 
-        var localItems = view.Items.Where(item => item.Local is not null).ToList();
+        var localItems = items.Where(item => item.Local is not null).ToList();
         if (localItems.Count > 0)
         {
             try
             {
-                foreach (var (guid, item) in await GetLocalItemsAsync(view.Scope, view.LanguageName, localItems, cancellationToken))
+                foreach (var (guid, item) in await GetLocalItemsAsync(scope, languageName, localItems, cancellationToken))
                 {
                     details[guid] = new RowDetails(
-                        GetItemLink(view.Scope, view.LanguageName, item.Id).GetPath(pageLinkGenerator), OpensOnTarget: false, item.HasNewerDraft);
+                        GetItemLink(scope, languageName, item.Id).GetPath(pageLinkGenerator), OpensOnTarget: false, item.HasNewerDraft);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -270,14 +305,14 @@ internal abstract class ContentSyncStatusTabBase(
         }
 
         // Only-on-target items don't exist on this instance, so they open on the target.
-        var remoteOnlyItems = view.Items.Where(item => item.Local is null).ToList();
+        var remoteOnlyItems = items.Where(item => item.Local is null).ToList();
         if (remoteOnlyItems.Count > 0 && settings.Source.TargetAdminUrl is { } targetAdminUrl)
         {
-            var (links, contentItemGuids) = await GetTargetDetailsAsync(view.Scope, view.LanguageName, remoteOnlyItems, targetAdminUrl, cancellationToken);
+            var (links, contentItemGuids) = await GetTargetDetailsAsync(scope, languageName, remoteOnlyItems, targetAdminUrl, cancellationToken);
             var rowContentItems = remoteOnlyItems.ToDictionary(item => item.Guid, item => ContentItemGuidOf(item, contentItemGuids));
             var deletedItems = await recycleBinLookup.GetDeletedItemsAsync(
-                view.LanguageName, [.. rowContentItems.Values.OfType<Guid>()], cancellationToken);
-            var movedItems = await GetMovedItemsAsync(view.Scope, view.LanguageName, [.. rowContentItems.Values.OfType<Guid>()], cancellationToken);
+                languageName, [.. rowContentItems.Values.OfType<Guid>()], cancellationToken);
+            var movedItems = await GetMovedItemsAsync(scope, languageName, [.. rowContentItems.Values.OfType<Guid>()], cancellationToken);
 
             foreach (var (guid, contentItem) in rowContentItems)
             {
@@ -358,14 +393,16 @@ internal abstract class ContentSyncStatusTabBase(
             TooltipAsHtml = tooltip is not null,
         };
 
-    private static Row ToRow(ContentSyncStatusItem item, RowDetails details) =>
+    // An item is listed once per language, so its row is identified by both.
+    private static Row ToRow(ContentSyncStatusItem item, RowDetails details, string? language) =>
         new()
         {
-            Identifier = item.Guid,
+            Identifier = $"{item.Guid}_{ContentSyncStatusListingSupport.LanguageName(item)}",
             Action = details.Link is null || details.OpensOnTarget ? null : new RowAction(ActionType.Link) { Parameter = details.Link },
             Cells =
             [
                 NameCell(item, details),
+                .. LanguageCell(language),
                 new StringCell { Value = ContentSyncStatusListingSupport.ContentTypeDisplayName(item) },
                 TagCell(
                     ContentSyncStatusListingSupport.StatusLabel(item, details.DeletedItem, details.MovedItem),
@@ -414,9 +451,13 @@ internal abstract class ContentSyncStatusTabBase(
     // Marks a link that opens in a new tab.
     private const string TargetLinkMarker = " ↗";
 
+    // No cell without the Language column; see ContentSyncStatusListingSupport.ShowsLanguageColumn.
+    private static IEnumerable<Cell> LanguageCell(string? language) =>
+        language is null ? [] : [new StringCell { Value = language }];
+
     // A single row explaining a state that depends on the selected scope, with a status-style tag
     // so it reads differently from both real rows and Xperience's native empty state.
-    private static LoadDataResult MessageRow(string message, string tagLabel, Color color) =>
+    private LoadDataResult MessageRow(string message, string tagLabel, Color color) =>
         new()
         {
             TotalCount = 1,
@@ -428,6 +469,7 @@ internal abstract class ContentSyncStatusTabBase(
                     Cells =
                     [
                         new StringCell { Value = message },
+                        .. LanguageCell(showsLanguage ? string.Empty : null),
                         new StringCell { Value = string.Empty },
                         TagCell(tagLabel, color),
                         new StringCell { Value = string.Empty },
