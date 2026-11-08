@@ -398,8 +398,8 @@ outside the current view:
   `Source:TargetUrl`), so there's nothing to compare.
 - **A "Target unavailable" row**: the target couldn't be reached, rejected the
   secret, or doesn't have Content Sync's target role enabled.
-- **No rows**: the channel or workspace has no published content in the
-  compared language, or nothing matches the applied filters.
+- **No rows**: the channel or workspace has no published content (in the
+  selected language, if you chose one), or nothing matches the applied filters.
 - **A "Not available" row**: the selected channel, workspace, or language was
   deleted after the filter was applied. Clear that filter or choose another.
 
