@@ -30,6 +30,7 @@ internal sealed class ContentSyncStatusContentHubTab(
     IContentInventoryClient inventoryClient,
     ContentSyncStatusRefreshRequestStore refreshRequestStore,
     IContentSyncRecycleBinLookup recycleBinLookup,
+    IContentSyncWorkspaceMoveLookup workspaceMoveLookup,
     IPageLinkGenerator pageLinkGenerator)
     : ContentSyncStatusTabBase(
         new ContentSyncStatusContentHubFilterModel(),
@@ -74,6 +75,10 @@ internal sealed class ContentSyncStatusContentHubTab(
     protected override Task<TargetItemIdsFetchResult> GetTargetItemIdsAsync(
         ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken) =>
         inventoryClient.GetContentItemIdsAsync(scope.Name, languageName, [.. items.Select(item => item.Guid)], cancellationToken);
+
+    protected override Task<IReadOnlyDictionary<Guid, ContentSyncMovedItem>> GetMovedItemsAsync(
+        ContentSyncScope scope, string languageName, IReadOnlyCollection<Guid> contentItemGuids, CancellationToken cancellationToken) =>
+        workspaceMoveLookup.GetMovedItemsAsync(scope.Id, languageName, contentItemGuids, cancellationToken);
 
     // A workspace scope's ID is its WorkspaceID.
     protected override ContentSyncStatusItemLink GetItemLink(ContentSyncScope scope, string languageName, int itemId) =>

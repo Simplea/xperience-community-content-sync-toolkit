@@ -72,6 +72,7 @@ internal static class ContentSyncStatusListingSupport
         + "<strong>Not published</strong>: nothing yet; it has no published version here. Publish it to sync.<br>"
         + "<strong>Only on target</strong>: nothing; Content Sync can't delete, so delete it there.<br>"
         + "<strong>Deleted here</strong>: the same, for an item still in this instance's recycle bin.<br>"
+        + "<strong>Moved here</strong>: nothing from this workspace; sync it from the workspace it moved to.<br>"
         + "<strong>In sync</strong>: nothing; it's the same on both.";
 
     // Items in sync are left out unless the editor asked for them: with Show items in sync, by selecting
@@ -248,6 +249,15 @@ internal static class ContentSyncStatusListingSupport
 
     public const string DeletedHereLabel = "Deleted here";
 
+    // An item only on the target in this workspace that this instance has in another: deleting it there
+    // would remove what a sync can move.
+    private static string MovedHere(ContentSyncMovedItem moved) =>
+        moved.WorkspaceDisplayName is { } workspace
+            ? $"Moved to {workspace} here, but still in this workspace on the target. Don't delete it: syncing it from {workspace} moves it there."
+            : "Moved to another workspace here, but still in this workspace on the target. Don't delete it: syncing it from that workspace moves it there.";
+
+    public const string MovedHereLabel = "Moved here";
+
     private static string FormatDate(DateTime value) => value.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
 
     public const string IncompatibleLabel = "Incompatible";
@@ -329,11 +339,18 @@ internal static class ContentSyncStatusListingSupport
     //
     // deletedItem (an Only on target item still in this instance's recycle bin) says so, and how to take
     // it off the target without signing in there.
+    //
+    // movedItem (an Only on target item this instance has in another workspace) says where, and not to
+    // delete it.
     public static string? StatusTooltip(
-        ContentSyncStatusItem item, bool hasNewerDraft = false, bool opensOnTarget = false, ContentSyncDeletedItem? deletedItem = null)
+        ContentSyncStatusItem item,
+        bool hasNewerDraft = false,
+        bool opensOnTarget = false,
+        ContentSyncDeletedItem? deletedItem = null,
+        ContentSyncMovedItem? movedItem = null)
     {
         bool showDraft = hasNewerDraft && item.Local is not null && !ContentInventoryVersionStatus.IsUnpublished(item.Local.VersionStatus);
-        string? tooltip = StatusOnlyTooltip(item, opensOnTarget, deletedItem);
+        string? tooltip = StatusOnlyTooltip(item, opensOnTarget, deletedItem, movedItem);
 
         if (!showDraft)
         {
@@ -345,7 +362,8 @@ internal static class ContentSyncStatusListingSupport
             : tooltip + " " + NewerDraftHint;
     }
 
-    private static string? StatusOnlyTooltip(ContentSyncStatusItem item, bool opensOnTarget, ContentSyncDeletedItem? deletedItem)
+    private static string? StatusOnlyTooltip(
+        ContentSyncStatusItem item, bool opensOnTarget, ContentSyncDeletedItem? deletedItem, ContentSyncMovedItem? movedItem)
     {
         if (item.HasCompatibilityIssues)
         {
@@ -367,6 +385,7 @@ internal static class ContentSyncStatusListingSupport
             ContentSyncStatus.NotPublished =>
                 (item.Local is not null && ContentInventoryVersionStatus.IsNeverPublished(item.Local.VersionStatus) ? NeverPublishedTooltip : UnpublishedDraftTooltip)
                 + " " + TargetState(item.Remote is not null, remoteUnpublished),
+            ContentSyncStatus.OnlyOnTarget when movedItem is not null => MovedHere(movedItem),
             ContentSyncStatus.OnlyOnTarget when deletedItem is not null && remoteUnpublished =>
                 DeletedHere(deletedItem) + ", and unpublished on the target. Content Sync can't delete it, so delete it there if it shouldn't be there.",
             ContentSyncStatus.OnlyOnTarget when deletedItem is not null =>
@@ -481,6 +500,11 @@ internal static class ContentSyncStatusListingSupport
     public static string StatusLabel(ContentSyncStatusItem item, ContentSyncDeletedItem? deletedItem) =>
         deletedItem is not null && item.Status == ContentSyncStatus.OnlyOnTarget ? DeletedHereLabel : StatusLabel(item);
 
+    // The same for an item this instance has in another workspace. It's listed and filtered as Only on
+    // target, because this workspace's comparison can't see it on either side as the same item.
+    public static string StatusLabel(ContentSyncStatusItem item, ContentSyncDeletedItem? deletedItem, ContentSyncMovedItem? movedItem) =>
+        movedItem is not null && item.Status == ContentSyncStatus.OnlyOnTarget ? MovedHereLabel : StatusLabel(item, deletedItem);
+
     public static string StatusLabel(ContentSyncStatus status) => status switch
     {
         ContentSyncStatus.Unpublished => "Unpublished",
@@ -504,6 +528,10 @@ internal static class ContentSyncStatusListingSupport
     // on the target, or not published here), green for done.
     public static Color StatusColor(ContentSyncStatusItem item) =>
         item.HasCompatibilityIssues ? Enum.Parse<Color>(nameof(Color.AlertBackgroundHighEmphasis)) : StatusColor(item.Status);
+
+    // Unlike the rest of Only on target, a sync can fix a moved item.
+    public static Color StatusColor(ContentSyncStatusItem item, ContentSyncMovedItem? movedItem) =>
+        movedItem is not null && item.Status == ContentSyncStatus.OnlyOnTarget ? StatusColor(ContentSyncStatus.Moved) : StatusColor(item);
 
     public static Color StatusColor(ContentSyncStatus status) => Enum.Parse<Color>(status switch
     {

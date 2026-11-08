@@ -18,6 +18,7 @@ public static class ContentSyncToolkitAdminServiceCollectionExtensions
         services.TryAddScoped<IContentSyncScopeAccess, ContentSyncScopeAccess>();
         services.TryAddScoped<IContentSyncScopeProvider, ContentSyncScopeProvider>();
         services.TryAddScoped<IContentSyncRecycleBinLookup, ContentSyncRecycleBinLookup>();
+        services.TryAddScoped<IContentSyncWorkspaceMoveLookup, ContentSyncWorkspaceMoveLookup>();
         services.TryAddSingleton<IContentSyncFilterOptionsProvider, ContentSyncFilterOptionsProvider>();
         services.TryAddTransient<IContentSyncItemIdResolver, ContentSyncItemIdResolver>();
         services.TryAddSingleton<ContentSyncStatusRefreshRequestStore>();

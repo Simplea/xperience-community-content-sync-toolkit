@@ -536,6 +536,18 @@ does create the folder on the target and moves the item into it; the old folder
 stays there, empty. Kentico documents folders as a way to organize the admin that
 can't control content delivery, so nothing on the site differs.
 
+Workspaces are compared one at a time, so a content item moved to another
+workspace looks missing on each side: `OnlyOnTarget` in the old workspace and
+`New` in the new one. Verified live on 31.9.1: the move changes neither version
+nor publish date, and a sync from the new workspace moves the item on the target
+and clears both rows. The status stays `OnlyOnTarget`, but the Content hub tab
+looks up that listing page's rows on this instance
+(`ContentSyncWorkspaceMoveLookup`). A row whose item is here in another workspace,
+with a variant in the listed language, reads **Moved here** in the color of what a
+sync changes, and its tooltip says not to delete it. A workspace the user can't
+open isn't named. This is source-only, so it needs no schema change. The `New` row
+stays: telling it apart means asking the target about its other workspaces.
+
 Also seen on the rig: syncing only some articles moved them to their source
 positions on the target, but `Coffee Beverages Explained`, not in that sync,
 kept its old order value there and so came first on the target and third on
