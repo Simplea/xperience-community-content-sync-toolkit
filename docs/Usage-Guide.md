@@ -351,6 +351,13 @@ items you could find in the Recycle bin application: the ones you deleted, or
 everyone's with **Manage recycle bin**. The **Only on target** filter includes
 these rows.
 
+If you moved a content item to another workspace here, its status reads **Moved
+here** in the old workspace, in orange because a sync can fix it. Don't delete it
+on the target: it's the same item. Sync it from the workspace it moved to, and
+Content Sync moves it there on the target. The tooltip names that workspace, or
+says "another workspace" if you can't open it. The **Only on target** filter
+includes these rows. Until you sync, the new workspace lists the item as **New**.
+
 **In sync**
 
 - The target has the same published version, publish state and position.

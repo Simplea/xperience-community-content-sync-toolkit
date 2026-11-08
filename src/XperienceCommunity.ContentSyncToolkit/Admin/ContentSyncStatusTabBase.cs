@@ -237,8 +237,9 @@ internal abstract class ContentSyncStatusTabBase(
         return [.. view.Items.Select(item => ToRow(item, details.GetValueOrDefault(item.Guid)))];
     }
 
-    /// <summary>A row's editor link, whether it opens the target, whether it has a newer draft, and its recycle bin entry.</summary>
-    private readonly record struct RowDetails(string? Link, bool OpensOnTarget, bool HasNewerDraft, ContentSyncDeletedItem? DeletedItem = null);
+    /// <summary>A row's editor link, whether it opens the target, whether it has a newer draft, its recycle bin entry, and where it moved to.</summary>
+    private readonly record struct RowDetails(
+        string? Link, bool OpensOnTarget, bool HasNewerDraft, ContentSyncDeletedItem? DeletedItem = null, ContentSyncMovedItem? MovedItem = null);
 
     // Each row's editor link and whether it has a newer draft. Both are conveniences: if a lookup
     // fails, rows still render, just without links or draft hints.
@@ -276,18 +277,26 @@ internal abstract class ContentSyncStatusTabBase(
             var rowContentItems = remoteOnlyItems.ToDictionary(item => item.Guid, item => ContentItemGuidOf(item, contentItemGuids));
             var deletedItems = await recycleBinLookup.GetDeletedItemsAsync(
                 view.LanguageName, [.. rowContentItems.Values.OfType<Guid>()], cancellationToken);
+            var movedItems = await GetMovedItemsAsync(view.Scope, view.LanguageName, [.. rowContentItems.Values.OfType<Guid>()], cancellationToken);
 
             foreach (var (guid, contentItem) in rowContentItems)
             {
                 string? link = links.GetValueOrDefault(guid);
                 var deletedItem = contentItem is Guid contentItemGuid ? deletedItems.GetValueOrDefault(contentItemGuid) : null;
 
-                details[guid] = new RowDetails(link, OpensOnTarget: link is not null, HasNewerDraft: false, deletedItem);
+                var movedItem = contentItem is Guid movedGuid ? movedItems.GetValueOrDefault(movedGuid) : null;
+
+                details[guid] = new RowDetails(link, OpensOnTarget: link is not null, HasNewerDraft: false, deletedItem, movedItem);
             }
         }
 
         return details;
     }
+
+    /// <summary>Items listed as only on the target that this instance has in another scope. Only workspaces can have them.</summary>
+    protected virtual Task<IReadOnlyDictionary<Guid, ContentSyncMovedItem>> GetMovedItemsAsync(
+        ContentSyncScope scope, string languageName, IReadOnlyCollection<Guid> contentItemGuids, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyDictionary<Guid, ContentSyncMovedItem>>(new Dictionary<Guid, ContentSyncMovedItem>());
 
     private Guid? ContentItemGuidOf(ContentSyncStatusItem item, IReadOnlyDictionary<Guid, Guid> contentItemGuids)
     {
@@ -359,9 +368,9 @@ internal abstract class ContentSyncStatusTabBase(
                 NameCell(item, details),
                 new StringCell { Value = ContentSyncStatusListingSupport.ContentTypeDisplayName(item) },
                 TagCell(
-                    ContentSyncStatusListingSupport.StatusLabel(item, details.DeletedItem),
-                    ContentSyncStatusListingSupport.StatusColor(item),
-                    ContentSyncStatusListingSupport.StatusTooltip(item, details.HasNewerDraft, details.OpensOnTarget, details.DeletedItem)),
+                    ContentSyncStatusListingSupport.StatusLabel(item, details.DeletedItem, details.MovedItem),
+                    ContentSyncStatusListingSupport.StatusColor(item, details.MovedItem),
+                    ContentSyncStatusListingSupport.StatusTooltip(item, details.HasNewerDraft, details.OpensOnTarget, details.DeletedItem, details.MovedItem)),
                 LastPublishedCell(item, details),
             ],
         };
