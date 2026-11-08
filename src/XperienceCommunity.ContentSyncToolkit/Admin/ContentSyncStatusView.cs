@@ -166,15 +166,7 @@ internal static class ContentSyncStatusViewBuilder
         return scopes.FirstOrDefault(scope => string.Equals(scope.Name, requestedScopeName, StringComparison.OrdinalIgnoreCase));
     }
 
-    // Same rule as scopes, defaulting to the instance's default language (or the first, should
-    // none be marked default).
-    private static string? ResolveLanguageName(IReadOnlyList<ContentSyncLanguage> languages, string? requestedLanguageName)
-    {
-        if (string.IsNullOrEmpty(requestedLanguageName))
-        {
-            return (languages.FirstOrDefault(language => language.IsDefault) ?? languages[0]).Name;
-        }
-
-        return languages.FirstOrDefault(language => string.Equals(language.Name, requestedLanguageName, StringComparison.OrdinalIgnoreCase))?.Name;
-    }
+    // As for scopes, a requested language that no longer exists returns null rather than another one.
+    private static string? ResolveLanguageName(IReadOnlyList<ContentSyncLanguage> languages, string? requestedLanguageName) =>
+        languages.FirstOrDefault(language => string.Equals(language.Name, requestedLanguageName, StringComparison.OrdinalIgnoreCase))?.Name;
 }

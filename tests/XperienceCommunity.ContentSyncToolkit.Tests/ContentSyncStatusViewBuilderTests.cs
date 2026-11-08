@@ -37,7 +37,7 @@ public class ContentSyncStatusViewBuilderTests
     private static ContentSyncStatusViewRequest Request(
         bool isSourceConfigured = true,
         string? requestedScopeName = null,
-        string? requestedLanguageName = null,
+        string? requestedLanguageName = "en",
         bool forceRefresh = false,
         ContentSyncStatusFilter? filter = null,
         string? searchTerm = null,
@@ -121,20 +121,13 @@ public class ContentSyncStatusViewBuilderTests
         Assert.That(statusCalls, Is.Empty);
     }
 
+    // Not just the default language: one nobody chose shows nowhere on the page. See AllLanguagesTests.
     [Test]
-    public async Task NoRequestedLanguage_DefaultsToTheDefaultLanguage()
+    public async Task NoRequestedLanguage_ComparesEveryLanguage()
     {
-        await Build(Request(), twoScopes);
+        await Build(Request(requestedLanguageName: null), twoScopes);
 
-        Assert.That(statusCalls.Single().LanguageName, Is.EqualTo("en"));
-    }
-
-    [Test]
-    public async Task NoLanguageMarkedDefault_FallsBackToTheFirstLanguage()
-    {
-        await Build(Request(), twoScopes, languages: [new("es", "Spanish", false), new("en", "English", false)]);
-
-        Assert.That(statusCalls.Single().LanguageName, Is.EqualTo("es"));
+        Assert.That(statusCalls.Select(call => call.LanguageName), Is.EqualTo(new[] { "es", "en" }));
     }
 
     [Test]

@@ -11,7 +11,8 @@ namespace XperienceCommunity.ContentSyncToolkit.Admin;
 /// </summary>
 internal abstract class ContentSyncStatusFilterModelBase
 {
-    [DropDownComponent(DataProviderType = typeof(ContentSyncStatusLanguageOptionsProvider), Label = "Language", Placeholder = "Default language", Order = 10)]
+    // No selection lists every language; see ContentSyncStatusListingSupport.IsAllLanguages.
+    [DropDownComponent(DataProviderType = typeof(ContentSyncStatusLanguageOptionsProvider), Label = "Language", Placeholder = ContentSyncStatusListingSupport.AllLanguagesLabel, Order = 10)]
     public string? Language { get; set; }
 
     // Unchecked is the default view, what's still pending, so Clear filter keeps it too. A Status

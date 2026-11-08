@@ -4,7 +4,7 @@ using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 namespace XperienceCommunity.ContentSyncToolkit.Tests;
 
-// The Language filter's All languages option and the Language column.
+// The Language filter, which lists every language when nothing is selected, and the Language column.
 public class AllLanguagesTests
 {
     private static readonly IReadOnlyList<ContentSyncScope> scopes = [new(1, "First", "First channel")];
@@ -42,11 +42,11 @@ public class AllLanguagesTests
             CancellationToken.None);
 
     [Test]
-    public async Task AllLanguages_ComparesEachLanguage_AndListsTheirItemsTogether()
+    public async Task NoLanguageSelected_ComparesEachLanguage_AndListsTheirItemsTogether()
     {
         List<string> calls = [];
 
-        var view = await Build(ContentSyncStatusListingSupport.AllLanguagesFilter, calls);
+        var view = await Build(null, calls);
 
         Assert.Multiple(() =>
         {
@@ -63,7 +63,7 @@ public class AllLanguagesTests
     public async Task AllLanguages_WhenTheTargetFailsForOneLanguage_IsUnavailable()
     {
         var view = await Build(
-            ContentSyncStatusListingSupport.AllLanguagesFilter,
+            null,
             [],
             language => language == "en" ? new ContentSyncStatusResult(false, []) : new ContentSyncStatusResult(true, [Item(language)]));
 
@@ -81,22 +81,24 @@ public class AllLanguagesTests
         Assert.That(view.LanguageName, Is.EqualTo("es"));
     }
 
+    // A language deleted after it was selected isn't silently replaced by every language.
     [Test]
-    public async Task NoLanguageSelected_StillComparesTheDefaultLanguage()
+    public async Task ALanguageThatNoLongerExists_IsNotFound()
     {
         List<string> calls = [];
 
-        await Build(null, calls);
+        var view = await Build("fr", calls);
 
-        Assert.That(calls, Is.EqualTo(new[] { "en" }));
+        Assert.That(view.Kind, Is.EqualTo(ContentSyncStatusViewKind.LanguageNotFound));
+        Assert.That(calls, Is.Empty);
     }
 
     [Test]
-    public void IsAllLanguages_MatchesOnlyTheAllLanguagesValue()
+    public void IsAllLanguages_WhenNothingIsSelected()
     {
-        Assert.That(ContentSyncStatusListingSupport.IsAllLanguages(ContentSyncStatusListingSupport.AllLanguagesFilter), Is.True);
+        Assert.That(ContentSyncStatusListingSupport.IsAllLanguages(null), Is.True);
+        Assert.That(ContentSyncStatusListingSupport.IsAllLanguages(string.Empty), Is.True);
         Assert.That(ContentSyncStatusListingSupport.IsAllLanguages("en"), Is.False);
-        Assert.That(ContentSyncStatusListingSupport.IsAllLanguages(null), Is.False);
     }
 
     [TestCase(1, false)]
@@ -135,21 +137,13 @@ public class AllLanguagesTests
     public void LanguageDisplayName_FallsBackToTheCodeName() =>
         Assert.That(ContentSyncStatusListingSupport.LanguageDisplayName(Item("de"), new Dictionary<string, string>()), Is.EqualTo("de"));
 
+    // All languages is the empty selection, not an option.
     [Test]
-    public async Task LanguageOptions_StartWithAllLanguages_WhenThereAreSeveral()
+    public async Task LanguageOptions_AreTheLanguages()
     {
-        var options = (await new ContentSyncStatusLanguageOptionsProvider(new FakeLanguages(languages)).GetOptionItems()).ToList();
+        var options = await new ContentSyncStatusLanguageOptionsProvider(new FakeLanguages(languages)).GetOptionItems();
 
-        Assert.That(options.Select(option => option.Text), Is.EqualTo(new[] { "All languages", "Spanish", "English" }));
-        Assert.That(options[0].Value, Is.EqualTo(ContentSyncStatusListingSupport.AllLanguagesFilter));
-    }
-
-    [Test]
-    public async Task LanguageOptions_WithOneLanguage_HaveNoAllLanguages()
-    {
-        var options = await new ContentSyncStatusLanguageOptionsProvider(new FakeLanguages([languages[1]])).GetOptionItems();
-
-        Assert.That(options.Select(option => option.Text), Is.EqualTo(new[] { "English" }));
+        Assert.That(options.Select(option => option.Text), Is.EqualTo(new[] { "Spanish", "English" }));
     }
 
     private sealed class FakeLanguages(IReadOnlyList<ContentSyncLanguage> languages) : IContentSyncFilterOptionsProvider

@@ -23,12 +23,12 @@ internal static class ContentSyncStatusListingSupport
     public const string LastPublishedColumn = "lastPublished";
     public const string LanguageColumn = "language";
 
-    // The Language filter's value for every language. A language code name can't contain it.
-    public const string AllLanguagesFilter = "*";
+    // No language selected lists every language: the page says what's pending, and a default language
+    // nobody chose shows nowhere, not even as an applied filter, so "everything is in sync" would
+    // silently mean only that language. Selecting one narrows the list.
     public const string AllLanguagesLabel = "All languages";
 
-    public static bool IsAllLanguages(string? requestedLanguageName) =>
-        string.Equals(requestedLanguageName, AllLanguagesFilter, StringComparison.Ordinal);
+    public static bool IsAllLanguages(string? requestedLanguageName) => string.IsNullOrEmpty(requestedLanguageName);
 
     // The Language column is shown on an instance with more than one language, whichever is selected,
     // so the columns don't change with the filter.

@@ -174,7 +174,7 @@ internal abstract class ContentSyncStatusTabBase(
             showsLanguage = ContentSyncStatusListingSupport.ShowsLanguageColumn(languages.Count);
 
             // GetCurrentContentLanguage() on ListingPageBase is private, so the admin's own language
-            // switcher isn't reachable here; the Language filter (default language when unset) is.
+            // switcher isn't reachable here; the Language filter (every language when unset) is.
             view = await ContentSyncStatusViewBuilder.BuildAsync(
                 request,
                 GetScopesAsync,
