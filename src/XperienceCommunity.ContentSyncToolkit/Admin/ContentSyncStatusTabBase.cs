@@ -203,10 +203,6 @@ internal abstract class ContentSyncStatusTabBase(
                 "The target instance couldn't be reached or rejected the request, so sync status can't be determined.",
                 "Target unavailable",
                 Enum.Parse<Color>(nameof(Color.AlertBackgroundHighEmphasis))),
-            ContentSyncStatusViewKind.AllInSync => MessageRow(
-                "Nothing is pending: everything is in sync.",
-                ContentSyncStatusListingSupport.StatusLabel(ContentSyncStatus.InSync),
-                ContentSyncStatusListingSupport.StatusColor(ContentSyncStatus.InSync)),
             ContentSyncStatusViewKind.ScopeNotFound => MessageRow(
                 $"The selected {ScopeNoun} no longer exists. Clear the filter or choose another {ScopeNoun}.",
                 "Not available",
@@ -216,9 +212,12 @@ internal abstract class ContentSyncStatusTabBase(
                 "Not available",
                 Enum.Parse<Color>(nameof(Color.BackgroundTagGrey))),
 
-            // Not configured and no scopes are explained by the banner; no items uses Xperience's
-            // native empty state.
-            ContentSyncStatusViewKind.NotConfigured or ContentSyncStatusViewKind.NoScopes or ContentSyncStatusViewKind.Empty or _ =>
+            // Not configured and no scopes are explained by the banner. Nothing to list, whether it's all
+            // in sync, there's no content or the filters match nothing, uses Xperience's native empty
+            // state, as other admin listings do: its text can't be changed (a listing's result has only
+            // rows and a count), and rows above are kept for failures, which an empty list would hide.
+            ContentSyncStatusViewKind.NotConfigured or ContentSyncStatusViewKind.NoScopes or ContentSyncStatusViewKind.Empty
+                or ContentSyncStatusViewKind.AllInSync or _ =>
                 new LoadDataResult { TotalCount = 0, Rows = [] },
         };
     }

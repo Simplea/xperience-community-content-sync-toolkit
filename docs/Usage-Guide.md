@@ -132,8 +132,8 @@ on what's still pending, with two pages in its navigation: **Pages** (one websit
 channel at a time) and **Content hub** (one workspace at a time). Xperience's own
 **List of content synchronizations** stays below them.
 
-Items in sync aren't listed unless you ask for them, and when nothing is pending
-the list says **Nothing is pending: everything is in sync.**
+Items in sync aren't listed unless you ask for them, so when nothing is pending
+the list is empty.
 
 ![Sync status Pages tab with Hide items in sync applied, listing pages as Incompatible, Unpublished, New, Changed, Moved and Reordered](images/pages-statuses.jpg)
 
