@@ -132,16 +132,19 @@ on what's still pending, with two pages in its navigation: **Pages** (one websit
 channel at a time) and **Content hub** (one workspace at a time). Xperience's own
 **List of content synchronizations** stays below them.
 
-Items in sync aren't listed unless you ask for them, and when nothing is pending
-the list says **Nothing is pending: everything is in sync.**
+Items in sync aren't listed unless you ask for them, so when nothing is pending
+the list is empty.
 
 ![Sync status Pages tab with Hide items in sync applied, listing pages as Incompatible, Unpublished, New, Changed, Moved and Reordered](images/pages-statuses.jpg)
 
 - **Filter** opens the filter panel. All fields are optional and combine:
   - **Channel** (Pages) or **Workspace** (Content hub). Without a selection,
     the first one is shown.
-  - **Language**. Without a selection, the instance's default content language
-    is compared.
+  - **Language**. Without a selection, every language is listed, one row per
+    language version, so nothing pending in another language goes unnoticed.
+    Choose a language to see only that one. With more than one language, a
+    **Language** column says which version each row is, and clicking a row
+    opens that version.
   - **Show items in sync**: lists them too. Without it, you see only what
     differs, Incompatible and Only on target included. Selecting a **Status** or
     searching looks at every item without it, so you can still find an item
@@ -395,8 +398,8 @@ outside the current view:
   `Source:TargetUrl`), so there's nothing to compare.
 - **A "Target unavailable" row**: the target couldn't be reached, rejected the
   secret, or doesn't have Content Sync's target role enabled.
-- **No rows**: the channel or workspace has no published content in the
-  compared language, or nothing matches the applied filters.
+- **No rows**: the channel or workspace has no published content (in the
+  selected language, if you chose one), or nothing matches the applied filters.
 - **A "Not available" row**: the selected channel, workspace, or language was
   deleted after the filter was applied. Clear that filter or choose another.
 
@@ -419,5 +422,8 @@ outside the current view:
     recommends editing only on the source; a sync overwrites target edits.
   - **Scheduled publish or unpublish dates.** Content Sync doesn't transfer
     them, and no status reflects them.
-- **One language at a time.** The default content language unless you choose
-  another with the Language filter.
+- **Every language, unless you choose one.** Each language version is
+  compared on its own, as Content Sync syncs them, so an item can be **In
+  sync** in one language and **Changed** in another. The target is asked for
+  each language in turn, so on a site with many languages the first load and
+  Refresh take longer.

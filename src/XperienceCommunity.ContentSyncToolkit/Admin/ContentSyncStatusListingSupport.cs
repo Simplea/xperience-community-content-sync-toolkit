@@ -21,6 +21,18 @@ internal static class ContentSyncStatusListingSupport
     public const string ContentTypeColumn = "contentType";
     public const string StatusColumn = "status";
     public const string LastPublishedColumn = "lastPublished";
+    public const string LanguageColumn = "language";
+
+    // No language selected lists every language: the page says what's pending, and a default language
+    // nobody chose shows nowhere, not even as an applied filter, so "everything is in sync" would
+    // silently mean only that language. Selecting one narrows the list.
+    public const string AllLanguagesLabel = "All languages";
+
+    public static bool IsAllLanguages(string? requestedLanguageName) => string.IsNullOrEmpty(requestedLanguageName);
+
+    // The Language column is shown on an instance with more than one language, whichever is selected,
+    // so the columns don't change with the filter.
+    public static bool ShowsLanguageColumn(int languageCount) => languageCount > 1;
 
     // Status filter values: Incompatible, or a ContentSyncStatus member name.
     public const string IncompatibleStatusFilter = "incompatible";
@@ -155,14 +167,23 @@ internal static class ContentSyncStatusListingSupport
     // also the fallback when no column is sent): Incompatible first, since those need a developer before
     // anyone can sync them, then by status (see statusOrder). Within a status, the most recently
     // published come first, since those are what editors are working on; every other sort breaks ties
-    // by display name, ascending. Tie-breaks don't follow the sort direction.
+    // by display name, ascending, then by language, so an item's languages stay together. Tie-breaks
+    // don't follow the sort direction. languageDisplayNames sorts the Language column by the names it
+    // shows; without them, by code name.
     public static IReadOnlyList<ContentSyncStatusItem> ApplySort(
-        IReadOnlyList<ContentSyncStatusItem> items, string? sortBy, bool descending)
+        IReadOnlyList<ContentSyncStatusItem> items,
+        string? sortBy,
+        bool descending,
+        IReadOnlyDictionary<string, string>? languageDisplayNames = null)
     {
+        string Language(ContentSyncStatusItem item) => LanguageDisplayName(item, languageDisplayNames);
+
         var ordered = sortBy switch
         {
             _ when IsColumn(sortBy, NameColumn) =>
                 Order(items, DisplayName, StringComparer.OrdinalIgnoreCase, descending),
+            _ when IsColumn(sortBy, LanguageColumn) =>
+                Order(items, Language, StringComparer.OrdinalIgnoreCase, descending),
             _ when IsColumn(sortBy, ContentTypeColumn) =>
                 Order(items, ContentTypeDisplayName, StringComparer.OrdinalIgnoreCase, descending),
             _ when IsColumn(sortBy, LastPublishedColumn) =>
@@ -171,7 +192,7 @@ internal static class ContentSyncStatusListingSupport
                 .ThenByDescending(PublishedOrEarliest),
         };
 
-        return [.. ordered.ThenBy(DisplayName, StringComparer.OrdinalIgnoreCase)];
+        return [.. ordered.ThenBy(DisplayName, StringComparer.OrdinalIgnoreCase).ThenBy(Language, StringComparer.OrdinalIgnoreCase)];
     }
 
     // Never-published items sort as the earliest possible date.
@@ -228,6 +249,15 @@ internal static class ContentSyncStatusListingSupport
     private static string? NonEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
     public static DateTime? LastPublishedWhen(ContentSyncStatusItem item) => (item.Local ?? item.Remote)?.LastPublishedWhen;
+
+    /// <summary>The language variant the item's row is about.</summary>
+    public static string LanguageName(ContentSyncStatusItem item) => (item.Local ?? item.Remote)?.LanguageName ?? string.Empty;
+
+    public static string LanguageDisplayName(ContentSyncStatusItem item, IReadOnlyDictionary<string, string>? languageDisplayNames)
+    {
+        string name = LanguageName(item);
+        return languageDisplayNames?.GetValueOrDefault(name) ?? name;
+    }
 
     private const string CannotDeleteHint =
         " Content Sync can't delete content: if it was deleted here, delete it on the target.";

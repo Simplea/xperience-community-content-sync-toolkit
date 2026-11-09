@@ -25,8 +25,11 @@ internal sealed record ContentSyncStatusView(
     /// <summary>The channel/workspace the items belong to; set once the scope is resolved.</summary>
     public ContentSyncScope? Scope { get; init; }
 
-    /// <summary>The compared language; set once the language is resolved.</summary>
+    /// <summary>The compared language; set once the language is resolved, and null when every language is compared.</summary>
     public string? LanguageName { get; init; }
+
+    /// <summary>This instance's languages, for the Language column; set once they're loaded.</summary>
+    public IReadOnlyList<ContentSyncLanguage> Languages { get; init; } = [];
 
     public static ContentSyncStatusView Of(ContentSyncStatusViewKind kind) => new(kind, [], 0);
 }
@@ -96,26 +99,35 @@ internal static class ContentSyncStatusViewBuilder
             return ContentSyncStatusView.Of(ContentSyncStatusViewKind.Empty);
         }
 
-        string? languageName = ResolveLanguageName(languages, request.RequestedLanguageName);
-        if (languageName is null)
+        bool allLanguages = ContentSyncStatusListingSupport.IsAllLanguages(request.RequestedLanguageName);
+        string? languageName = allLanguages ? null : ResolveLanguageName(languages, request.RequestedLanguageName);
+        if (!allLanguages && languageName is null)
         {
             return ContentSyncStatusView.Of(ContentSyncStatusViewKind.LanguageNotFound);
         }
 
-        var result = await getStatus(scope.Name, languageName, request.ForceRefresh, cancellationToken);
-        if (!result.TargetAvailable)
+        // Each language is its own comparison, cached on its own, as when it's selected alone. They run
+        // one after another, so a site with many languages doesn't send the target as many requests at once.
+        List<ContentSyncStatusItem> allItems = [];
+        foreach (string name in languageName is null ? languages.Select(language => language.Name) : [languageName])
         {
-            return ContentSyncStatusView.Of(ContentSyncStatusViewKind.TargetUnavailable);
+            var result = await getStatus(scope.Name, name, request.ForceRefresh, cancellationToken);
+            if (!result.TargetAvailable)
+            {
+                return ContentSyncStatusView.Of(ContentSyncStatusViewKind.TargetUnavailable);
+            }
+
+            allItems.AddRange(result.Items);
         }
 
-        if (result.Items.Count == 0)
+        if (allItems.Count == 0)
         {
             return ContentSyncStatusView.Of(ContentSyncStatusViewKind.Empty);
         }
 
         var filter = request.Filter;
         bool hideInSync = ContentSyncStatusListingSupport.HidesInSync(filter, request.SearchTerm);
-        var items = ContentSyncStatusListingSupport.ApplyHideInSync(result.Items, hideInSync);
+        var items = ContentSyncStatusListingSupport.ApplyHideInSync(allItems, hideInSync);
         if (hideInSync && items.Count == 0)
         {
             return ContentSyncStatusView.Of(ContentSyncStatusViewKind.AllInSync);
@@ -125,7 +137,7 @@ internal static class ContentSyncStatusViewBuilder
         items = ContentSyncStatusListingSupport.ApplyContentTypeFilter(items, filter.ContentTypeName);
         items = ContentSyncStatusListingSupport.ApplyPublishedFilter(items, filter.PublishedFrom, filter.PublishedTo);
         items = ContentSyncStatusListingSupport.ApplySearch(items, request.SearchTerm);
-        items = ContentSyncStatusListingSupport.ApplySort(items, request.SortBy, request.SortDescending);
+        items = ContentSyncStatusListingSupport.ApplySort(items, request.SortBy, request.SortDescending, LanguageDisplayNames(languages));
         int totalCount = items.Count;
         items = ContentSyncStatusListingSupport.ApplyPaging(items, request.PageSize, request.PageIndex);
 
@@ -133,8 +145,14 @@ internal static class ContentSyncStatusViewBuilder
         {
             Scope = scope,
             LanguageName = languageName,
+            Languages = languages,
         };
     }
+
+    public static IReadOnlyDictionary<string, string> LanguageDisplayNames(IReadOnlyList<ContentSyncLanguage> languages) =>
+        languages
+            .DistinctBy(language => language.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(language => language.Name, language => language.DisplayName, StringComparer.OrdinalIgnoreCase);
 
     // No filter applied yet defaults to the first scope; a requested scope that no longer exists
     // (deleted after the dropdown loaded) returns null rather than silently showing another one.
@@ -148,15 +166,7 @@ internal static class ContentSyncStatusViewBuilder
         return scopes.FirstOrDefault(scope => string.Equals(scope.Name, requestedScopeName, StringComparison.OrdinalIgnoreCase));
     }
 
-    // Same rule as scopes, defaulting to the instance's default language (or the first, should
-    // none be marked default).
-    private static string? ResolveLanguageName(IReadOnlyList<ContentSyncLanguage> languages, string? requestedLanguageName)
-    {
-        if (string.IsNullOrEmpty(requestedLanguageName))
-        {
-            return (languages.FirstOrDefault(language => language.IsDefault) ?? languages[0]).Name;
-        }
-
-        return languages.FirstOrDefault(language => string.Equals(language.Name, requestedLanguageName, StringComparison.OrdinalIgnoreCase))?.Name;
-    }
+    // As for scopes, a requested language that no longer exists returns null rather than another one.
+    private static string? ResolveLanguageName(IReadOnlyList<ContentSyncLanguage> languages, string? requestedLanguageName) =>
+        languages.FirstOrDefault(language => string.Equals(language.Name, requestedLanguageName, StringComparison.OrdinalIgnoreCase))?.Name;
 }
