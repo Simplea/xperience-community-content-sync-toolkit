@@ -44,12 +44,14 @@ internal abstract class ContentSyncStatusTabBase(
         FilterFormModel = filterModel,
         ColumnConfigurations =
         [
-            // Widths are 8px grid units; the minimums add up to 93, which fits the 920px grid of a
-            // 1440px-wide window (see docs/specs/sync-status-admin-page.md, Column widths).
-            SortableColumn(ContentSyncStatusListingSupport.NameColumn, nameColumnCaption, minWidth: 40, maxWidth: 100, searchable: true),
-            SortableColumn(ContentSyncStatusListingSupport.ContentTypeColumn, "Content type", minWidth: 18, maxWidth: 32),
+            // Widths are 8px grid units; the minimums add up to 91, which with the cells' padding fits
+            // the 920px grid of a 1440px-wide window (see docs/specs/sync-status-admin-page.md, Column widths).
+            // Modified by has no header tooltip: its icon would cut the caption at that width.
+            SortableColumn(ContentSyncStatusListingSupport.NameColumn, nameColumnCaption, minWidth: 30, maxWidth: 100, searchable: true),
+            SortableColumn(ContentSyncStatusListingSupport.ContentTypeColumn, "Content type", minWidth: 14, maxWidth: 32),
             // The default sort, so the header shows it; see ContentSyncStatusListingSupport.ApplySort.
             SortableColumn(ContentSyncStatusListingSupport.StatusColumn, "Status", minWidth: 17, maxWidth: 24, tooltip: ContentSyncStatusListingSupport.StatusLegend(options.Value.ComparePageOrder), defaultDirection: SortTypeEnum.Asc),
+            SortableColumn(ContentSyncStatusListingSupport.ModifiedByColumn, "Modified by", minWidth: 12, maxWidth: 24),
             SortableColumn(ContentSyncStatusListingSupport.LastPublishedColumn, "Last published", minWidth: 18, maxWidth: 24, tooltip: LastPublishedTooltip),
         ],
         PageSizes = [10, 25, 50],
@@ -81,6 +83,10 @@ internal abstract class ContentSyncStatusTabBase(
         string scopeName, string languageName, bool forceRefresh, CancellationToken cancellationToken);
 
     /// <summary>Local item IDs and draft state for the given items (one listing page), keyed by item GUID.</summary>
+    /// <summary>Who last modified each of the scope's items' language version here, keyed by row GUID.</summary>
+    protected abstract Task<IReadOnlyDictionary<Guid, ContentSyncModifier>> GetModifiersAsync(
+        ContentSyncScope scope, string languageName, CancellationToken cancellationToken);
+
     protected abstract Task<IReadOnlyDictionary<Guid, ContentSyncLocalItem>> GetLocalItemsAsync(
         ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken);
 
@@ -180,6 +186,7 @@ internal abstract class ContentSyncStatusTabBase(
                 GetScopesAsync,
                 _ => Task.FromResult(languages),
                 GetStatusAsync,
+                GetModifiersAsync,
                 cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -237,7 +244,8 @@ internal abstract class ContentSyncStatusTabBase(
                 ContentSyncStatusFilterValueExtractor.ExtractStringParameter(where, ContentTypeFilterFieldName),
                 ContentSyncStatusFilterValueExtractor.ExtractDateParameter(where, nameof(ContentSyncStatusFilterModelBase.PublishedFrom)),
                 ContentSyncStatusFilterValueExtractor.ExtractDateParameter(where, nameof(ContentSyncStatusFilterModelBase.PublishedTo)),
-                ContentSyncStatusFilterValueExtractor.ExtractBoolParameter(where, nameof(ContentSyncStatusFilterModelBase.ShowInSync)) == true),
+                ContentSyncStatusFilterValueExtractor.ExtractBoolParameter(where, nameof(ContentSyncStatusFilterModelBase.ShowInSync)) == true,
+                ContentSyncStatusFilterValueExtractor.ExtractBoolParameter(where, nameof(ContentSyncStatusFilterModelBase.OnlyMyChanges)) == true),
             settings.SearchTerm,
             settings.SortBy,
             settings.SortType == SortTypeEnum.Desc,
@@ -271,7 +279,8 @@ internal abstract class ContentSyncStatusTabBase(
             return ToRow(
                 item,
                 details.GetValueOrDefault((item.Guid, language)),
-                showsLanguage ? ContentSyncStatusListingSupport.LanguageDisplayName(item, languageDisplayNames) : null);
+                showsLanguage ? ContentSyncStatusListingSupport.LanguageDisplayName(item, languageDisplayNames) : null,
+                view.ModifierOf(item)?.Name);
         })];
     }
 
@@ -393,7 +402,7 @@ internal abstract class ContentSyncStatusTabBase(
         };
 
     // An item is listed once per language, so its row is identified by both.
-    private static Row ToRow(ContentSyncStatusItem item, RowDetails details, string? language) =>
+    private static Row ToRow(ContentSyncStatusItem item, RowDetails details, string? language, string? modifiedBy) =>
         new()
         {
             Identifier = $"{item.Guid}_{ContentSyncStatusListingSupport.LanguageName(item)}",
@@ -407,6 +416,7 @@ internal abstract class ContentSyncStatusTabBase(
                     ContentSyncStatusListingSupport.StatusLabel(item, details.DeletedItem, details.MovedItem),
                     ContentSyncStatusListingSupport.StatusColor(item, details.MovedItem),
                     ContentSyncStatusListingSupport.StatusTooltip(item, details.HasNewerDraft, details.OpensOnTarget, details.DeletedItem, details.MovedItem)),
+                new StringCell { Value = modifiedBy ?? string.Empty },
                 LastPublishedCell(item, details),
             ],
         };
@@ -471,6 +481,7 @@ internal abstract class ContentSyncStatusTabBase(
                         .. LanguageCell(showsLanguage ? string.Empty : null),
                         new StringCell { Value = string.Empty },
                         TagCell(tagLabel, color),
+                        new StringCell { Value = string.Empty },
                         new StringCell { Value = string.Empty },
                     ],
                 },

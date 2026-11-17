@@ -145,6 +145,11 @@ the list is empty.
     Choose a language to see only that one. With more than one language, a
     **Language** column says which version each row is, and clicking a row
     opens that version.
+  - **Only my changes**: lists only the items you last edited on this instance
+    (saving a draft counts), so you can see what you still need to sync. If
+    someone edits an item after you, it's theirs: the **Modified by** column
+    shows who. Items only on the target never match. Off by default, so you see
+    everyone's changes; Xperience remembers it once you check it.
   - **Show items in sync**: lists them too. Without it, you see only what
     differs, Incompatible and Only on target included. Selecting a **Status** or
     searching looks at every item without it, so you can still find an item
@@ -159,6 +164,10 @@ the list is empty.
   <img src="images/filter-panel.png" width="380" alt="Filter panel with Hide items in sync checked and Unpublished and New selected in the Status filter">
 - **Search** by path (Pages) or name (Content hub, the name the Content hub
   shows); press Enter to apply.
+- **Modified by** shows who last edited each item on this instance, saving a
+  draft included, so you know whom to ask before syncing someone else's
+  change. It's empty for items only on the target. Hover a shortened name to
+  see it in full.
 - **Sort** by clicking a column header. The list starts sorted by **Status**,
   in the order of the [statuses table](#statuses): Incompatible first, then Unpublished, New,
   Changed, Moved, Reordered (when compared), Not published, Only on target, and In sync. Within each status,

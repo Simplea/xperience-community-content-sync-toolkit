@@ -39,6 +39,7 @@ public class AllLanguagesTests
                 calls.Add(language);
                 return Task.FromResult(result?.Invoke(language) ?? new ContentSyncStatusResult(true, [Item(language, guid: sharedGuid)]));
             },
+            (_, _, _) => Task.FromResult<IReadOnlyDictionary<Guid, ContentSyncModifier>>(new Dictionary<Guid, ContentSyncModifier>()),
             CancellationToken.None);
 
     [Test]

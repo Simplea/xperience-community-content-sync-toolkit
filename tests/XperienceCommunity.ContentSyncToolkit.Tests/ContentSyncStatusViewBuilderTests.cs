@@ -75,6 +75,7 @@ public class ContentSyncStatusViewBuilderTests
                 statusCalls.Add((scopeName, languageName, forceRefresh));
                 return Task.FromResult(result ?? new ContentSyncStatusResult(true, [Item("/A")]));
             },
+            (_, _, _) => Task.FromResult<IReadOnlyDictionary<Guid, ContentSyncModifier>>(new Dictionary<Guid, ContentSyncModifier>()),
             CancellationToken.None);
 
     [Test]

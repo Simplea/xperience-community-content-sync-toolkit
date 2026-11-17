@@ -33,6 +33,7 @@ internal sealed class ContentSyncStatusPagesTab(
     IContentInventoryClient inventoryClient,
     ContentSyncStatusRefreshRequestStore refreshRequestStore,
     IContentSyncRecycleBinLookup recycleBinLookup,
+    IContentSyncModifierLookup modifierLookup,
     IPageLinkGenerator pageLinkGenerator)
     : ContentSyncStatusTabBase(
         new ContentSyncStatusPagesFilterModel(),
@@ -78,6 +79,11 @@ internal sealed class ContentSyncStatusPagesTab(
 
         return visibility.Apply(result);
     }
+
+    // A website channel scope's ID is its WebsiteChannelID.
+    protected override Task<IReadOnlyDictionary<Guid, ContentSyncModifier>> GetModifiersAsync(
+        ContentSyncScope scope, string languageName, CancellationToken cancellationToken) =>
+        modifierLookup.GetWebPagesAsync(scope.Id, languageName, cancellationToken);
 
     protected override Task<IReadOnlyDictionary<Guid, ContentSyncLocalItem>> GetLocalItemsAsync(
         ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken) =>
