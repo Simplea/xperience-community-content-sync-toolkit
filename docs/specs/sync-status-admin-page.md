@@ -156,6 +156,7 @@ live: Xperience omits it from the compiled filter entirely).
 | --- | --- | --- |
 | **Language** | Dropdown of the instance's content languages | No selection (placeholder "All languages") compares **every** language: each separately, one after another, each with its own cached target inventory, and lists the results together. A row is one language version, identified by its GUID and language. Before 1.0.0 no selection compared only the default language, but nothing on the page showed that (an unchosen value isn't an applied filter), so an empty list could hide another language's changes. Selecting a language narrows the list to it. A language deleted after the filter was applied shows a "no longer exists" row, like a deleted channel/workspace. If the target fails for any language, the tab shows Target unavailable rather than a partial list. Row links, newer-draft hints and the recycle bin and workspace lookups are fetched per language on the page. |
 | **Show items in sync** | Checkbox | The page is about what's pending, so In sync items are left out by default; everything else stays, Incompatible and Only on target included, so an item never disappears just because it can't be synced yet. Unchecked is the default rather than a pre-checked *Hide items in sync*, so the default view doesn't depend on how a form's initial value reaches the first load, and Clear all keeps it (confirmed live on 31.9.1). A Status selection or a search looks at every item, so selecting In sync or searching for an item in sync never comes back empty. Xperience remembers the applied filter per browser. Read back as a `bool` parameter; unchecked adds no condition and no "Applied filters" chip. When everything is hidden because it's all in sync, the list uses Xperience's native empty state, as when there's no content or the filters match nothing. Before 1.0.0 a row said "Nothing is pending: everything is in sync." It was dropped so every empty list looks the same and like other admin listings: the native empty state's text can't be changed (`LoadDataResult` has only rows and a count; only Kentico's internal structured listing template has a no-data message), and a row in its place is a fake item in the table. Rows are kept only for failures (Target unavailable, Error, Not available), which an empty list would hide. Two drafts were dropped: a *Needs sync* option in the Status list (a group mixed in with statuses), and a *Show* dropdown with *Not in sync* and *Ready to sync*, which differ only for Incompatible and Only on target items, so most of the time they showed the same list. |
+| **Only my changes** | Checkbox | Lists only the items the signed-in user last modified on this instance, so an editor can see what they still need to move. "Last modified" is Kentico's `ContentItemLanguageMetadataModifiedByUserID` for the row's language version: saving a draft counts, so an item someone else published and the user then edited counts as theirs (its tooltip already says the newer draft isn't published), and an item the user published and someone else then edited counts as the other person's. Only rows with a copy on this instance can match, so **Only on target** never does; In sync items match only with **Show items in sync**. It combines with every other filter. **Unchecked is the default**, so the page shows everyone's pending changes, as for languages: items last changed by an import, the API or a user who has left belong to no one, and a personal default would hide them from everybody; leads who run the sync need the whole list; and a sync also sends linked items and parent pages others changed, so "nothing of mine" isn't "nothing will change". Xperience remembers the applied filter per browser, so an editor who checks it keeps a personal view. Read back as a `bool` parameter like Show items in sync. It uses the Modified by column's data, so the column shows why an item is or isn't listed: an item someone else edited after you is theirs. Not included: who published the compared version, or everyone who edited it since the target's copy (both need version history). |
 | **Status** | General selector (multi-select with search): *Incompatible*, then each status in the sort order (placeholder *All*) | Items matching **any** selected option. *Incompatible* = items whose required objects the target lacks. Each status option matches the tag shown, so an incompatible item matches *Incompatible* only. Kentico's general selector returns the selected values as a list, so `ContentSyncStatusMultiValueConditionBuilder` (the field's `FilterCondition` builder) compiles them into one parameter, comma-separated, which is read back like the other fields. Its options come from `ContentSyncStatusFilterOptionsDataProvider`, which leaves out *Reordered* unless `ComparePageOrder` is on (the Status column's legend does too). Verified live on 31.9.1, and the general selector, its data provider interface and `FilterCondition` exist in 30.8.0 (the library compiles against it). |
 | **Content type** | Dropdown of website content types (Pages) or reusable content types (Content hub) | Lists every type of that kind, not only the ones present in the selected scope, because an options provider can't see the selected channel/workspace. Options show the type's display name; the value is its code name. |
 | **Published from** / **Published to** | Two date inputs | Filter on the date in the Last published column (the local date, or the target's for Only on target). Both bounds are inclusive whole days, taken in the **server's** time zone: the date inputs carry no time zone and the server can't see the editor's, so near midnight a day boundary can differ from the column, which shows the editor's time zone. Items without a publish date are excluded while either bound is set. |
@@ -220,16 +221,32 @@ in the tooltip, so editors had to hover to tell an edit from an unpublish or a
 move.
 
 **Column widths.** `MinWidth`/`MaxWidth` are 8px grid units. At a 1440px-wide
-window the grid is 920px, so the minimums add up to 93 (Name 40, Content type
-18, Status 17, Last published 18): every status label and a full date and
-time fit. Long paths and content type names are cut with an ellipsis. Verified
-live on 31.9.1.
+window the grid is 920px, and the cells' padding adds about 2 units, so the
+minimums add up to 91 (Name 30, Content type 14, Status 17, Modified by 12,
+Last published 18): every status label and a full date and time fit. Long
+paths, content type names and user names are cut with an ellipsis; Kentico's
+cells show the full text on hover. Before 1.0.0 there were four columns (Name
+40, Content type 18); Modified by and Language took their width from them.
+Verified live on 31.9.1.
+
+**Modified by column.** Who last modified the row's language version on this
+instance (`ContentItemLanguageMetadataModifiedByUserID`; saving a draft counts),
+as the user's full name, or their user name when they have none. Empty for Only
+on target rows, which have no copy here. Sortable. It's the same data as Only my
+changes: `IContentSyncModifierLookup` reads it for every item in the channel or
+workspace and language (three queries, whatever the number of items), so the
+column sorts across pages and the filter needs no query of its own. A failed
+lookup is logged (`MODIFIEDBY`) and leaves the column empty. Its header has no
+tooltip: the icon would cut the caption at its width. Not included: the
+target's author for Only on target rows (it needs a new inventory schema
+version), and everyone who edited since the target's copy (it needs version
+history, `CMS_ContentItemVersion`, which isn't filled on every instance).
 
 **Language column.** Shown, and sortable by display name, on an instance with
 more than one content language, whichever language is selected, so the columns
 don't change with the filter. `ConfigurePage` adds it and `LoadData` adds the
 matching cell, both from the number of languages. Its minimum width (10) comes
-out of the name column's (30), so the minimums still add up to 93. Default
+out of the name column's (20), so the minimums still add up to 91. Default
 sort ties are broken by name, then language, so an item's language versions
 stay together. Verified live on 31.9.1 with English and Spanish.
 

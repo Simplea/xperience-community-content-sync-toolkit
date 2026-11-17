@@ -15,6 +15,10 @@ internal abstract class ContentSyncStatusFilterModelBase
     [DropDownComponent(DataProviderType = typeof(ContentSyncStatusLanguageOptionsProvider), Label = "Language", Placeholder = ContentSyncStatusListingSupport.AllLanguagesLabel, Order = 10)]
     public string? Language { get; set; }
 
+    // Unchecked by default, so the page shows everyone's changes; see docs/specs/sync-status-admin-page.md.
+    [CheckBoxComponent(Label = "Only my changes", Order = 12)]
+    public bool OnlyMyChanges { get; set; }
+
     // Unchecked is the default view, what's still pending, so Clear filter keeps it too. A Status
     // selection or a search looks at every item; see ContentSyncStatusListingSupport.HidesInSync.
     [CheckBoxComponent(Label = "Show items in sync", Order = 15)]

@@ -31,6 +31,13 @@ internal sealed record ContentSyncStatusView(
     /// <summary>This instance's languages, for the Language column; set once they're loaded.</summary>
     public IReadOnlyList<ContentSyncLanguage> Languages { get; init; } = [];
 
+    /// <summary>Who last modified each listed language version here, keyed by row GUID and language. Only on target items have none.</summary>
+    public IReadOnlyDictionary<(Guid Guid, string LanguageName), ContentSyncModifier> Modifiers { get; init; } =
+        new Dictionary<(Guid, string), ContentSyncModifier>();
+
+    public ContentSyncModifier? ModifierOf(ContentSyncStatusItem item) =>
+        Modifiers.GetValueOrDefault((item.Guid, ContentSyncStatusListingSupport.LanguageName(item)));
+
     public static ContentSyncStatusView Of(ContentSyncStatusViewKind kind) => new(kind, [], 0);
 }
 
@@ -40,12 +47,14 @@ internal sealed record ContentSyncStatusView(
 /// <param name="PublishedFrom">First day to include, from a date input (midnight).</param>
 /// <param name="PublishedTo">Last day to include, from a date input (midnight).</param>
 /// <param name="ShowInSync">Whether to list items in sync; see <see cref="ContentSyncStatusListingSupport.HidesInSync"/>.</param>
+/// <param name="OnlyMyChanges">Whether to list only the items the signed-in user last modified on this instance.</param>
 internal sealed record ContentSyncStatusFilter(
     string? Status = null,
     string? ContentTypeName = null,
     DateTime? PublishedFrom = null,
     DateTime? PublishedTo = null,
-    bool ShowInSync = false);
+    bool ShowInSync = false,
+    bool OnlyMyChanges = false);
 
 // RequestedScopeName/RequestedLanguageName come from the filter, or are null when not applied.
 // PageIndex is zero-based, as LoadDataSettings.SelectedPage provides it.
@@ -74,6 +83,7 @@ internal static class ContentSyncStatusViewBuilder
         Func<CancellationToken, Task<IReadOnlyList<ContentSyncScope>>> getScopes,
         Func<CancellationToken, Task<IReadOnlyList<ContentSyncLanguage>>> getLanguages,
         Func<string, string, bool, CancellationToken, Task<ContentSyncStatusResult>> getStatus,
+        Func<ContentSyncScope, string, CancellationToken, Task<IReadOnlyDictionary<Guid, ContentSyncModifier>>> getModifiers,
         CancellationToken cancellationToken)
     {
         if (!request.IsSourceConfigured)
@@ -109,6 +119,7 @@ internal static class ContentSyncStatusViewBuilder
         // Each language is its own comparison, cached on its own, as when it's selected alone. They run
         // one after another, so a site with many languages doesn't send the target as many requests at once.
         List<ContentSyncStatusItem> allItems = [];
+        var modifiers = new Dictionary<(Guid, string), ContentSyncModifier>();
         foreach (string name in languageName is null ? languages.Select(language => language.Name) : [languageName])
         {
             var result = await getStatus(scope.Name, name, request.ForceRefresh, cancellationToken);
@@ -117,7 +128,21 @@ internal static class ContentSyncStatusViewBuilder
                 return ContentSyncStatusView.Of(ContentSyncStatusViewKind.TargetUnavailable);
             }
 
-            allItems.AddRange(result.Items);
+            // Only items with a copy here have a modifier here, and only they can be the user's.
+            var languageModifiers = await getModifiers(scope, name, cancellationToken);
+            foreach (var item in result.Items)
+            {
+                var modifier = item.Local is null ? null : languageModifiers.GetValueOrDefault(item.Guid);
+                if (modifier is not null)
+                {
+                    modifiers[(item.Guid, ContentSyncStatusListingSupport.LanguageName(item))] = modifier;
+                }
+
+                if (!request.Filter.OnlyMyChanges || modifier?.IsCurrentUser == true)
+                {
+                    allItems.Add(item);
+                }
+            }
         }
 
         if (allItems.Count == 0)
@@ -137,7 +162,12 @@ internal static class ContentSyncStatusViewBuilder
         items = ContentSyncStatusListingSupport.ApplyContentTypeFilter(items, filter.ContentTypeName);
         items = ContentSyncStatusListingSupport.ApplyPublishedFilter(items, filter.PublishedFrom, filter.PublishedTo);
         items = ContentSyncStatusListingSupport.ApplySearch(items, request.SearchTerm);
-        items = ContentSyncStatusListingSupport.ApplySort(items, request.SortBy, request.SortDescending, LanguageDisplayNames(languages));
+        items = ContentSyncStatusListingSupport.ApplySort(
+            items,
+            request.SortBy,
+            request.SortDescending,
+            LanguageDisplayNames(languages),
+            item => modifiers.GetValueOrDefault((item.Guid, ContentSyncStatusListingSupport.LanguageName(item)))?.Name ?? string.Empty);
         int totalCount = items.Count;
         items = ContentSyncStatusListingSupport.ApplyPaging(items, request.PageSize, request.PageIndex);
 
@@ -146,6 +176,7 @@ internal static class ContentSyncStatusViewBuilder
             Scope = scope,
             LanguageName = languageName,
             Languages = languages,
+            Modifiers = modifiers,
         };
     }
 

@@ -22,6 +22,7 @@ internal static class ContentSyncStatusListingSupport
     public const string StatusColumn = "status";
     public const string LastPublishedColumn = "lastPublished";
     public const string LanguageColumn = "language";
+    public const string ModifiedByColumn = "modifiedBy";
 
     // No language selected lists every language: the page says what's pending, and a default language
     // nobody chose shows nowhere, not even as an applied filter, so "everything is in sync" would
@@ -174,7 +175,8 @@ internal static class ContentSyncStatusListingSupport
         IReadOnlyList<ContentSyncStatusItem> items,
         string? sortBy,
         bool descending,
-        IReadOnlyDictionary<string, string>? languageDisplayNames = null)
+        IReadOnlyDictionary<string, string>? languageDisplayNames = null,
+        Func<ContentSyncStatusItem, string>? modifiedBy = null)
     {
         string Language(ContentSyncStatusItem item) => LanguageDisplayName(item, languageDisplayNames);
 
@@ -184,6 +186,8 @@ internal static class ContentSyncStatusListingSupport
                 Order(items, DisplayName, StringComparer.OrdinalIgnoreCase, descending),
             _ when IsColumn(sortBy, LanguageColumn) =>
                 Order(items, Language, StringComparer.OrdinalIgnoreCase, descending),
+            _ when IsColumn(sortBy, ModifiedByColumn) && modifiedBy is not null =>
+                Order(items, modifiedBy, StringComparer.OrdinalIgnoreCase, descending),
             _ when IsColumn(sortBy, ContentTypeColumn) =>
                 Order(items, ContentTypeDisplayName, StringComparer.OrdinalIgnoreCase, descending),
             _ when IsColumn(sortBy, LastPublishedColumn) =>
