@@ -26,7 +26,7 @@ public class AllLanguagesTests
     }
 
     private static ContentSyncStatusViewRequest Request(string? languageName) =>
-        new(true, null, languageName, false, new ContentSyncStatusFilter(ShowInSync: true), null, null, false, 50, 0);
+        new(true, null, languageName, false, new ContentSyncStatusFilter(), null, null, false, 50, 0);
 
     private static Task<ContentSyncStatusView> Build(
         string? languageName, List<string> calls, Func<string, ContentSyncStatusResult>? result = null) =>
@@ -40,6 +40,7 @@ public class AllLanguagesTests
                 return Task.FromResult(result?.Invoke(language) ?? new ContentSyncStatusResult(true, [Item(language, guid: sharedGuid)]));
             },
             (_, _, _) => Task.FromResult<IReadOnlyDictionary<Guid, ContentSyncModifier>>(new Dictionary<Guid, ContentSyncModifier>()),
+            (_, _) => Task.FromResult(true),
             CancellationToken.None);
 
     [Test]

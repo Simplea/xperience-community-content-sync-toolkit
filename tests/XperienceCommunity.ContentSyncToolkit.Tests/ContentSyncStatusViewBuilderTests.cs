@@ -45,7 +45,7 @@ public class ContentSyncStatusViewBuilderTests
         bool sortDescending = false,
         int pageSize = 50,
         int pageIndex = 0) =>
-        new(isSourceConfigured, requestedScopeName, requestedLanguageName, forceRefresh, filter ?? new ContentSyncStatusFilter(ShowInSync: true),
+        new(isSourceConfigured, requestedScopeName, requestedLanguageName, forceRefresh, filter ?? new ContentSyncStatusFilter(),
             searchTerm, sortBy, sortDescending, pageSize, pageIndex);
 
     private static ContentSyncStatusItem Item(
@@ -76,6 +76,7 @@ public class ContentSyncStatusViewBuilderTests
                 return Task.FromResult(result ?? new ContentSyncStatusResult(true, [Item("/A")]));
             },
             (_, _, _) => Task.FromResult<IReadOnlyDictionary<Guid, ContentSyncModifier>>(new Dictionary<Guid, ContentSyncModifier>()),
+            (_, _) => Task.FromResult(true),
             CancellationToken.None);
 
     [Test]
@@ -189,27 +190,29 @@ public class ContentSyncStatusViewBuilderTests
     private static string[] Paths(ContentSyncStatusView view) =>
         [.. view.Items.Select(ContentSyncStatusListingSupport.DisplayName)];
 
+    // Everything is listed by default, pending items first, so the list isn't empty while there's content.
     [Test]
-    public async Task DefaultView_ListsWhatIsPending()
+    public async Task DefaultView_ListsEverything_PendingFirst()
     {
         var view = await Build(Request(filter: new ContentSyncStatusFilter()), twoScopes, pendingAndInSync);
+
+        Assert.That(Paths(view), Is.EqualTo(new[] { "/Pending", "/Synced" }));
+    }
+
+    [Test]
+    public async Task HideInSync_ListsWhatIsPending()
+    {
+        var view = await Build(Request(filter: new ContentSyncStatusFilter(HideInSync: true)), twoScopes, pendingAndInSync);
 
         Assert.That(Paths(view), Is.EqualTo(new[] { "/Pending" }));
     }
 
-    [Test]
-    public async Task ShowInSync_ListsEverything()
-    {
-        var view = await Build(Request(filter: new ContentSyncStatusFilter(ShowInSync: true)), twoScopes, pendingAndInSync);
-
-        Assert.That(Paths(view), Is.EquivalentTo(new[] { "/Pending", "/Synced" }));
-    }
-
-    // Selecting In sync must show it, even with the checkbox left alone.
+    // Selecting In sync must show it, even with Hide items in sync checked.
     [Test]
     public async Task StatusSelection_DecidesOnItsOwn()
     {
-        var view = await Build(Request(filter: new ContentSyncStatusFilter(Status: nameof(ContentSyncStatus.InSync))), twoScopes, pendingAndInSync);
+        var view = await Build(
+            Request(filter: new ContentSyncStatusFilter(Status: nameof(ContentSyncStatus.InSync), HideInSync: true)), twoScopes, pendingAndInSync);
 
         Assert.That(Paths(view), Is.EqualTo(new[] { "/Synced" }));
     }
@@ -218,17 +221,17 @@ public class ContentSyncStatusViewBuilderTests
     [Test]
     public async Task Search_LooksAtItemsInSyncToo()
     {
-        var view = await Build(Request(filter: new ContentSyncStatusFilter(), searchTerm: "Synced"), twoScopes, pendingAndInSync);
+        var view = await Build(Request(filter: new ContentSyncStatusFilter(HideInSync: true), searchTerm: "Synced"), twoScopes, pendingAndInSync);
 
         Assert.That(Paths(view), Is.EqualTo(new[] { "/Synced" }));
     }
 
     [Test]
-    public async Task DefaultView_WithNothingPending_SaysEverythingIsInSync()
+    public async Task HideInSync_WithNothingPending_SaysEverythingIsInSync()
     {
         var result = new ContentSyncStatusResult(true, [Item("/Synced", ContentSyncStatus.InSync)]);
 
-        var view = await Build(Request(filter: new ContentSyncStatusFilter()), twoScopes, result);
+        var view = await Build(Request(filter: new ContentSyncStatusFilter(HideInSync: true)), twoScopes, result);
 
         Assert.That(view.Kind, Is.EqualTo(ContentSyncStatusViewKind.AllInSync));
     }
@@ -238,7 +241,7 @@ public class ContentSyncStatusViewBuilderTests
     public async Task DefaultView_WithPendingItemsFilteredOut_IsAnEmptyItemsView()
     {
         var view = await Build(
-            Request(filter: new ContentSyncStatusFilter(ContentTypeName: "Test.Other")), twoScopes, pendingAndInSync);
+            Request(filter: new ContentSyncStatusFilter(ContentTypeName: "Test.Other", HideInSync: true)), twoScopes, pendingAndInSync);
 
         Assert.That(view.Kind, Is.EqualTo(ContentSyncStatusViewKind.Items));
         Assert.That(view.TotalCount, Is.Zero);

@@ -42,7 +42,7 @@ public class OnlyMyChangesTests
         bool sortDescending = false) =>
         ContentSyncStatusViewBuilder.BuildAsync(
             new ContentSyncStatusViewRequest(
-                true, null, languageName, false, new ContentSyncStatusFilter(ShowInSync: showInSync, OnlyMyChanges: onlyMyChanges),
+                true, null, languageName, false, new ContentSyncStatusFilter(OnlyMyChanges: onlyMyChanges, HideInSync: !showInSync),
                 null, sortBy, sortDescending, 50, 0),
             _ => Task.FromResult(scopes),
             _ => Task.FromResult(languages),
@@ -52,6 +52,7 @@ public class OnlyMyChangesTests
                 lookups.Add((scope.Id, language));
                 return Task.FromResult<IReadOnlyDictionary<Guid, ContentSyncModifier>>(modifiers(language));
             },
+            (_, _) => Task.FromResult(true),
             CancellationToken.None);
 
     [Test]

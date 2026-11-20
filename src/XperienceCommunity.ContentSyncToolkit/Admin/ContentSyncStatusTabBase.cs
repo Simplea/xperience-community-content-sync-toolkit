@@ -84,6 +84,9 @@ internal abstract class ContentSyncStatusTabBase(
 
     /// <summary>Local item IDs and draft state for the given items (one listing page), keyed by item GUID.</summary>
     /// <summary>Who last modified each of the scope's items' language version here, keyed by row GUID.</summary>
+    /// <summary>Whether the scope has any content on this instance, to choose where the page opens.</summary>
+    protected abstract Task<bool> HasContentAsync(ContentSyncScope scope, CancellationToken cancellationToken);
+
     protected abstract Task<IReadOnlyDictionary<Guid, ContentSyncModifier>> GetModifiersAsync(
         ContentSyncScope scope, string languageName, CancellationToken cancellationToken);
 
@@ -187,6 +190,7 @@ internal abstract class ContentSyncStatusTabBase(
                 _ => Task.FromResult(languages),
                 GetStatusAsync,
                 GetModifiersAsync,
+                HasContentAsync,
                 cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -244,7 +248,7 @@ internal abstract class ContentSyncStatusTabBase(
                 ContentSyncStatusFilterValueExtractor.ExtractStringParameter(where, ContentTypeFilterFieldName),
                 ContentSyncStatusFilterValueExtractor.ExtractDateParameter(where, nameof(ContentSyncStatusFilterModelBase.PublishedFrom)),
                 ContentSyncStatusFilterValueExtractor.ExtractDateParameter(where, nameof(ContentSyncStatusFilterModelBase.PublishedTo)),
-                ContentSyncStatusFilterValueExtractor.ExtractBoolParameter(where, nameof(ContentSyncStatusFilterModelBase.ShowInSync)) == true,
+                ContentSyncStatusFilterValueExtractor.ExtractBoolParameter(where, nameof(ContentSyncStatusFilterModelBase.HideInSync)) == true,
                 ContentSyncStatusFilterValueExtractor.ExtractBoolParameter(where, nameof(ContentSyncStatusFilterModelBase.OnlyMyChanges)) == true),
             settings.SearchTerm,
             settings.SortBy,
