@@ -214,7 +214,7 @@ with the target on the same machine:
 Every status was listed as expected: **Deleted here** with its **In recycle
 bin** link on the recycled rows, **Only on target** on the permanently deleted
 ones, **Moved here** on the moved items, and **Only my changes** listing only
-the other user's 300 changes for them. The recycle bin and workspace move
+the other user's 150 changes per tab for them. The recycle bin and workspace move
 lookups each received the 2,300 only-on-target GUIDs in one query without
 errors.
 
