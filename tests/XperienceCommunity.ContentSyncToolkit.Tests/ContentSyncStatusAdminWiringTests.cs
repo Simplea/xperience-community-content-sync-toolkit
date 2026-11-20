@@ -167,7 +167,7 @@ public class ContentSyncStatusAdminWiringTests
     [TestCase(typeof(ContentSyncStatusContentHubFilterModel), "Workspace")]
     public void FilterModels_ExposeTheFieldsLoadDataReads(Type filterModelType, string scopeField)
     {
-        string[] expected = [scopeField, "Language", "OnlyMyChanges", "ShowInSync", "Status", "ContentType", "PublishedFrom", "PublishedTo"];
+        string[] expected = [scopeField, "Language", "OnlyMyChanges", "HideInSync", "Status", "ContentType", "PublishedFrom", "PublishedTo"];
 
         Assert.That(filterModelType.GetProperties().Select(property => property.Name), Is.EquivalentTo(expected));
     }

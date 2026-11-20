@@ -33,6 +33,20 @@ internal interface IContentSyncScopeAccess
 
     /// <summary>What the user can see in the Recycle bin application.</summary>
     public Task<ContentSyncRecycleBinAccess> GetRecycleBinAccessAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether the website channel has a page on this instance that was ever published and that the user
+    /// can see in the page tree, with the same rules as <see cref="GetPageVisibilityAsync"/>. Chooses
+    /// where the Pages tab opens: a page never published isn't listed, so it doesn't count.
+    /// </summary>
+    public Task<bool> HasVisiblePagesAsync(ContentSyncScope websiteChannel, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether the workspace has a content item on this instance that was ever published. Access is per
+    /// workspace, and the Content hub tab only lists workspaces the user can view, so no item-level
+    /// check applies.
+    /// </summary>
+    public Task<bool> HasContentItemsAsync(ContentSyncScope workspace, CancellationToken cancellationToken);
 }
 
 internal sealed class ContentSyncScopeAccess(
@@ -106,10 +120,7 @@ internal sealed class ContentSyncScopeAccess(
         }
 
         var aclManager = webPageAclManagerFactory.Create(websiteChannel.Id);
-        var roleSet = roleIds.ToHashSet();
-        bool CanDisplay(WebPageAclConfigurationDescriptor descriptor) =>
-            descriptor.PermissionsConfiguration.Roles.Any(role =>
-                roleSet.Contains(role.RoleID) && role.Permissions.Contains(WebPageAclPermissions.DISPLAY, StringComparer.OrdinalIgnoreCase));
+        var CanDisplay = DisplayCheck(roleIds);
 
         // Page ID 0 is the channel root.
         bool rootVisible = CanDisplay(await aclManager.GetPermissions(0, cancellationToken));
@@ -138,6 +149,98 @@ internal sealed class ContentSyncScopeAccess(
         return ContentSyncPageVisibility.For(rootVisible, localPages
             .Where(page => pageIds.ContainsKey(page.Guid))
             .Select(page => (page.Guid, page.TreePath, visibleById[pageIds[page.Guid]])));
+    }
+
+    private const string WebPageObjectType = "cms.webpageitem";
+    private const string WebPageIdColumn = "WebPageItemID";
+    private const string WebPageChannelIdColumn = "WebPageItemWebsiteChannelID";
+    private const string WebPageContentItemIdColumn = "WebPageItemContentItemID";
+    private const string ContentItemObjectType = "cms.contentitem";
+    private const string ContentItemIdColumn = "ContentItemID";
+    private const string ContentItemWorkspaceIdColumn = "ContentItemWorkspaceID";
+    private const string ContentItemIsReusableColumn = "ContentItemIsReusable";
+    private const string CommonDataObjectType = "cms.contentitemcommondata";
+    private const string CommonDataContentItemIdColumn = "ContentItemCommonDataContentItemID";
+    private const string CommonDataLastPublishedWhenColumn = "ContentItemCommonDataLastPublishedWhen";
+
+    // Content items with a version that was published at some point, in any language: the list leaves
+    // out items never published, so a scope with only those would open empty. A subquery, so a large
+    // scope adds no long list.
+    private static ObjectQuery EverPublishedContentItemIds() =>
+        new ObjectQuery(CommonDataObjectType)
+            .Column(CommonDataContentItemIdColumn)
+            .WhereNotNull(CommonDataLastPublishedWhenColumn);
+
+    // Users who see every page need one row. Anyone else is checked as for the listing, batch by batch,
+    // stopping at the first page they can see: a channel whose pages are all hidden from them would
+    // otherwise open on an empty list.
+    public async Task<bool> HasVisiblePagesAsync(ContentSyncScope websiteChannel, CancellationToken cancellationToken)
+    {
+        var user = await GetCurrentUserAsync(cancellationToken);
+        if (user is null)
+        {
+            return false;
+        }
+
+        var pages = new ObjectQuery(WebPageObjectType)
+            .Column(WebPageIdColumn)
+            .WhereEquals(WebPageChannelIdColumn, websiteChannel.Id)
+            .WhereIn(WebPageContentItemIdColumn, EverPublishedContentItemIds());
+
+        if (user.IsAdministrator())
+        {
+            return await AnyAsync(pages, cancellationToken);
+        }
+
+        var roleIds = await GetRoleIdsAsync(user, cancellationToken);
+        var channel = await websiteChannelInfoProvider.GetAsync(websiteChannel.Id, cancellationToken);
+        if (channel is null)
+        {
+            return false;
+        }
+
+        if (await HasChannelPermissionAsync(channel.WebsiteChannelGUID, WebsiteChannelUIPermissions.MANAGE_PERMISSIONS, roleIds, cancellationToken))
+        {
+            return await AnyAsync(pages, cancellationToken);
+        }
+
+        var pageIds = (await pages.GetEnumerableTypedResultAsync(cancellationToken: cancellationToken))
+            .Select(row => Convert.ToInt32(row.GetValue(WebPageIdColumn)))
+            .ToList();
+        var aclManager = webPageAclManagerFactory.Create(websiteChannel.Id);
+        var canDisplay = DisplayCheck(roleIds);
+
+        for (int start = 0; start < pageIds.Count; start += BatchSize)
+        {
+            var batch = pageIds.GetRange(start, Math.Min(BatchSize, pageIds.Count - start));
+            var visibleById = await GetDisplayableAsync(batch, aclManager, canDisplay, cancellationToken);
+            if (visibleById.Values.Any(visible => visible))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public Task<bool> HasContentItemsAsync(ContentSyncScope workspace, CancellationToken cancellationToken) =>
+        AnyAsync(
+            new ObjectQuery(ContentItemObjectType)
+                .Column(ContentItemIdColumn)
+                .WhereEquals(ContentItemWorkspaceIdColumn, workspace.Id)
+                .WhereTrue(ContentItemIsReusableColumn)
+                .WhereIn(ContentItemIdColumn, EverPublishedContentItemIds()),
+            cancellationToken);
+
+    private static async Task<bool> AnyAsync(ObjectQuery query, CancellationToken cancellationToken) =>
+        (await query.TopN(1).GetEnumerableTypedResultAsync(cancellationToken: cancellationToken)).Any();
+
+    // The page tree's Display permission, through any of the user's roles.
+    private static Func<WebPageAclConfigurationDescriptor, bool> DisplayCheck(IEnumerable<int> roleIds)
+    {
+        var roleSet = roleIds.ToHashSet();
+        return descriptor => descriptor.PermissionsConfiguration.Roles.Any(role =>
+            roleSet.Contains(role.RoleID) && role.Permissions.Contains(WebPageAclPermissions.DISPLAY, StringComparer.OrdinalIgnoreCase));
     }
 
     // The Recycle bin application was added in 30.12.0, so its identifier and permission aren't

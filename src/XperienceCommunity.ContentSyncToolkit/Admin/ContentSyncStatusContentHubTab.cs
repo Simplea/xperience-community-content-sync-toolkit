@@ -25,6 +25,7 @@ internal sealed class ContentSyncStatusContentHubTab(
     IOptions<ContentSyncToolkitOptions> options,
     IContentSyncStatusService syncStatusService,
     IContentSyncScopeProvider scopeProvider,
+    IContentSyncScopeAccess scopeAccess,
     IContentSyncFilterOptionsProvider filterOptionsProvider,
     IContentSyncItemIdResolver itemIdResolver,
     IContentInventoryClient inventoryClient,
@@ -59,6 +60,9 @@ internal sealed class ContentSyncStatusContentHubTab(
 
     protected override Task<IReadOnlyList<ContentSyncScope>> GetScopesAsync(CancellationToken cancellationToken) =>
         scopeProvider.GetWorkspacesAsync(cancellationToken);
+
+    protected override Task<bool> HasContentAsync(ContentSyncScope scope, CancellationToken cancellationToken) =>
+        scopeAccess.HasContentItemsAsync(scope, cancellationToken);
 
     // A workspace scope's ID is its WorkspaceID.
     protected override Task<IReadOnlyDictionary<Guid, ContentSyncModifier>> GetModifiersAsync(

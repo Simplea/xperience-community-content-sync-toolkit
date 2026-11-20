@@ -46,14 +46,14 @@ internal sealed record ContentSyncStatusView(
 /// <param name="ContentTypeName">A content type code name.</param>
 /// <param name="PublishedFrom">First day to include, from a date input (midnight).</param>
 /// <param name="PublishedTo">Last day to include, from a date input (midnight).</param>
-/// <param name="ShowInSync">Whether to list items in sync; see <see cref="ContentSyncStatusListingSupport.HidesInSync"/>.</param>
+/// <param name="HideInSync">Whether to leave out items in sync; see <see cref="ContentSyncStatusListingSupport.HidesInSync"/>.</param>
 /// <param name="OnlyMyChanges">Whether to list only the items the signed-in user last modified on this instance.</param>
 internal sealed record ContentSyncStatusFilter(
     string? Status = null,
     string? ContentTypeName = null,
     DateTime? PublishedFrom = null,
     DateTime? PublishedTo = null,
-    bool ShowInSync = false,
+    bool HideInSync = false,
     bool OnlyMyChanges = false);
 
 // RequestedScopeName/RequestedLanguageName come from the filter, or are null when not applied.
@@ -84,6 +84,7 @@ internal static class ContentSyncStatusViewBuilder
         Func<CancellationToken, Task<IReadOnlyList<ContentSyncLanguage>>> getLanguages,
         Func<string, string, bool, CancellationToken, Task<ContentSyncStatusResult>> getStatus,
         Func<ContentSyncScope, string, CancellationToken, Task<IReadOnlyDictionary<Guid, ContentSyncModifier>>> getModifiers,
+        Func<ContentSyncScope, CancellationToken, Task<bool>> hasContent,
         CancellationToken cancellationToken)
     {
         if (!request.IsSourceConfigured)
@@ -97,7 +98,9 @@ internal static class ContentSyncStatusViewBuilder
             return ContentSyncStatusView.Of(ContentSyncStatusViewKind.NoScopes);
         }
 
-        var scope = ResolveScope(scopes, request.RequestedScopeName);
+        var scope = string.IsNullOrEmpty(request.RequestedScopeName)
+            ? await DefaultScopeAsync(scopes, hasContent, cancellationToken)
+            : ResolveScope(scopes, request.RequestedScopeName);
         if (scope is null)
         {
             return ContentSyncStatusView.Of(ContentSyncStatusViewKind.ScopeNotFound);
@@ -187,6 +190,23 @@ internal static class ContentSyncStatusViewBuilder
 
     // No filter applied yet defaults to the first scope; a requested scope that no longer exists
     // (deleted after the dropdown loaded) returns null rather than silently showing another one.
+    // With none chosen, the first scope with content here, so the list isn't empty: Xperience hides the
+    // toolbar, Filter included, under an empty list with nothing applied. Only when every scope is empty,
+    // and there's nothing to switch to, the first one.
+    private static async Task<ContentSyncScope> DefaultScopeAsync(
+        IReadOnlyList<ContentSyncScope> scopes, Func<ContentSyncScope, CancellationToken, Task<bool>> hasContent, CancellationToken cancellationToken)
+    {
+        foreach (var candidate in scopes)
+        {
+            if (await hasContent(candidate, cancellationToken))
+            {
+                return candidate;
+            }
+        }
+
+        return scopes[0];
+    }
+
     private static ContentSyncScope? ResolveScope(IReadOnlyList<ContentSyncScope> scopes, string? requestedScopeName)
     {
         if (string.IsNullOrEmpty(requestedScopeName))

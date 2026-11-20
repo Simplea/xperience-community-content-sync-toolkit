@@ -10,7 +10,7 @@ Sync lets editors push pages and content hub items to a target instance, but it
 gives no visibility into what is still missing there. This toolkit adds that
 visibility with **sync status** pages in Xperience's own **Content
 synchronization** application (under **Configuration**), which compare this
-instance with its Content Sync target and open on what's still pending:
+instance with its Content Sync target, with what's still pending listed first:
 
 - **Pages** and **Content hub** tabs with one status per item: Incompatible,
   Unpublished, New, Changed, Moved, Not published, Only on target, or In sync

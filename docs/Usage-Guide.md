@@ -128,18 +128,20 @@ the page tree doesn't see it here either.
 ## Use the sync status pages
 
 Open **Configuration → Content synchronization**. On a source instance it opens
-on what's still pending, with two pages in its navigation: **Pages** (one website
+on the sync status, with two pages in its navigation: **Pages** (one website
 channel at a time) and **Content hub** (one workspace at a time). Xperience's own
 **List of content synchronizations** stays below them.
 
-Items in sync aren't listed unless you ask for them, so when nothing is pending
-the list is empty.
+Every item is listed, the ones still pending first (the list is sorted by
+**Status**, with **In sync** last). To see only what's pending, check **Hide
+items in sync** in the filter; Xperience remembers it in your browser.
 
 ![Sync status Pages tab with Hide items in sync applied, listing pages as Incompatible, Unpublished, New, Changed, Moved and Reordered](images/pages-statuses.jpg)
 
 - **Filter** opens the filter panel. All fields are optional and combine:
   - **Channel** (Pages) or **Workspace** (Content hub). Without a selection,
-    the first one is shown.
+    the first one with published content you can see is shown, so an empty
+    channel or workspace never hides the others.
   - **Language**. Without a selection, every language is listed, one row per
     language version, so nothing pending in another language goes unnoticed.
     Choose a language to see only that one. With more than one language, a
@@ -150,10 +152,10 @@ the list is empty.
     someone edits an item after you, it's theirs: the **Modified by** column
     shows who. Items only on the target never match. Off by default, so you see
     everyone's changes; Xperience remembers it once you check it.
-  - **Show items in sync**: lists them too. Without it, you see only what
-    differs, Incompatible and Only on target included. Selecting a **Status** or
-    searching looks at every item without it, so you can still find an item
-    that's in sync.
+  - **Hide items in sync**: lists only what differs, Incompatible and Only on
+    target included. Selecting a **Status** or searching still looks at every
+    item, so you can find an item that's in sync. When nothing is pending, the
+    list says it couldn't find any matches; clear the filter to see everything.
   - **Status**: choose one or more of the [statuses](#statuses); the list shows items
     matching any of them. Each option matches the tag shown, so an incompatible item
     only matches **Incompatible**.
@@ -407,8 +409,9 @@ outside the current view:
   `Source:TargetUrl`), so there's nothing to compare.
 - **A "Target unavailable" row**: the target couldn't be reached, rejected the
   secret, or doesn't have Content Sync's target role enabled.
-- **No rows**: the channel or workspace has no published content (in the
-  selected language, if you chose one), or nothing matches the applied filters.
+- **No rows**: nothing matches the applied filters, or the channel or
+  workspace you chose has no published content (in the selected language, if
+  you chose one). The toolbar stays, so you can change or clear the filters.
 - **A "Not available" row**: the selected channel, workspace, or language was
   deleted after the filter was applied. Clear that filter or choose another.
 

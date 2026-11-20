@@ -88,10 +88,13 @@ internal static class ContentSyncStatusListingSupport
         + "<strong>Moved here</strong>: nothing from this workspace; sync it from the workspace it moved to.<br>"
         + "<strong>In sync</strong>: nothing; it's the same on both.";
 
-    // Items in sync are left out unless the editor asked for them: with Show items in sync, by selecting
-    // a status, or by searching, since "is this item synced?" must not come back empty.
+    // Every item is listed, pending ones first by the Status sort, unless the editor checks Hide items in
+    // sync. Even then, a Status selection or a search looks at every item, since "is this item synced?"
+    // must not come back empty. Listing everything by default keeps the list from being empty while the
+    // channel or workspace has content: with nothing applied, Xperience hides the toolbar, Filter
+    // included, under an empty list (issue #33).
     public static bool HidesInSync(ContentSyncStatusFilter filter, string? searchTerm) =>
-        !filter.ShowInSync && ParseStatusFilter(filter.Status) is null && string.IsNullOrWhiteSpace(searchTerm);
+        filter.HideInSync && ParseStatusFilter(filter.Status) is null && string.IsNullOrWhiteSpace(searchTerm);
 
     // Hiding items in sync leaves everything that differs, Incompatible and Only on target included,
     // so an item never disappears just because it can't be synced yet.

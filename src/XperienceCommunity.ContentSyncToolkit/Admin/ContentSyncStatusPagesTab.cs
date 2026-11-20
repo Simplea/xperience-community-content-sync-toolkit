@@ -80,6 +80,10 @@ internal sealed class ContentSyncStatusPagesTab(
         return visibility.Apply(result);
     }
 
+    // Pages the user can't see in the page tree don't count, as they aren't listed.
+    protected override Task<bool> HasContentAsync(ContentSyncScope scope, CancellationToken cancellationToken) =>
+        scopeAccess.HasVisiblePagesAsync(scope, cancellationToken);
+
     // A website channel scope's ID is its WebsiteChannelID.
     protected override Task<IReadOnlyDictionary<Guid, ContentSyncModifier>> GetModifiersAsync(
         ContentSyncScope scope, string languageName, CancellationToken cancellationToken) =>
