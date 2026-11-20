@@ -161,6 +161,42 @@ about the same time as for an administrator (0.35–0.55 s per request) for a
 role with Manage permissions on the channel, which sees every page, and about
 0.75–0.8 s when page permissions had to be checked for every page.
 
+### 1.0.0-beta.4
+
+Checked in November 2026, before the release.
+
+`31.9.1`, on the repository's Dancing Goat rig, driven with the Playwright CLI:
+
+- the pages inside **Content synchronization** (#27); every language listed
+  by default with the Language column (#29); **Moved here** for an item moved
+  to another workspace, and a sync from its new workspace clearing it (#28);
+  the **Modified by** column and **Only my changes** (#32), with one page
+  marked as last edited by another user;
+- issue #33, in fresh browser profiles: an empty workspace sorting first is
+  skipped; an all-in-sync workspace lists its items; **Hide items in sync**
+  is remembered after a reload; **Clear all** and Xperience's **Clear your
+  filters here** never leave the editor without the toolbar; a channel whose
+  only page was never published is skipped; and a restricted editor (Article
+  reviewer, with View on Content synchronization and Access channel on both
+  channels) who can't see a channel's only page opens on the next channel,
+  while an administrator opens on it;
+- the column widths at 1440 and 1920 px wide.
+
+`30.8.0`, with the library packed as `1.0.0-beta.4-local33` and installed on a
+fresh Dancing Goat site from `Kentico.Xperience.Templates` `30.8.0`, run as
+source and target on the existing `30.8.0` databases: both tabs load inside
+**Content synchronization**, with the Language and Modified by columns, the
+Only my changes and Hide items in sync filters, every item listed with the
+pending ones first, and each status tag in its color (Incompatible red;
+Unpublished, New, Changed and Moved orange; Not published and Only on target
+grey; In sync green). Not repeated on `30.8.0`: the restricted editor, the
+recycle bin and workspace move hints, and a second language.
+
+Upgrading a role that had View on the old **Sync status** application isn't
+enough: since #27 the pages need View on **Content synchronization**, and
+without it the editor gets Access Denied (seen on `31.9.1`; the Usage Guide's
+upgrade note covers it).
+
 ## Updating versions
 
 - Retest and update the latest verified version after every Xperience refresh.
