@@ -136,7 +136,7 @@ Every item is listed, the ones still pending first (the list is sorted by
 **Status**, with **In sync** last). To see only what's pending, check **Hide
 items in sync** in the filter; Xperience remembers it in your browser.
 
-![Sync status Pages tab with Hide items in sync applied, listing pages as Incompatible, Unpublished, New, Changed, Moved and Reordered](images/pages-statuses.jpg)
+![Pages tab in Content synchronization, listing pages as Incompatible, Unpublished, New, Changed and Moved first, then In sync, with Language and Modified by columns](images/pages-statuses.jpg)
 
 - **Filter** opens the filter panel. All fields are optional and combine:
   - **Channel** (Pages) or **Workspace** (Content hub). Without a selection,
@@ -163,7 +163,7 @@ items in sync** in the filter; Xperience remembers it in your browser.
   - **Published from** / **Published to**: whole days, both included, matched
     against the Last published column.
 
-  <img src="images/filter-panel.png" width="380" alt="Filter panel with Hide items in sync checked and Unpublished and New selected in the Status filter">
+  <img src="images/filter-panel.png" width="380" alt="Filter panel with Workspace, Language (All languages), Only my changes, Hide items in sync checked, Unpublished and New selected in the Status filter, Content type and the Published dates">
 - **Search** by path (Pages) or name (Content hub, the name the Content hub
   shows); press Enter to apply.
 - **Modified by** shows who last edited each item on this instance, saving a
@@ -205,7 +205,7 @@ The status color says what to do, and the label says what's different:
 The list is sorted the same way: red first, then orange, grey and green.
 Hover the ⓘ next to **Status** for the same summary in the application:
 
-![Status column tooltip summarizing each status](images/status-legend-tooltip.png)
+![Status column tooltip summarizing each status, including Deleted here and Moved here](images/status-legend-tooltip.png)
 
 | Status | Color | Meaning | What to do |
 | --- | --- | --- | --- |
@@ -221,7 +221,7 @@ Hover the ⓘ next to **Status** for the same summary in the application:
 
 Hover a status tag for details about that item.
 
-![Content hub tab with Hide items in sync applied, listing items as Incompatible, Unpublished, New, Changed, Not published and Only on target](images/content-hub-statuses.jpg)
+![Content hub tab listing items as Unpublished, New, Changed, Not published and Only on target first, then In sync](images/content-hub-statuses.jpg)
 
 ### What each status covers
 
@@ -254,7 +254,7 @@ source and target instance.", then says what a sync will do once it's fixed.
 The languages, channels and workspaces of linked items, reusable field schemas,
 image variants, member roles and project code aren't checked.
 
-![Tooltip on an Incompatible tag: Content type Image has different field definitions on the source and target instance](images/incompatible-tooltip.png)
+![Tooltip on an Incompatible tag: Content type Home page has different field definitions on the source and target instance](images/incompatible-tooltip.png)
 
 **Unpublished**
 
@@ -365,12 +365,16 @@ items you could find in the Recycle bin application: the ones you deleted, or
 everyone's with **Manage recycle bin**. The **Only on target** filter includes
 these rows.
 
+![Deleted here row: the tooltip says who deleted the item here and until when it can be restored from the recycle bin, and an In recycle bin link replaces its date](images/deleted-here-tooltip.png)
+
 If you moved a content item to another workspace here, its status reads **Moved
 here** in the old workspace, in orange because a sync can fix it. Don't delete it
 on the target: it's the same item. Sync it from the workspace it moved to, and
 Content Sync moves it there on the target. The tooltip names that workspace, or
 says "another workspace" if you can't open it. The **Only on target** filter
 includes these rows. Until you sync, the new workspace lists the item as **New**.
+
+![Moved here tooltip: moved to Dancing Goat Events here, but still in this workspace on the target; don't delete it, syncing it from Dancing Goat Events moves it there](images/moved-here-tooltip.png)
 
 **In sync**
 
