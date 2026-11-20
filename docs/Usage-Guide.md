@@ -365,12 +365,16 @@ items you could find in the Recycle bin application: the ones you deleted, or
 everyone's with **Manage recycle bin**. The **Only on target** filter includes
 these rows.
 
+![Deleted here row: the tooltip says who deleted the item here and until when it can be restored from the recycle bin, and an In recycle bin link replaces its date](images/deleted-here-tooltip.png)
+
 If you moved a content item to another workspace here, its status reads **Moved
 here** in the old workspace, in orange because a sync can fix it. Don't delete it
 on the target: it's the same item. Sync it from the workspace it moved to, and
 Content Sync moves it there on the target. The tooltip names that workspace, or
 says "another workspace" if you can't open it. The **Only on target** filter
 includes these rows. Until you sync, the new workspace lists the item as **New**.
+
+![Moved here tooltip: moved to Dancing Goat Events here, but still in this workspace on the target; don't delete it, syncing it from Dancing Goat Events moves it there](images/moved-here-tooltip.png)
 
 **In sync**
 
