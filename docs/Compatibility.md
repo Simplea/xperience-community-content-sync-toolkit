@@ -192,6 +192,32 @@ Unpublished, New, Changed and Moved orange; Not published and Only on target
 grey; In sync green). Not repeated on `30.8.0`: the restricted editor, the
 recycle bin and workspace move hints, and a second language.
 
+A large site on `31.9.1`, to check the new lookups (Modified by, Deleted here,
+Moved here, every language, the default channel or workspace) at scale:
+20,000 pages and 20,000 Content hub items created and published through the
+Xperience API, the first 2,000 of each with a Spanish version, then the source
+copied to the target. On the source after that: 300 of each republished (half
+by another user), 100 with a newer draft, 50 unpublished, 100 Spanish versions
+republished, 30 pages moved, 200 new pages and items, 2,200 of each moved to
+the recycle bin and 100 deleted permanently (2,300 rows **Only on target** per
+tab), and 50 items moved to another workspace. Requests timed in the browser,
+with the target on the same machine:
+
+| Listing request | Pages (~22,700 rows) | Content hub (~22,300 rows) |
+| --- | --- | --- |
+| Administrator, first visit after a restart (fetches the target) | 1.7 s | 0.9 s |
+| Administrator, paging, sorting, search, filters | 0.4–0.5 s | 0.3 s |
+| Editor with Manage permissions on the channel | 0.4–0.5 s | 0.3 s |
+| Editor who sees every page through page permissions | 0.8–0.9 s | 0.3 s |
+| Editor who sees no page (default-scope check reads every page) | 0.9 s, 2.3 s first visit | 0.3 s |
+
+Every status was listed as expected: **Deleted here** with its **In recycle
+bin** link on the recycled rows, **Only on target** on the permanently deleted
+ones, **Moved here** on the moved items, and **Only my changes** listing only
+the other user's 300 changes for them. The recycle bin and workspace move
+lookups each received the 2,300 only-on-target GUIDs in one query without
+errors.
+
 Upgrading a role that had View on the old **Sync status** application isn't
 enough: since #27 the pages need View on **Content synchronization**, and
 without it the editor gets Access Denied (seen on `31.9.1`; the Usage Guide's
