@@ -47,6 +47,20 @@ internal interface IContentSyncScopeAccess
     /// check applies.
     /// </summary>
     public Task<bool> HasContentItemsAsync(ContentSyncScope workspace, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether the user may sync the workspace's content items: Xperience's Synchronize permission for
+    /// Content hub in that workspace, as Content hub's own Sync action requires.
+    /// </summary>
+    public Task<bool> CanSynchronizeWorkspaceAsync(int workspaceId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Which of the website channel's pages (by <c>WebPageItemID</c>) the user may sync: the Synchronize
+    /// page permission (with Read, which it needs), or Manage permissions on the channel, as the page
+    /// tree's own Sync requires. Administrators may sync all of them.
+    /// </summary>
+    public Task<IReadOnlySet<int>> GetSynchronizablePagesAsync(
+        ContentSyncScope websiteChannel, IReadOnlyCollection<int> pageIds, CancellationToken cancellationToken);
 }
 
 internal sealed class ContentSyncScopeAccess(
@@ -232,15 +246,64 @@ internal sealed class ContentSyncScopeAccess(
                 .WhereIn(ContentItemIdColumn, EverPublishedContentItemIds()),
             cancellationToken);
 
+    // Content hub's Synchronize permission has no constant in Xperience's API; it's stored by this name,
+    // the same as the page permission.
+    private const string SynchronizePermission = WebPageAclPermissions.SYNCHRONIZE;
+
+    public async Task<bool> CanSynchronizeWorkspaceAsync(int workspaceId, CancellationToken cancellationToken) =>
+        (await workspacePermissionEvaluator.Evaluate(SynchronizePermission, typeof(ContentHubApplication), workspaceId)).Succeeded;
+
+    public async Task<IReadOnlySet<int>> GetSynchronizablePagesAsync(
+        ContentSyncScope websiteChannel, IReadOnlyCollection<int> pageIds, CancellationToken cancellationToken)
+    {
+        var none = new HashSet<int>();
+        var user = await GetCurrentUserAsync(cancellationToken);
+        if (user is null || pageIds.Count == 0)
+        {
+            return none;
+        }
+
+        if (user.IsAdministrator())
+        {
+            return pageIds.ToHashSet();
+        }
+
+        var roleIds = await GetRoleIdsAsync(user, cancellationToken);
+        var channel = await websiteChannelInfoProvider.GetAsync(websiteChannel.Id, cancellationToken);
+        if (channel is null)
+        {
+            return none;
+        }
+
+        if (await HasChannelPermissionAsync(channel.WebsiteChannelGUID, WebsiteChannelUIPermissions.MANAGE_PERMISSIONS, roleIds, cancellationToken))
+        {
+            return pageIds.ToHashSet();
+        }
+
+        var aclManager = webPageAclManagerFactory.Create(websiteChannel.Id);
+        var allowed = await GetDisplayableAsync([.. pageIds], aclManager, PermissionCheck(roleIds, SynchronizePermission), cancellationToken);
+
+        return allowed.Where(pair => pair.Value).Select(pair => pair.Key).ToHashSet();
+    }
+
     private static async Task<bool> AnyAsync(ObjectQuery query, CancellationToken cancellationToken) =>
         (await query.TopN(1).GetEnumerableTypedResultAsync(cancellationToken: cancellationToken)).Any();
 
     // The page tree's Display permission, through any of the user's roles.
-    private static Func<WebPageAclConfigurationDescriptor, bool> DisplayCheck(IEnumerable<int> roleIds)
+    private static Func<WebPageAclConfigurationDescriptor, bool> DisplayCheck(IEnumerable<int> roleIds) =>
+        PermissionCheck(roleIds, WebPageAclPermissions.DISPLAY);
+
+    // A page permission through any of the user's roles. Every permission but Display also needs Read
+    // (Kentico's page permission management: without it they have no effect).
+    private static Func<WebPageAclConfigurationDescriptor, bool> PermissionCheck(IEnumerable<int> roleIds, string permission)
     {
         var roleSet = roleIds.ToHashSet();
+        bool needsRead = !string.Equals(permission, WebPageAclPermissions.DISPLAY, StringComparison.OrdinalIgnoreCase);
+
         return descriptor => descriptor.PermissionsConfiguration.Roles.Any(role =>
-            roleSet.Contains(role.RoleID) && role.Permissions.Contains(WebPageAclPermissions.DISPLAY, StringComparer.OrdinalIgnoreCase));
+            roleSet.Contains(role.RoleID)
+            && role.Permissions.Contains(permission, StringComparer.OrdinalIgnoreCase)
+            && (!needsRead || role.Permissions.Contains(WebPageAclPermissions.READ, StringComparer.OrdinalIgnoreCase)));
     }
 
     // The Recycle bin application was added in 30.12.0, so its identifier and permission aren't

@@ -20,6 +20,8 @@ internal sealed class ContentInventoryCache(TimeProvider timeProvider) : IConten
 
     public void SetRequiredObjects(IReadOnlyList<RequiredObject> objects, TimeSpan ttl) => SetValue(RequiredObjectsKey, objects, ttl);
 
+    public void Clear() => entries.Clear();
+
     private bool TryGetValue<T>(string key, out IReadOnlyList<T> values)
     {
         values = [];

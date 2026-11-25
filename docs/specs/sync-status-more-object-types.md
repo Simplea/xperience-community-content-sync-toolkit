@@ -79,6 +79,12 @@ the required-objects check). Requires a new endpoint and schema version.
 the tab is hidden, or the toolkit's minimum version moves to 30.9.0; either is
 a release decision.
 
+**Syncing.** Decided in the [sync actions](sync-actions.md) review (November
+2026): forms are synced from this tab, with the same Sync actions as Pages and
+Content hub (row, selected, all pending), not with the pages that show them.
+Forms need the **Synchronize** permission for the Forms application. Any other
+kind of content added as a tab gets the same actions.
+
 ### 3. Taxonomies and tags
 
 **Problem.** Tags travel with the items that use them, so renaming or moving a

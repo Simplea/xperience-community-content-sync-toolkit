@@ -35,4 +35,23 @@ public sealed class ContentSyncToolkitOptions
     /// site. A page under a different parent always shows as Moved.
     /// </summary>
     public bool ComparePageOrder { get; set; }
+
+    /// <summary>
+    /// Whether the status pages offer Sync actions: a Sync button per row, and Sync for the selected rows. On by
+    /// default; editors also need Xperience's Synchronize permission for the workspace or the pages.
+    /// Turn it off to keep the status pages read-only. See docs/specs/sync-actions.md.
+    /// </summary>
+    public bool SyncActions { get; set; } = true;
+
+    /// <summary>
+    /// A name for this instance, such as "Staging", shown with its host at the top of the status pages.
+    /// Optional; without it the host alone is shown. See docs/specs/target-banner.md.
+    /// </summary>
+    public string? InstanceLabel { get; set; }
+
+    /// <summary>
+    /// A name for the target, such as "Production", shown with its host at the top of the status pages
+    /// and in the Sync confirmations. Optional; without it the host alone is shown.
+    /// </summary>
+    public string? TargetLabel { get; set; }
 }

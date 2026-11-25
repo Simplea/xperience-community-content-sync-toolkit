@@ -24,4 +24,12 @@ public interface IContentInventoryCache
 
     /// <summary>As <see cref="Set"/>, for the target's required objects.</summary>
     public void SetRequiredObjects(IReadOnlyList<RequiredObject> objects, TimeSpan ttl);
+
+    /// <summary>
+    /// Forgets everything cached, so the next status check fetches the target again. Called when a sync
+    /// started from the status list ends. Does nothing unless an implementation supports it.
+    /// </summary>
+    public void Clear()
+    {
+    }
 }

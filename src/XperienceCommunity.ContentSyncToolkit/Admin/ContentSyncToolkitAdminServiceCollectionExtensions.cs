@@ -23,6 +23,13 @@ public static class ContentSyncToolkitAdminServiceCollectionExtensions
         services.TryAddSingleton<IContentSyncFilterOptionsProvider, ContentSyncFilterOptionsProvider>();
         services.TryAddTransient<IContentSyncItemIdResolver, ContentSyncItemIdResolver>();
         services.TryAddSingleton<ContentSyncStatusRefreshRequestStore>();
+        services.TryAddSingleton<Sync.ContentSyncTracker>();
+        services.TryAddSingleton<ContentSyncDialogSelectionStore>();
+        services.TryAddScoped<IContentSyncDialogData, ContentSyncDialogData>();
+        services.TryAddScoped<ContentSyncDialogBackend>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<Microsoft.Extensions.Hosting.IHostedService, Sync.ContentSyncProgressService>());
+        services.TryAddScoped<Sync.IContentSyncEngine, Sync.ContentSyncEngine>();
+        services.TryAddScoped<Sync.IContentSyncActionService, Sync.ContentSyncActionService>();
         services.TryAddTransient<ContentSyncStatusChannelOptionsProvider>();
         services.TryAddTransient<ContentSyncStatusWorkspaceOptionsProvider>();
         services.TryAddTransient<ContentSyncStatusLanguageOptionsProvider>();
