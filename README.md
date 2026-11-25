@@ -23,6 +23,9 @@ instance with its Content Sync target, with what's still pending listed first:
   a developer needs to deploy.
 - Kentico's own permissions: editors only see the channels, workspaces and
   pages they can see in Xperience.
+- Sync from the list: one row or a selection, through Xperience's own Content
+  Sync dialog, with Xperience's Synchronize permission. Reordered pages take
+  their level along, and each sync is followed and logged.
 - Built for large sites: a tab of 20,000 pages opens in about a third of a
   second.
 

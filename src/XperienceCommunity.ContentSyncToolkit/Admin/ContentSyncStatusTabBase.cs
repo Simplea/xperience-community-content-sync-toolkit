@@ -7,6 +7,8 @@ using Kentico.Xperience.Admin.Base.UIPages;
 using Microsoft.Extensions.Options;
 
 using XperienceCommunity.ContentSyncToolkit.Http;
+using XperienceCommunity.ContentSyncToolkit.Inventory;
+using XperienceCommunity.ContentSyncToolkit.Sync;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 using LoadDataSettings = Kentico.Xperience.Admin.Base.LoadDataSettings;
@@ -21,7 +23,7 @@ namespace XperienceCommunity.ContentSyncToolkit.Admin;
 /// result to Xperience's listing template.
 /// Subclasses must declare <c>[UIEvaluatePermission(SystemPermissions.VIEW)]</c> themselves.
 /// </summary>
-internal abstract class ContentSyncStatusTabBase(
+internal abstract partial class ContentSyncStatusTabBase(
     ContentSyncStatusFilterModelBase filterModel,
     string nameColumnCaption,
     IContentSyncToolkitSettings settings,
@@ -30,9 +32,15 @@ internal abstract class ContentSyncStatusTabBase(
     IContentSyncFilterOptionsProvider filterOptionsProvider,
     ContentSyncStatusRefreshRequestStore refreshRequestStore,
     IContentSyncRecycleBinLookup recycleBinLookup,
+    IContentSyncActionService actionService,
+    ContentSyncTracker tracker,
+    Kentico.Xperience.Admin.Base.Authentication.IAuthenticatedUserAccessor userAccessor,
+    ContentSyncDialogBackend dialog,
     IPageLinkGenerator pageLinkGenerator)
     : ListingPageBase<ListingConfiguration, ListingTemplateClientProperties>
 {
+    private const int DefaultPageSize = 25;
+
     private const string LastPublishedTooltip =
         "When the item was last published on this instance, in your time zone. For items only on the target, when it was published there.";
 
@@ -54,7 +62,9 @@ internal abstract class ContentSyncStatusTabBase(
             SortableColumn(ContentSyncStatusListingSupport.ModifiedByColumn, "Modified by", minWidth: 12, maxWidth: 24),
             SortableColumn(ContentSyncStatusListingSupport.LastPublishedColumn, "Last published", minWidth: 18, maxWidth: 24, tooltip: LastPublishedTooltip),
         ],
-        PageSizes = [10, 25, 50],
+        // As Xperience's own listings: a selection carries across pages, so everything pending is selected
+        // page by page. See docs/specs/sync-actions.md, One way to sync.
+        PageSizes = [10, 25, 50, 100],
         HeaderActions =
         [
             new ActionConfiguration { Type = ActionType.Command, Name = nameof(Refresh), Parameter = nameof(Refresh), Label = "Refresh" },
@@ -103,6 +113,19 @@ internal abstract class ContentSyncStatusTabBase(
     /// </summary>
     protected abstract bool RowGuidsAreContentItemGuids { get; }
 
+    /// <summary>Which kind of content the tab lists, for the Sync actions.</summary>
+    protected abstract ContentInventoryItemKind Kind { get; }
+
+    /// <summary>"page" or "workspace": what the Synchronize permission is checked on, for messages.</summary>
+    protected abstract string SynchronizeScopeNoun { get; }
+
+    /// <summary>
+    /// Which of the given local items (keyed by row GUID) the user may sync, by Xperience's Synchronize
+    /// permission. See docs/specs/sync-actions.md, Permissions.
+    /// </summary>
+    protected abstract Task<IReadOnlySet<Guid>> GetSynchronizableAsync(
+        ContentSyncScope scope, IReadOnlyDictionary<Guid, ContentSyncLocalItem> localItems, CancellationToken cancellationToken);
+
     /// <summary>
     /// Where an item opens in Xperience's own editor. Also used for the target's editor, with the
     /// target's IDs: both instances' admin URLs have the same structure.
@@ -110,6 +133,9 @@ internal abstract class ContentSyncStatusTabBase(
     protected abstract ContentSyncStatusItemLink GetItemLink(ContentSyncScope scope, string languageName, int itemId);
 
     private bool IsSourceConfigured => settings.Source.TargetUrl is not null;
+
+    // Sync actions need a target, and can be turned off (ContentSyncToolkit:SyncActions).
+    private bool SyncActionsEnabled => IsSourceConfigured && options.Value.SyncActions;
 
     protected IContentSyncStatusService SyncStatusService => syncStatusService;
 
@@ -130,6 +156,21 @@ internal abstract class ContentSyncStatusTabBase(
             const int languageMinWidth = 10;
             PageConfiguration.ColumnConfigurations[0].MinWidth -= languageMinWidth;
             PageConfiguration.ColumnConfigurations.Insert(1, SortableColumn(ContentSyncStatusListingSupport.LanguageColumn, "Language", minWidth: languageMinWidth, maxWidth: 20));
+        }
+
+        if (IsSourceConfigured)
+        {
+            // Which instances are compared, above the toolbar: this one by the address the editor uses, the
+            // target by Content Sync's settings. See docs/specs/target-banner.md.
+            var request = Service.Resolve<Microsoft.AspNetCore.Http.IHttpContextAccessor>().HttpContext?.Request;
+            PageConfiguration.Caption = ContentSyncRules.InstancesCaption(
+                request?.Host.Value, options.Value.InstanceLabel, settings.Source.TargetUrl!, options.Value.TargetLabel);
+        }
+
+        if (SyncActionsEnabled)
+        {
+            AddSyncActions();
+            AddFailedSyncCallout();
         }
 
         if (IsSourceConfigured && (await GetScopesAsync(CancellationToken.None)).Count == 0)
@@ -153,12 +194,124 @@ internal abstract class ContentSyncStatusTabBase(
     {
         properties = await base.ConfigureTemplateProperties(properties);
 
+        // Xperience opens a listing on its largest page size; 25, as in Content hub.
+        properties.PageSize = DefaultPageSize;
+
         if (!IsSourceConfigured)
         {
             properties.RedirectUrl = pageLinkGenerator.GetPath(typeof(SynchronizationsList));
         }
 
         return properties;
+    }
+
+    // The Sync button in each row's Actions column, and Sync for ticked rows (which also adds the
+    // checkboxes). Rows carry their own Sync button (an ActionCell), enabled or not; Xperience's client
+    // needs the matching table action declared, or the page fails to render. There's no "sync
+    // everything" action: every sync shows what goes first. See docs/specs/sync-actions.md, One way to sync.
+    private void AddSyncActions()
+    {
+        string target = ContentSyncRules.InstanceName(ContentSyncRules.TargetName(settings.Source.TargetUrl), options.Value.TargetLabel);
+
+        // Xperience's own Sync dialog where this version has the one the toolkit answers; otherwise the
+        // toolkit's own confirmation.
+        if (UsesSyncDialog)
+        {
+            PageConfiguration.TableActions.AddActionWithCustomComponent(SyncDialogComponent(), "Sync", icon: Icons.ArrowLeaveSquare);
+            PageConfiguration.MassActions.AddActionWithCustomComponent(SyncDialogComponent(), "Sync", icon: Icons.ArrowLeaveSquare);
+            return;
+        }
+
+        PageConfiguration.TableActions.AddCommandWithConfirmation(
+            "Sync",
+            nameof(SyncRow),
+            confirmation: RowConfirmationTitle,
+            confirmationButton: "Sync",
+            confirmationDetail: RowConfirmationDetail + PageOrderNote,
+            icon: Icons.ArrowLeaveSquare);
+
+        PageConfiguration.MassActions.AddCommandWithConfirmation(
+            "Sync selected",
+            nameof(SyncSelected),
+            confirmation: $"Sync the selected {RowNoun}s to {target}?",
+            confirmationButton: "Sync",
+            confirmationDetail: SyncConfirmationDetail + " Selected rows that don't need a sync are skipped." + PageOrderNote,
+            icon: Icons.ArrowLeaveSquare,
+            confirmationModel: typeof(ContentSyncConfirmationModel));
+    }
+
+    private string RowNoun => Kind == ContentInventoryItemKind.WebPage ? "page" : "item";
+
+    // The latest failed sync of the last 24 hours, until its rows are synced again. Callouts are part of
+    // the page configuration, so it appears when the page loads.
+    private void AddFailedSyncCallout()
+    {
+        if (tracker.RecentFailures(Kind) is not [var failed, ..])
+        {
+            return;
+        }
+
+        var progress = failed.Progress!;
+        string reason = progress.Errors.Count > 0 ? string.Join(" ", progress.Errors) : $"{progress.Title} {progress.Description}".Trim();
+        PageConfiguration.Callouts.Add(new CalloutConfiguration
+        {
+            Type = CalloutType.FriendlyWarning,
+            Placement = CalloutPlacement.OnDesk,
+            Headline = $"A sync of {failed.Rows.Count} {RowNoun}{(failed.Rows.Count == 1 ? string.Empty : "s")} failed",
+            Content = $"{reason} Started by {failed.UserName}. Details are in the Event log and in List of content synchronizations.",
+        });
+    }
+
+    // When page order is compared, a Reordered page takes its whole level along. See docs/specs/sync-actions.md, Page order.
+    private string PageOrderNote => Kind == ContentInventoryItemKind.WebPage && options.Value.ComparePageOrder
+        ? " A Reordered page is synced with the other pages on its level, to keep their order."
+        : string.Empty;
+
+    // A row's own button carries its confirmation as text only: the form fields Xperience builds from a
+    // confirmation model are generated internally, so a row syncs right away. Sync selected offers the
+    // scheduled restore.
+    private string RowConfirmationTitle => $"Sync this {RowNoun} to {ContentSyncRules.InstanceName(ContentSyncRules.TargetName(settings.Source.TargetUrl), options.Value.TargetLabel)}?";
+
+    private const string RowConfirmationDetail = SyncConfirmationDetail + " The target restores it right away.";
+
+    private const string SyncConfirmationDetail =
+        "Content Sync sends the published version, with the items it links to and any missing parent pages.";
+
+    [PageCommand(Permission = SystemPermissions.VIEW)]
+    public async Task<ICommandResponse<RowActionResult>> SyncRow(string id, CancellationToken cancellationToken)
+    {
+        var result = await RunSyncAsync([id], scheduledRestore: null, cancellationToken);
+        var response = ResponseFrom(new RowActionResult(false));
+        return result.Succeeded ? response.AddSuccessMessage(result.Message) : response.AddErrorMessage(result.Message);
+    }
+
+    [PageCommand(Permission = SystemPermissions.VIEW)]
+    public async Task<ICommandResponse<MassActionResult>> SyncSelected(
+        IEnumerable<string> identifiers, ContentSyncConfirmationModel? model, CancellationToken cancellationToken)
+    {
+        var result = await RunSyncAsync([.. identifiers], model?.ScheduledRestore, cancellationToken);
+        var response = ResponseFrom(new MassActionResult(false, false));
+        return result.Succeeded ? response.AddSuccessMessage(result.Message) : response.AddErrorMessage(result.Message);
+    }
+
+    // The page's View permission only opens the tab: the service checks Synchronize per row.
+    private async Task<ContentSyncActionResult> RunSyncAsync(
+        IReadOnlyList<string> rowIds, DateTime? scheduledRestore, CancellationToken cancellationToken)
+    {
+        if (!SyncActionsEnabled)
+        {
+            return new ContentSyncActionResult(false, "Sync actions are turned off.");
+        }
+
+        try
+        {
+            return await actionService.SyncAsync(new ContentSyncActionRequest(rowIds, Kind, scheduledRestore), cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            EventLogService.LogException(nameof(ContentSyncStatusTabBase), "SYNC", ex);
+            return new ContentSyncActionResult(false, "The sync couldn't start. Details are in the event log.");
+        }
     }
 
     // Header actions ignore a command's result, so the documented way to refresh the listing is
@@ -277,6 +430,14 @@ internal abstract class ContentSyncStatusTabBase(
             }
         }
 
+        // Where Xperience's Sync dialog is available, each row's Sync button opens it for that row.
+        SyncButton? syncButton = null;
+        if (SyncActionsEnabled)
+        {
+            var dialogProperties = UsesSyncDialog ? await SyncDialogComponent().GetClientProperties() : null;
+            syncButton = new SyncButton(SynchronizeScopeNoun, RowConfirmationTitle, RowConfirmationDetail + PageOrderNote, dialogProperties);
+        }
+
         return [.. view.Items.Select(item =>
         {
             string language = ContentSyncStatusListingSupport.LanguageName(item);
@@ -284,13 +445,16 @@ internal abstract class ContentSyncStatusTabBase(
                 item,
                 details.GetValueOrDefault((item.Guid, language)),
                 showsLanguage ? ContentSyncStatusListingSupport.LanguageDisplayName(item, languageDisplayNames) : null,
-                view.ModifierOf(item)?.Name);
+                view.ModifierOf(item)?.Name,
+                syncButton,
+                SyncActionsEnabled ? tracker.RunningSyncOf(Kind, item.Guid, language) : null);
         })];
     }
 
     /// <summary>A row's editor link, whether it opens the target, whether it has a newer draft, its recycle bin entry, and where it moved to.</summary>
     private readonly record struct RowDetails(
-        string? Link, bool OpensOnTarget, bool HasNewerDraft, ContentSyncDeletedItem? DeletedItem = null, ContentSyncMovedItem? MovedItem = null);
+        string? Link, bool OpensOnTarget, bool HasNewerDraft, ContentSyncDeletedItem? DeletedItem = null, ContentSyncMovedItem? MovedItem = null,
+        bool CanSynchronize = false);
 
     // Each row's editor link and whether it has a newer draft. Both are conveniences: if a lookup
     // fails, rows still render, just without links or draft hints.
@@ -304,10 +468,13 @@ internal abstract class ContentSyncStatusTabBase(
         {
             try
             {
-                foreach (var (guid, item) in await GetLocalItemsAsync(scope, languageName, localItems, cancellationToken))
+                var local = await GetLocalItemsAsync(scope, languageName, localItems, cancellationToken);
+                var synchronizable = SyncActionsEnabled ? await GetSynchronizableAsync(scope, local, cancellationToken) : new HashSet<Guid>();
+                foreach (var (guid, item) in local)
                 {
                     details[guid] = new RowDetails(
-                        GetItemLink(scope, languageName, item.Id).GetPath(pageLinkGenerator), OpensOnTarget: false, item.HasNewerDraft);
+                        GetItemLink(scope, languageName, item.Id).GetPath(pageLinkGenerator), OpensOnTarget: false, item.HasNewerDraft,
+                        CanSynchronize: synchronizable.Contains(guid));
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -405,25 +572,113 @@ internal abstract class ContentSyncStatusTabBase(
             TooltipAsHtml = tooltip is not null,
         };
 
-    // An item is listed once per language, so its row is identified by both.
-    private static Row ToRow(ContentSyncStatusItem item, RowDetails details, string? language, string? modifiedBy) =>
+    /// <summary>What a row's Sync button needs.</summary>
+    /// <param name="ScopeNoun">"page" or "workspace", for the permission message.</param>
+    /// <param name="ConfirmationTitle">The confirmation's question, without Xperience's dialog.</param>
+    /// <param name="ConfirmationDetail">The confirmation's text, without Xperience's dialog.</param>
+    /// <param name="Dialog">Xperience's Sync dialog, which the button opens where this version has it; otherwise the confirmation.</param>
+    private sealed record SyncButton(string ScopeNoun, string ConfirmationTitle, string ConfirmationDetail, IActionComponentClientProperties? Dialog);
+
+    // An item is listed once per language, so its row is identified by both. With Sync actions on
+    // (syncButton set), the row ends with its Sync button.
+    private static Row ToRow(
+        ContentSyncStatusItem item, RowDetails details, string? language, string? modifiedBy, SyncButton? syncButton, ContentSyncTrackedSync? running) =>
         new()
         {
-            Identifier = $"{item.Guid}_{ContentSyncStatusListingSupport.LanguageName(item)}",
+            Identifier = ContentSyncRules.RowId(item.Guid, ContentSyncStatusListingSupport.LanguageName(item)),
             Action = details.Link is null || details.OpensOnTarget ? null : new RowAction(ActionType.Link) { Parameter = details.Link },
             Cells =
             [
                 NameCell(item, details),
                 .. LanguageCell(language),
                 new StringCell { Value = ContentSyncStatusListingSupport.ContentTypeDisplayName(item) },
-                TagCell(
-                    ContentSyncStatusListingSupport.StatusLabel(item, details.DeletedItem, details.MovedItem),
-                    ContentSyncStatusListingSupport.StatusColor(item, details.MovedItem),
-                    ContentSyncStatusListingSupport.StatusTooltip(item, details.HasNewerDraft, details.OpensOnTarget, details.DeletedItem, details.MovedItem)),
+                running is null
+                    ? TagCell(
+                        ContentSyncStatusListingSupport.StatusLabel(item, details.DeletedItem, details.MovedItem),
+                        ContentSyncStatusListingSupport.StatusColor(item, details.MovedItem),
+                        ContentSyncStatusListingSupport.StatusTooltip(item, details.HasNewerDraft, details.OpensOnTarget, details.DeletedItem, details.MovedItem))
+                    : TagCell("Syncing", Enum.Parse<Color>(nameof(Color.BackgroundTagGrey)), SyncingTooltip(running)),
                 new StringCell { Value = modifiedBy ?? string.Empty },
                 LastPublishedCell(item, details),
+                .. SyncCell(item, details, syncButton, running),
             ],
         };
+
+    // The row's Sync button: enabled when ContentSyncRules allow it, otherwise disabled with the reason.
+    private static IEnumerable<Cell> SyncCell(ContentSyncStatusItem item, RowDetails details, SyncButton? syncButton, ContentSyncTrackedSync? running)
+    {
+        if (syncButton is null)
+        {
+            return [];
+        }
+
+        var availability = running is null
+            ? ContentSyncRules.Evaluate(item, details.CanSynchronize, details.MovedItem, syncButton.ScopeNoun)
+            : ContentSyncAvailability.Unavailable("A sync of it is in progress.", ContentSyncRules.AlreadySyncingSummary);
+
+        string title = availability.CanSync ? "Sync to the target" : availability.Reason!;
+        if (syncButton.Dialog is { } dialogProperties)
+        {
+            return
+            [
+                new ActionCell
+                {
+                    Actions =
+                    [
+                        new RowAction(ActionType.CustomComponent)
+                        {
+                            Label = "Sync",
+                            Icon = Icons.ArrowLeaveSquare,
+                            Title = title,
+                            Disabled = !availability.CanSync,
+                            ComponentProperties = dialogProperties,
+                        },
+                    ],
+                },
+            ];
+        }
+
+        return
+        [
+            new ActionCell
+            {
+                Actions =
+                [
+                    new RowAction(ActionType.Command)
+                    {
+                        Label = "Sync",
+                        Parameter = nameof(SyncRow),
+                        Icon = Icons.ArrowLeaveSquare,
+                        Title = title,
+                        Disabled = !availability.CanSync,
+                        ConfirmationDialog = new ConfirmationDialog
+                        {
+                            Title = syncButton.ConfirmationTitle,
+                            Detail = syncButton.ConfirmationDetail,
+                            Button = "Sync",
+                        },
+                    },
+                ],
+            },
+        ];
+    }
+
+    // Where a running sync is, for the Syncing tag's tooltip.
+    private static string SyncingTooltip(ContentSyncTrackedSync running)
+    {
+        if (running.ScheduledRestore is { } when)
+        {
+            return $"Sync scheduled by {running.UserName}: the target restores it at {ContentSyncRules.RestoreTimeText(when, TimeZoneInfo.Local)}.";
+        }
+
+        return running.Progress?.State switch
+        {
+            ContentSyncProgressState.WaitingForTarget => $"Sync started by {running.UserName}: waiting for the target to restore it.",
+            ContentSyncProgressState.Restoring => $"Sync started by {running.UserName}: the target is restoring it.",
+            ContentSyncProgressState.Unknown or ContentSyncProgressState.Starting or ContentSyncProgressState.Transferring
+                or ContentSyncProgressState.Completed or ContentSyncProgressState.Failed or ContentSyncProgressState.TimedOut or null or _ => $"Sync started by {running.UserName}.",
+        } + " Reload the list to see the result.";
+    }
 
     // Kentico's own local date-time cell: the browser shows it in the editor's time zone. An item in the
     // recycle bin links there instead: the target's publish date says less about it than where it went.

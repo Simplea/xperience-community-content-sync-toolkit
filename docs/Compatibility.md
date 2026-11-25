@@ -223,6 +223,41 @@ enough: since #27 the pages need View on **Content synchronization**, and
 without it the editor gets Access Denied (seen on `31.9.1`; the Usage Guide's
 upgrade note covers it).
 
+### Sync from the status lists
+
+Checked in November 2026, before merging ([sync-actions.md](specs/sync-actions.md)),
+driven with the Playwright CLI. Real syncs between the local source and target.
+
+`31.9.1`, on the repository's Dancing Goat rig, through Xperience's own Sync
+dialog:
+
+- a row's Sync on a Changed page: the dialog listed it, its progress went from
+  "Waiting for restoration" to "Sync successfully finished" in about 15 seconds,
+  and the row showed In sync on reload, without Refresh;
+- Sync for 25 selected pages (Changed, Incompatible and In sync): only the
+  Changed page was sent;
+- a row's Sync on a Changed Content hub item;
+- the disabled buttons' reasons: Not published, Moved here, Only on target,
+  Deleted here, In sync, and a restricted editor without Synchronize on the
+  workspace ("You don't have the Synchronize permission for this workspace.");
+  an editor with Manage permissions on the channel can sync pages;
+- the Event log's started and completed entries, with the items.
+
+Not repeated in this round (checked while building, see the spec's On the
+status list): postponed restore, Detailed selection, a selection across list
+pages, and the failure callout. Not checked: a Reordered page with its
+siblings, and a selection over 200 pages.
+
+`30.8.0`, with the library packed as `1.0.0-sync4` on the `30.8.0` Dancing Goat
+site: the toolkit's own confirmation instead of the dialog ("Sync the selected
+pages to localhost:27411?", with **Immediately** or **At a scheduled time**),
+a Changed page synced through **Sync selected**, the row's **Syncing** tag and
+then In sync, the Event log entries, and every other row's button disabled.
+
+Known limitation, on `31.9.1`: on the Pages tab, the blue bar at the bottom of
+Xperience's dialog is empty. Xperience's client has text there only for content
+items; see the spec.
+
 ## Updating versions
 
 - Retest and update the latest verified version after every Xperience refresh.

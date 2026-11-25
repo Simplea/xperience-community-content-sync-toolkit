@@ -7,6 +7,8 @@ using Microsoft.Extensions.Options;
 
 using XperienceCommunity.ContentSyncToolkit.Admin;
 using XperienceCommunity.ContentSyncToolkit.Http;
+using XperienceCommunity.ContentSyncToolkit.Inventory;
+using XperienceCommunity.ContentSyncToolkit.Sync;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 // A page of Kentico's Content synchronization application, before its own list (order 100), so the
@@ -34,6 +36,10 @@ internal sealed class ContentSyncStatusPagesTab(
     ContentSyncStatusRefreshRequestStore refreshRequestStore,
     IContentSyncRecycleBinLookup recycleBinLookup,
     IContentSyncModifierLookup modifierLookup,
+    IContentSyncActionService actionService,
+    ContentSyncTracker tracker,
+    Kentico.Xperience.Admin.Base.Authentication.IAuthenticatedUserAccessor userAccessor,
+    ContentSyncDialogBackend dialog,
     IPageLinkGenerator pageLinkGenerator)
     : ContentSyncStatusTabBase(
         new ContentSyncStatusPagesFilterModel(),
@@ -44,6 +50,10 @@ internal sealed class ContentSyncStatusPagesTab(
         filterOptionsProvider,
         refreshRequestStore,
         recycleBinLookup,
+        actionService,
+        tracker,
+        userAccessor,
+        dialog,
         pageLinkGenerator)
 {
     protected override string TabKey => "pages";
@@ -51,6 +61,19 @@ internal sealed class ContentSyncStatusPagesTab(
     protected override string ScopeFilterFieldName => nameof(ContentSyncStatusPagesFilterModel.Channel);
 
     protected override bool RowGuidsAreContentItemGuids => false;
+
+    protected override ContentInventoryItemKind Kind => ContentInventoryItemKind.WebPage;
+
+    protected override string SynchronizeScopeNoun => "page";
+
+    // Pages are synced by page permission: Synchronize (with Read), or Manage permissions on the channel.
+    protected override async Task<IReadOnlySet<Guid>> GetSynchronizableAsync(
+        ContentSyncScope scope, IReadOnlyDictionary<Guid, ContentSyncLocalItem> localItems, CancellationToken cancellationToken)
+    {
+        var allowedPageIds = await scopeAccess.GetSynchronizablePagesAsync(scope, [.. localItems.Values.Select(item => item.Id)], cancellationToken);
+
+        return localItems.Where(pair => allowedPageIds.Contains(pair.Value.Id)).Select(pair => pair.Key).ToHashSet();
+    }
 
     protected override string ScopeNoun => "channel";
 

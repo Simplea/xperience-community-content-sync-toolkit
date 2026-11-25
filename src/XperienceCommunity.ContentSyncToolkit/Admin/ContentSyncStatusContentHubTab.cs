@@ -7,6 +7,8 @@ using Microsoft.Extensions.Options;
 
 using XperienceCommunity.ContentSyncToolkit.Admin;
 using XperienceCommunity.ContentSyncToolkit.Http;
+using XperienceCommunity.ContentSyncToolkit.Inventory;
+using XperienceCommunity.ContentSyncToolkit.Sync;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 [assembly: UIPage(
@@ -33,6 +35,10 @@ internal sealed class ContentSyncStatusContentHubTab(
     IContentSyncRecycleBinLookup recycleBinLookup,
     IContentSyncWorkspaceMoveLookup workspaceMoveLookup,
     IContentSyncModifierLookup modifierLookup,
+    IContentSyncActionService actionService,
+    ContentSyncTracker tracker,
+    Kentico.Xperience.Admin.Base.Authentication.IAuthenticatedUserAccessor userAccessor,
+    ContentSyncDialogBackend dialog,
     IPageLinkGenerator pageLinkGenerator)
     : ContentSyncStatusTabBase(
         new ContentSyncStatusContentHubFilterModel(),
@@ -43,6 +49,10 @@ internal sealed class ContentSyncStatusContentHubTab(
         filterOptionsProvider,
         refreshRequestStore,
         recycleBinLookup,
+        actionService,
+        tracker,
+        userAccessor,
+        dialog,
         pageLinkGenerator)
 {
     protected override string TabKey => "content-hub";
@@ -50,6 +60,17 @@ internal sealed class ContentSyncStatusContentHubTab(
     protected override string ScopeFilterFieldName => nameof(ContentSyncStatusContentHubFilterModel.Workspace);
 
     protected override bool RowGuidsAreContentItemGuids => true;
+
+    protected override ContentInventoryItemKind Kind => ContentInventoryItemKind.ContentHubItem;
+
+    protected override string SynchronizeScopeNoun => "workspace";
+
+    // Content hub items are synced by workspace: the Synchronize permission for Content hub there.
+    protected override async Task<IReadOnlySet<Guid>> GetSynchronizableAsync(
+        ContentSyncScope scope, IReadOnlyDictionary<Guid, ContentSyncLocalItem> localItems, CancellationToken cancellationToken) =>
+        await scopeAccess.CanSynchronizeWorkspaceAsync(scope.Id, cancellationToken)
+            ? localItems.Keys.ToHashSet()
+            : [];
 
     protected override string ScopeNoun => "workspace";
 

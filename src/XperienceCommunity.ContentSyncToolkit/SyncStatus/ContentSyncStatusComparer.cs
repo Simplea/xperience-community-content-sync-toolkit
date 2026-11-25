@@ -225,7 +225,7 @@ public static class ContentSyncStatusComparer
         return [.. localOrder.Where((_, index) => !kept.Contains(index))];
     }
 
-    private static string ParentPath(string treePath)
+    internal static string ParentPath(string treePath)
     {
         int lastSlash = treePath.LastIndexOf('/');
         return lastSlash <= 0 ? string.Empty : treePath[..lastSlash];
