@@ -11,6 +11,15 @@ public interface IContentInventoryClient
 
     public Task<ContentInventoryFetchResult> GetContentHubItemsAsync(string workspaceName, string languageName, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The target's content hub items with these GUIDs, in whatever workspace each is. A target on an
+    /// older toolkit version doesn't answer it; implementations written before this member existed
+    /// report an error.
+    /// </summary>
+    public Task<ContentInventoryFetchResult> GetContentHubItemsByGuidAsync(
+        string languageName, IReadOnlyCollection<Guid> guids, CancellationToken cancellationToken) =>
+        Task.FromResult(ContentInventoryFetchResult.Failed(ContentInventoryFetchStatus.Error));
+
     /// <summary>The target's content types, languages, website channels and workspaces.</summary>
     public Task<RequiredObjectsFetchResult> GetRequiredObjectsAsync(CancellationToken cancellationToken);
 

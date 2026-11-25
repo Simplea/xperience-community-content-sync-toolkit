@@ -73,8 +73,9 @@ internal static class ContentSyncRules
             : ContentSyncAvailability.Unavailable($"You don't have the Synchronize permission for this {scopeNoun}.", NoPermissionSummary);
     }
 
-    // An item only on the target can't be synced from here; one that moved to another workspace here
-    // is synced from there, which moves it on the target too.
+    // An item only on the target can't be synced from here. One that moved to another workspace here
+    // syncs its changes from there, but a sync doesn't move it on the target: Content Sync doesn't move
+    // items between workspaces (see docs/specs/moved-between-workspaces.md).
     private static string OnlyOnTargetReason(ContentSyncMovedItem? movedTo)
     {
         if (movedTo is null)
@@ -83,8 +84,8 @@ internal static class ContentSyncRules
         }
 
         return movedTo.WorkspaceDisplayName is { } workspace
-            ? $"Sync it from its new workspace, {workspace}."
-            : "Sync it from the workspace it moved to.";
+            ? $"Its changes sync from {workspace}. A sync doesn't move it: move it to {workspace} on the target."
+            : "Its changes sync from the workspace it moved to. A sync doesn't move it: move it there on the target.";
     }
 
     /// <summary>

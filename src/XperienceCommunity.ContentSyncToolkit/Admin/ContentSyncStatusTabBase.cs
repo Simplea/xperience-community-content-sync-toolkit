@@ -441,10 +441,17 @@ internal abstract partial class ContentSyncStatusTabBase(
             syncButton = new SyncButton(SynchronizeScopeNoun, RowConfirmationTitle, RowConfirmationDetail + PageOrderNote, dialogProperties);
         }
 
+        // Workspace display names, for items the target has in another workspace than this instance.
+        var scopeDisplayNames = view.Items.Any(ContentSyncStatusListingSupport.IsInAnotherScopeOnTarget)
+            ? (await GetScopesAsync(cancellationToken)).ToDictionary(scope => scope.Name, scope => scope.DisplayName, StringComparer.OrdinalIgnoreCase)
+            : null;
+
         return [.. view.Items.Select(item => ToRow(
             item,
             details.GetValueOrDefault(item.Guid),
             view.ModifierOf(item)?.Name,
+            ContentSyncStatusListingSupport.IsInAnotherScopeOnTarget(item) ? scopeDisplayNames?.GetValueOrDefault(item.Remote!.ScopeName) ?? string.Empty : null,
+            item.Local is { } here ? scopeDisplayNames?.GetValueOrDefault(here.ScopeName) : null,
             syncButton,
             SyncActionsEnabled ? tracker.RunningSyncOf(Kind, item.Guid, ContentSyncStatusListingSupport.LanguageName(item)) : null))];
     }
@@ -579,8 +586,11 @@ internal abstract partial class ContentSyncStatusTabBase(
 
     // A row is one language version, identified by the item and its language, which the Sync actions
     // read back. With Sync actions on (syncButton set), the row ends with its Sync button.
+    // workspaceOnTarget: where the target has an item that's in another workspace here; empty when the
+    // editor can't see that workspace. See docs/specs/moved-between-workspaces.md.
     private static Row ToRow(
-        ContentSyncStatusItem item, RowDetails details, string? modifiedBy, SyncButton? syncButton, ContentSyncTrackedSync? running) =>
+        ContentSyncStatusItem item, RowDetails details, string? modifiedBy, string? workspaceOnTarget, string? workspaceHere,
+        SyncButton? syncButton, ContentSyncTrackedSync? running) =>
         new()
         {
             Identifier = ContentSyncRules.RowId(item.Guid, ContentSyncStatusListingSupport.LanguageName(item)),
@@ -592,8 +602,10 @@ internal abstract partial class ContentSyncStatusTabBase(
                 running is null
                     ? TagCell(
                         ContentSyncStatusListingSupport.StatusLabel(item, details.DeletedItem, details.MovedItem),
-                        ContentSyncStatusListingSupport.StatusColor(item, details.MovedItem),
-                        ContentSyncStatusListingSupport.StatusTooltip(item, details.HasNewerDraft, details.OpensOnTarget, details.DeletedItem, details.MovedItem))
+                        // Moved here is grey, like the rest of Only on target: a sync can't change it
+                        // (see docs/specs/moved-between-workspaces.md).
+                        ContentSyncStatusListingSupport.StatusColor(item),
+                        ContentSyncStatusListingSupport.StatusTooltip(item, details.HasNewerDraft, details.OpensOnTarget, details.DeletedItem, details.MovedItem, workspaceOnTarget, workspaceHere))
                     : TagCell("Syncing", Enum.Parse<Color>(nameof(Color.BackgroundTagGrey)), SyncingTooltip(running)),
                 new StringCell { Value = modifiedBy ?? string.Empty },
                 LastPublishedCell(item, details),

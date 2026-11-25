@@ -234,7 +234,8 @@ Only rows that a sync would change can go: **Unpublished**, **New**,
 disabled, and hovering it says why: nothing to sync (**In sync**), no
 published version (**Not published**), a content type the target is missing
 (**Incompatible**), the item isn't on this instance (**Only on target**,
-**Deleted here**), it's synced from its new workspace (**Moved here**), or you
+**Deleted here**), it moved to another workspace here (**Moved here**: its changes
+sync from there, and you move it on the target yourself), or you
 don't have the Synchronize permission. You can still tick any row; the dialog
 lists the rows that go first, and the others greyed out with the reason, and
 sends only what can go.
@@ -453,13 +454,19 @@ these rows.
 ![Deleted here row: the tooltip says who deleted the item here and until when it can be restored from the recycle bin, and an In recycle bin link replaces its date](images/deleted-here-tooltip.png)
 
 If you moved a content item to another workspace here, its status reads **Moved
-here** in the old workspace, in orange because a sync can fix it. Don't delete it
-on the target: it's the same item. Sync it from the workspace it moved to, and
-Content Sync moves it there on the target. The tooltip names that workspace, or
-says "another workspace" if you can't open it. The **Only on target** filter
-includes these rows. Until you sync, the new workspace lists the item as **New**.
+here** in the old workspace. Content Sync doesn't move items between workspaces:
+a sync updates the item on the target, but leaves it in the workspace it was in
+there. So move it to the same workspace on the target yourself, and don't delete
+it there: it's the same item. Its changes sync from the workspace it moved to. The
+tooltip names that workspace, or says "another workspace" if you can't open it.
+The **Only on target** filter includes these rows.
 
-![Moved here tooltip: moved to Dancing Goat Events here, but still in this workspace on the target; don't delete it, syncing it from Dancing Goat Events moves it there](images/moved-here-tooltip.png)
+In the workspace it moved to, the item is compared with its copy on the target,
+wherever that is, so it reads **In sync** or **Changed** rather than **New**. Its
+tooltip says which workspace it's still in on the target. This needs the toolkit
+updated on the target too; with an older target, the item reads **New** there.
+
+![Moved here tooltip: moved to Dancing Goat Events here, but still in this workspace on the target; Content Sync doesn't move items between workspaces, so move it to Dancing Goat Events on the target and don't delete it there](images/moved-here-tooltip.png)
 
 **In sync**
 

@@ -39,6 +39,17 @@ public sealed class ContentInventoryController(
         return new ContentInventoryResponse(SchemaVersion, timeProvider.GetUtcNow(), items);
     }
 
+    // Content hub items the source has in another workspace: Content Sync doesn't move items between
+    // workspaces, so the source compares with them wherever they are here. See
+    // docs/specs/moved-between-workspaces.md.
+    [HttpGet("content-hub-items-by-guid")]
+    public async Task<ActionResult<ContentInventoryResponse>> GetContentHubItemsByGuid(
+        [FromQuery] string languageName, [FromQuery] string? guids, CancellationToken cancellationToken)
+    {
+        var items = await inventoryService.GetContentHubItemsByGuidAsync(languageName, ContentItemIdLookup.ParseGuids(guids), cancellationToken);
+        return new ContentInventoryResponse(SchemaVersion, timeProvider.GetUtcNow(), items);
+    }
+
     // This instance's IDs for items the source lists as only here, so it can link to them in this
     // instance's administration. See docs/specs/target-item-links.md.
     [HttpGet("web-page-ids")]

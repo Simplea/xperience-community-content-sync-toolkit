@@ -61,17 +61,13 @@ public class WorkspaceMoveHintsTests
     public void StatusLabel_WithoutAMove_KeepsTheOtherLabels() =>
         Assert.That(ContentSyncStatusListingSupport.StatusLabel(OnlyOnTarget(), null, null), Is.EqualTo("Only on target"));
 
-    // A sync can fix it, unlike the rest of Only on target.
+    // Content Sync doesn't move items between workspaces, so a sync can't change it: grey, like the
+    // rest of Only on target.
     [Test]
-    public void StatusColor_AMovedItem_IsTheColorOfWhatASyncChanges()
-    {
+    public void StatusColor_AMovedItem_IsTheColorOfWhatASyncCantChange() =>
         Assert.That(
-            ContentSyncStatusListingSupport.StatusColor(OnlyOnTarget(), Moved()),
-            Is.EqualTo(ContentSyncStatusListingSupport.StatusColor(ContentSyncStatus.Moved)));
-        Assert.That(
-            ContentSyncStatusListingSupport.StatusColor(OnlyOnTarget(), null),
+            ContentSyncStatusListingSupport.StatusColor(OnlyOnTarget()),
             Is.EqualTo(ContentSyncStatusListingSupport.StatusColor(ContentSyncStatus.OnlyOnTarget)));
-    }
 
     [Test]
     public void StatusTooltip_AMovedItem_SaysWhereAndNotToDeleteIt()
@@ -79,7 +75,8 @@ public class WorkspaceMoveHintsTests
         string? tooltip = ContentSyncStatusListingSupport.StatusTooltip(OnlyOnTarget(), opensOnTarget: true, movedItem: Moved());
 
         Assert.That(tooltip, Is.EqualTo(
-            "Moved to Events here, but still in this workspace on the target. Don't delete it: syncing it from Events moves it there."));
+            "Moved to Events here, but still in this workspace on the target. Content Sync doesn't move items between workspaces: "
+            + "move it to Events on the target, and don't delete it there. Its changes sync from Events."));
     }
 
     [Test]
@@ -87,8 +84,34 @@ public class WorkspaceMoveHintsTests
     {
         string? tooltip = ContentSyncStatusListingSupport.StatusTooltip(OnlyOnTarget(), movedItem: Moved(null));
 
-        Assert.That(tooltip, Does.StartWith("Moved to another workspace here").And.Contain("Don't delete it"));
+        Assert.That(tooltip, Does.StartWith("Moved to another workspace here").And.Contain("don't delete it there"));
     }
+
+    // The other side of Moved here: in the workspace it moved to, the item is compared with the target's
+    // copy, which Content Sync leaves where it was.
+    private static ContentSyncStatusItem InSyncElsewhereOnTarget() =>
+        new(itemGuid, ContentSyncStatus.InSync,
+            new ContentInventoryItem(itemGuid, ContentInventoryItemKind.ContentHubItem, "DG.Social", "Events", "en", null, DateTime.UtcNow, "Published"),
+            new ContentInventoryItem(itemGuid, ContentInventoryItemKind.ContentHubItem, "DG.Social", "Ltd", "en", null, DateTime.UtcNow, "Published"));
+
+    [Test]
+    public void IsInAnotherScopeOnTarget_AnItemInAnotherWorkspaceThere_IsFound()
+    {
+        Assert.That(ContentSyncStatusListingSupport.IsInAnotherScopeOnTarget(InSyncElsewhereOnTarget()), Is.True);
+        Assert.That(ContentSyncStatusListingSupport.IsInAnotherScopeOnTarget(OnlyOnTarget()), Is.False);
+    }
+
+    [Test]
+    public void StatusTooltip_InAnotherWorkspaceOnTarget_SaysWhereAndToMoveItThere() =>
+        Assert.That(
+            ContentSyncStatusListingSupport.StatusTooltip(InSyncElsewhereOnTarget(), workspaceOnTarget: "Ltd", workspaceHere: "Events"),
+            Is.EqualTo("On the target it's still in Ltd: Content Sync doesn't move items between workspaces, so move it to Events on the target."));
+
+    [Test]
+    public void StatusTooltip_InAWorkspaceOnTargetTheUserCantSee_IsNotNamed() =>
+        Assert.That(
+            ContentSyncStatusListingSupport.StatusTooltip(InSyncElsewhereOnTarget(), workspaceOnTarget: string.Empty),
+            Does.StartWith("On the target it's in another workspace").And.Contain("move it to this workspace on the target"));
 
     [Test]
     public void StatusLegend_ExplainsMovedHere() =>

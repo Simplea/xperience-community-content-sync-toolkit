@@ -73,7 +73,7 @@ internal static class ContentSyncStatusListingSupport
         + "<strong>Not published</strong>: nothing yet; it has no published version here. Publish it to sync.<br>"
         + "<strong>Only on target</strong>: nothing; Content Sync can't delete, so delete it there.<br>"
         + "<strong>Deleted here</strong>: the same, for an item still in this instance's recycle bin.<br>"
-        + "<strong>Moved here</strong>: nothing from this workspace; sync it from the workspace it moved to.<br>"
+        + "<strong>Moved here</strong>: nothing from this workspace; sync it from the workspace it moved to, and move it there on the target.<br>"
         + "<strong>In sync</strong>: nothing; it's the same on both.";
 
     // Hide items in sync leaves what differs. Even then, a Status selection or a search looks at every
@@ -260,12 +260,27 @@ internal static class ContentSyncStatusListingSupport
 
     public const string DeletedHereLabel = "Deleted here";
 
-    // An item only on the target in this workspace that this instance has in another: deleting it there
-    // would remove what a sync can move.
+    // An item only on the target in this workspace that this instance has in another. Content Sync doesn't
+    // move items between workspaces, so it stays here on the target until someone moves it there; deleting
+    // it would delete the item. See docs/specs/moved-between-workspaces.md.
     private static string MovedHere(ContentSyncMovedItem moved) =>
         moved.WorkspaceDisplayName is { } workspace
-            ? $"Moved to {workspace} here, but still in this workspace on the target. Don't delete it: syncing it from {workspace} moves it there."
-            : "Moved to another workspace here, but still in this workspace on the target. Don't delete it: syncing it from that workspace moves it there.";
+            ? $"Moved to {workspace} here, but still in this workspace on the target. Content Sync doesn't move items between workspaces: move it to {workspace} on the target, and don't delete it there. Its changes sync from {workspace}."
+            : "Moved to another workspace here, but still in this workspace on the target. Content Sync doesn't move items between workspaces: move it to the same workspace on the target, and don't delete it there. Its changes sync from that workspace.";
+
+    /// <summary>Whether the target has a content hub item in another workspace than this instance does.</summary>
+    public static bool IsInAnotherScopeOnTarget(ContentSyncStatusItem item) =>
+        item.Local is { Kind: ContentInventoryItemKind.ContentHubItem } local
+            && item.Remote is { } remote
+            && !string.Equals(local.ScopeName, remote.ScopeName, StringComparison.OrdinalIgnoreCase);
+
+    // The other side of Moved here: the item as this workspace sees it, compared with the target's copy
+    // wherever that is.
+    private static string InAnotherWorkspaceOnTarget(string workspaceOnTarget, string? workspaceHere) =>
+        (string.IsNullOrEmpty(workspaceOnTarget) ? "On the target it's in another workspace" : $"On the target it's still in {workspaceOnTarget}")
+            + ": Content Sync doesn't move items between workspaces, so move it "
+            + (string.IsNullOrEmpty(workspaceHere) ? "to this workspace" : $"to {workspaceHere}")
+            + " on the target.";
 
     public const string MovedHereLabel = "Moved here";
 
@@ -358,10 +373,17 @@ internal static class ContentSyncStatusListingSupport
         bool hasNewerDraft = false,
         bool opensOnTarget = false,
         ContentSyncDeletedItem? deletedItem = null,
-        ContentSyncMovedItem? movedItem = null)
+        ContentSyncMovedItem? movedItem = null,
+        string? workspaceOnTarget = null,
+        string? workspaceHere = null)
     {
         bool showDraft = hasNewerDraft && item.Local is not null && !ContentInventoryVersionStatus.IsUnpublished(item.Local.VersionStatus);
         string? tooltip = StatusOnlyTooltip(item, opensOnTarget, deletedItem, movedItem);
+        if (workspaceOnTarget is not null)
+        {
+            string note = InAnotherWorkspaceOnTarget(workspaceOnTarget, workspaceHere);
+            tooltip = tooltip is null ? note : tooltip + " " + note;
+        }
 
         if (!showDraft)
         {
@@ -540,9 +562,6 @@ internal static class ContentSyncStatusListingSupport
     public static Color StatusColor(ContentSyncStatusItem item) =>
         item.HasCompatibilityIssues ? Enum.Parse<Color>(nameof(Color.AlertBackgroundHighEmphasis)) : StatusColor(item.Status);
 
-    // Unlike the rest of Only on target, a sync can fix a moved item.
-    public static Color StatusColor(ContentSyncStatusItem item, ContentSyncMovedItem? movedItem) =>
-        movedItem is not null && item.Status == ContentSyncStatus.OnlyOnTarget ? StatusColor(ContentSyncStatus.Moved) : StatusColor(item);
 
     public static Color StatusColor(ContentSyncStatus status) => Enum.Parse<Color>(status switch
     {
