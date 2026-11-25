@@ -335,9 +335,13 @@ Content hub items, the progress panel to "Sync successfully finished", and the E
 - **Messages in command responses aren't shown** by the dialog, so the plan's notes (siblings added, new
   pages changing the order of their level) only appear as the rows' statuses and tooltips. The new-pages
   order warning is not shown in the dialog yet.
-- **The Pages tab's info bar is empty:** with the `WebPages` type, the list version has no text there
-  (the tree version says "Selected pages are synchronized together with…"). With `ContentItems` it says
-  "Selected reusable content items are synchronized…", which is wrong for pages. Open question.
+- **The Pages tab's info bar is empty,** a known limitation. The bar's text comes from Xperience's client
+  by content type: the list version has one only for `ContentItems` ("Selected reusable content items are
+  synchronized…", wrong for pages), and the page tree's version, a different dialog, has the pages text.
+  Xperience itself never opens the list version for pages (its Pages application has no list view), the
+  component has no property for the text, and messages in command responses don't reach the bar (checked on
+  `31.9.1`). Hiding the bar would need styling Xperience's markup, which can change with any Refresh. The
+  Usage Guide explains what goes with a page instead.
 
 ### Versions
 
@@ -357,7 +361,8 @@ Agreed in review (November 2026):
    Content Sync can transfer. See [Sync status beyond pages and content hub
    items](sync-status-more-object-types.md), Forms.
 4. **The actions are on by default;** `ContentSyncToolkit:SyncActions` turns them off.
-5. **Detailed selection** (excluding linked content) is left out (`withSelectedDependencies: false`).
+5. **Detailed selection** (excluding linked content) was left out of the first build; with Xperience's
+   dialog it's supported (see On the status list).
 
 ## Compatibility
 
@@ -379,7 +384,6 @@ Agreed in review (November 2026):
 ## Out of scope
 
 - Live progress without reloading (a custom React component).
-- Detailed selection (excluding linked content).
 - Deleting content on the target: Content Sync can't, and the toolkit keeps pointing to the recycle bin
   and the target editor.
 - Forms used on pages (decision 3). Forms get their own tab later, with these actions.

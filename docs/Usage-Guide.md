@@ -92,6 +92,9 @@ Four optional toolkit settings, all on the source:
 | `InventoryCacheDuration` | 90 seconds | How long the target's inventory is cached on the source. The source's own content is never cached. |
 | `TargetAdminUrl` | `{TargetUrl}/admin` | Where **Only on target** rows open the target's administration. Set it when Content Sync's `TargetUrl` isn't an address editors' browsers can reach, such as an internal host name. |
 | `ComparePageOrder` | `false` | Whether pages in a different position among their siblings on the target show as **Reordered**. Turn it on if your site displays pages in page tree order, such as a menu built from the tree. Without it, those pages show as **In sync** and **Reordered** isn't offered. Pages under a different parent always show as **Moved**. |
+| `SyncActions` | `true` | Whether editors can sync from the status pages (see [Sync from the status pages](#sync-from-the-status-pages)). Turn it off to keep the pages read-only. |
+| `InstanceLabel` | none | A name for this instance, such as "Staging", shown with its host at the top of the status pages. |
+| `TargetLabel` | none | A name for the target, such as "Production", shown with its host at the top of the status pages and in the sync confirmations. |
 
 ## Give editors access
 
@@ -125,12 +128,25 @@ So a role with access to one workspace sees only that workspace here, even
 with View on Content synchronization, and an editor who can't see a section of
 the page tree doesn't see it here either.
 
+Syncing from these pages needs the same permission as Xperience's own Sync:
+
+- **Content hub items:** **Synchronize** for Content hub in the item's workspace.
+- **Pages:** the **Synchronize** page permission (with **Read**) on the page, or
+  **Manage permissions** on the channel.
+
+View on Content synchronization alone lets an editor see the status but not
+sync; rows they can't sync have their Sync button disabled, with the reason.
+
 ## Use the sync status pages
 
 Open **Configuration → Content synchronization**. On a source instance it opens
 on the sync status, with two pages in its navigation: **Pages** (one website
 channel at a time) and **Content hub** (one workspace at a time). Xperience's own
 **List of content synchronizations** stays below them.
+
+The line at the top says which instances are compared, by host name, for
+example **staging.example.com → production.example.com**. Set `InstanceLabel`
+and `TargetLabel` to add names such as Staging and Production.
 
 Every item is listed, the ones still pending first (the list is sorted by
 **Status**, with **In sync** last). To see only what's pending, check **Hide
@@ -177,10 +193,8 @@ items in sync** in the filter; Xperience remembers it in your browser.
   the order.
   The page doesn't remember a different sort: it starts sorted by Status again
   each time you open it or use Refresh.
-- **Click a row** to open the item in its editor. To sync it, use Xperience's
-  own Content Sync actions: for a page, **Sync this page** or **Sync with all
-  subpages** in the page tree; for a content item, select it in the **Content
-  hub** list and use **Sync** (the content item editor has no Sync action).
+- **Click a row** to open the item in its editor. To sync it, use its
+  **Sync** button or select it (see [Sync from the status pages](#sync-from-the-status-pages)).
   **Only on target** rows can't be opened here, because the item doesn't
   exist on this instance; their name links to it on the target instead.
 - **Refresh** fetches the target's inventory again instead of using the cached
@@ -191,6 +205,68 @@ items in sync** in the filter; Xperience remembers it in your browser.
   then use Refresh. Hover the button for a reminder.
 - Hover the ⓘ next to **Status** or **Last published** for a short
   explanation, and hover a status tag for details about that item.
+
+## Sync from the status pages
+
+Each row has a **Sync** button in its **Actions** column, and selected rows
+have **Sync** above the list. Both open Xperience's own Content Sync dialog,
+the one Content hub uses, so you see what goes before anything is sent.
+
+- **One row:** its **Sync** button.
+- **Several rows:** tick them, then **Sync**. A selection carries across the
+  list's pages, as in Content hub.
+- **Everything pending:** apply **Hide items in sync** (or choose statuses),
+  select all on each page of the list, and use **Sync** once.
+
+Only rows that a sync would change can go: **Unpublished**, **New**,
+**Changed**, **Moved** and **Reordered**. Other rows have their Sync button
+disabled, and hovering it says why: nothing to sync (**In sync**), no
+published version (**Not published**), a content type the target is missing
+(**Incompatible**), the item isn't on this instance (**Only on target**,
+**Deleted here**), it's synced from its new workspace (**Moved here**), or you
+don't have the Synchronize permission. You can still tick any row; the dialog
+lists the rows that go first, and the others greyed out with the reason, and
+sends only what can go.
+
+In the dialog:
+
+- **Restore on the target immediately**, or **Postpone restoration on the
+  target** to a date and time.
+- Untick rows you don't want to send.
+- **Detailed selection** lists the selected items with everything that goes
+  with them (linked content items, parent pages), so you can leave some out.
+- After **Sync**, the dialog follows the sync until it finishes.
+
+What the toolkit adds to a sync:
+
+- **Reordered pages take their siblings along:** the other pages on the same
+  level, in the same language, go too, so the order on the target matches.
+- **One sync per language:** a selection in several languages starts one sync
+  for each, one after the other.
+- **Large selections are split** into syncs of at most 200 pages or 1,000
+  content items, as Kentico recommends.
+
+After a sync:
+
+- Rows in a running sync show a grey **Syncing** tag; hover it for its
+  progress. They can't be synced again until it ends.
+- The list doesn't update by itself. Reload it or use **Refresh** once the
+  target has restored the sync (usually within 30 seconds).
+- If a sync fails, a message at the top of the page says why and who started
+  it, until those rows are synced again or 24 hours pass.
+- Each sync is in Xperience's **List of content synchronizations**, and the
+  Event log has an entry (source `ContentSyncToolkit`) listing the items it
+  included and who started it.
+
+On the Pages tab, the blue bar at the bottom of the dialog is empty: Xperience
+fills it only for content items. Pages go with their linked content items and
+missing parent pages, as when synced from the page tree.
+
+On Xperience versions without this dialog, such as 30.8.0, Sync shows a
+confirmation instead: **Sync selected** offers **Immediately** or **At a
+scheduled time**, and a row's own Sync restores immediately.
+
+To keep the pages read-only, set `ContentSyncToolkit:SyncActions` to `false`.
 
 ## Statuses
 
