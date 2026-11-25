@@ -5,6 +5,7 @@ Thank you for helping improve Content Sync Toolkit for Xperience by Kentico.
 ## Requirements
 
 - The .NET SDK version specified by `global.json`
+- Node.js 22 or newer, for the toolkit's browser module (see below)
 - SQL Server 2019 or newer for the Dancing Goat integration host
 - An Xperience by Kentico 31.9.1 database for runtime verification (the latest
   build-verified version; see [Compatibility](./docs/Compatibility.md) for the
@@ -59,6 +60,23 @@ for versioning and publishing steps.
    and screenshots or video for administration UI changes.
 
 Pull requests must pass CI and have all review comments resolved before merge.
+
+## Browser module
+
+The status lists use a small browser module of the toolkit's, in
+`src/XperienceCommunity.ContentSyncToolkit/Client`: the menu entries' template and
+the component that keeps Content synchronization's left menu when Kentico's
+dropdowns switch a list (see [header-dropdowns.md](./docs/specs/header-dropdowns.md)).
+It's built with Kentico's webpack configuration and embedded in the assembly.
+
+`dotnet build` builds it when its output is missing or older than its sources,
+running `npm ci` first if `node_modules` is missing; its output (`Client/dist`)
+isn't committed. To work on it directly, run `npm ci`, then `npm run typecheck`
+and `npm run build` in that folder.
+
+Its `@kentico/*` packages match the lowest supported Xperience version, and the
+admin provides React and `react-router-dom` at runtime (they're never bundled).
+When the lowest supported version changes, update those packages with it.
 
 ## Line endings
 

@@ -86,20 +86,18 @@ supports, presented as Xperience's native section sub-navigation — a small
 vertical list within the section (confirmed against a live instance: this is
 how Xperience's own built-in Forms application presents its "List of forms"
 and "Featured fields" sub-pages, the real precedent this feature's admin
-integration follows), not horizontal pill-style tabs. The channel/workspace
-selector is Xperience's native listing **filter panel** (a "FILTER" button
-that opens a side panel; an applied selection shows as a removable chip), not
-an always-visible dropdown row — confirmed against a live instance, this is
-how the table's filter form actually renders, and building a custom
-always-visible selector row would mean not using the native filter mechanism
-this design otherwise depends on:
+integration follows), not horizontal pill-style tabs. Each sub-page shows one
+channel or workspace in one language, chosen with Kentico's own dropdowns in the
+top bar, as in Kentico's Content hub and Pages. Until 1.0.0 they were fields of
+the listing's filter panel; see [header-dropdowns.md](header-dropdowns.md) for
+the move and how the left menu is kept:
 
 ```text
-Sync status
+[Dancing Goat Pages ▾] [English ▾]   Content synchronization › Pages
 
 ┌────────────────┐  Pages                          [Refresh]  [⚗ FILTER]
 │ Content sync    │
-│ ──────────────  │  Applied filters:  [ Channel: DancingGoatCore ✕ ]
+│ ──────────────  │  Applied filters:  [ Hide items in sync ✕ ]
 │ Pages           │
 │ Content hub     │  Search: [                   ]
 │                 │
@@ -115,8 +113,8 @@ Sync status
                      Showing 24 of 24 items
 ```
 
-- The **Content hub** sub-page replaces the **Channel** filter with a
-  **Workspace** filter and drops the **Path / Name** column's path prefix in
+- The **Content hub** sub-page lists workspaces instead of channels in the top
+  bar, and drops the **Path / Name** column's path prefix in
   favor of a flat item name (content-hub items have no tree path): the name
   the Content hub shows ("Guatemala Finca El Injerto"), not the code name
   (`GuatemalaFincaElInjerto-k3bwkxk3`). See the foundation's
@@ -129,19 +127,19 @@ Sync status
   a custom form field, and not purely client-side JavaScript filtering over one
   fetched payload. It matches what the Path / Name column shows: the path for
   pages, the display name for content hub items.
-- With no channel/workspace chosen (a first visit, or after Clear all), the
-  tab opens on the first one, in display name order, that has something to
-  list for this editor: a page or content item that was published at some
+- A tab's menu entry opens the editor's last channel/workspace and language on
+  that tab, kept in their browser, if both can still be opened. Otherwise it
+  opens the first channel/workspace, in display name order, that has something
+  to list for this editor: a page or content item that was published at some
   point (never-published items aren't listed), and for Pages, one the editor
   can see in the page tree (the same Display permission rules as the listing;
   administrators and users with Manage permissions see every page). Each check
   is a small query on this instance, never a call to the target, and stops at
-  the first match. Since everything is listed by default (see Hide items in
-  sync), the list is then never empty, so Xperience keeps the toolbar. Only if
-  none has anything does it open on the first, and then there's nothing to
-  switch to. A chosen channel/workspace is used as is: it's an applied filter,
-  so an empty result keeps the toolbar. Before 1.0.0 the first one was used
-  even when empty (issue #33).
+  the first match. Only if none has anything does it open on the first, and
+  then there's nothing to switch to. The language is the channel's primary
+  language (Pages) or the default content language (Content hub). A channel or
+  workspace chosen in the top bar is used as is. Before 1.0.0 the first one was
+  used even when empty (issue #33). See [header-dropdowns.md](header-dropdowns.md).
 - **Refresh** forces a fresh remote fetch, bypassing the foundation's inventory
   cache (see Server workflow). It does not affect the local half, which is
   already always fresh. Its tooltip (`ActionConfiguration.Title`) explains
@@ -158,21 +156,21 @@ Sync status
 
 ### Filters and item navigation
 
-The filter panel holds, besides the channel/workspace, these fields. All are
+The filter panel holds these fields (the channel/workspace and the language
+are in the top bar; see [header-dropdowns.md](header-dropdowns.md)). All are
 optional and combine with AND; an empty field adds no condition (confirmed
 live: Xperience omits it from the compiled filter entirely).
 
 | Filter | Component | Values and behavior |
 | --- | --- | --- |
-| **Language** | Dropdown of the instance's content languages | No selection (placeholder "All languages") compares **every** language: each separately, one after another, each with its own cached target inventory, and lists the results together. A row is one language version, identified by its GUID and language. Before 1.0.0 no selection compared only the default language, but nothing on the page showed that (an unchosen value isn't an applied filter), so an empty list could hide another language's changes. Selecting a language narrows the list to it. A language deleted after the filter was applied shows a "no longer exists" row, like a deleted channel/workspace. If the target fails for any language, the tab shows Target unavailable rather than a partial list. Row links, newer-draft hints and the recycle bin and workspace lookups are fetched per language on the page. |
-| **Hide items in sync** | Checkbox | Leaves out In sync items, so only what differs is listed, Incompatible and Only on target included, so an item never disappears just because it can't be synced yet. **Unchecked by default**: every item is listed, pending ones first (the Status sort puts In sync last). A Status selection or a search looks at every item even when it's checked, so selecting In sync or searching for an item in sync never comes back empty. Xperience remembers the applied filter per browser, so an editor who checks it keeps a pending-only view; it's then an applied filter, so when nothing is pending Xperience's empty state keeps the toolbar and offers to clear the filters. Read back as a `bool` parameter; unchecked adds no condition and no chip. **Why everything is listed by default** (issue #33): with nothing applied (a first visit, or after Clear all, or Xperience's own *Clear your filters here*), Xperience hides the whole toolbar, Filter included, under an empty list, so an editor whose default channel or workspace listed nothing had no way to choose another. Before 1.0.0, a *Show items in sync* checkbox (unchecked) made the default view pending-only, and a channel with content but nothing pending, the normal state after a full sync, left the editor there; a "Nothing is pending" row once kept the toolbar, but it was a made-up row in the table and was dropped. Alternatives tried live on 31.9.1 and rejected: pre-selecting the scope with `ListingTemplateClientProperties.FilterInitialValues` (31.2.0 and later only; Clear all saves an empty state, after which it no longer applies), and a row in the unfiltered empty case only (it works, but is a made-up row). There's no supported way to change the empty state or keep the toolbar: a listing's result has only rows and a count. |
+| **Hide items in sync** | Checkbox | Leaves out In sync items, so only what differs is listed, Incompatible and Only on target included, so an item never disappears just because it can't be synced yet. A Status selection or a search looks at every item even when it's checked, so selecting In sync or searching for an item in sync never comes back empty. **Applied when a list first opens**, on Kentico 31.2.0 and later (`ListingTemplateClientProperties.FilterInitialValues`, set through reflection because 30.8.0 doesn't have it): as an applied filter, it keeps the toolbar under an empty list, and Xperience's empty state offers *Clear your filters here*. Xperience remembers the applied filters per browser, so an editor who removes it keeps seeing every item, pending ones first (the Status sort puts In sync last). On earlier versions every item is listed when a list opens. Read back as a `bool` parameter; unchecked adds no condition and no chip. **Why not a plain pending-only default** (issue #33): with nothing applied, Xperience hides the whole toolbar, Filter included, under an empty list. Before 1.0.0, a *Show items in sync* checkbox (unchecked) made the default view pending-only, and a channel with content but nothing pending, the normal state after a full sync, left the editor with no way to choose another channel; a "Nothing is pending" row once kept the toolbar, but it was a made-up row in the table and was dropped. `FilterInitialValues` was first tried for pre-selecting the channel or workspace, and rejected because after Clear all it no longer applies. With the channel or workspace in the top bar, it only applies Hide items in sync, and clearing it shows every item. There's no supported way to change the empty state itself: a listing's result has only rows and a count. |
 | **Only my changes** | Checkbox | Lists only the items the signed-in user last modified on this instance, so an editor can see what they still need to move. "Last modified" is Kentico's `ContentItemLanguageMetadataModifiedByUserID` for the row's language version: saving a draft counts, so an item someone else published and the user then edited counts as theirs (its tooltip already says the newer draft isn't published), and an item the user published and someone else then edited counts as the other person's. Only rows with a copy on this instance can match, so **Only on target** never does; In sync items match unless **Hide items in sync** is checked. It combines with every other filter. **Unchecked is the default**, so the page shows everyone's pending changes, as for languages: items last changed by an import, the API or a user who has left belong to no one, and a personal default would hide them from everybody; leads who run the sync need the whole list; and a sync also sends linked items and parent pages others changed, so "nothing of mine" isn't "nothing will change". Xperience remembers the applied filter per browser, so an editor who checks it keeps a personal view. Read back as a `bool` parameter like Hide items in sync. It uses the Modified by column's data, so the column shows why an item is or isn't listed: an item someone else edited after you is theirs. Not included: who published the compared version, or everyone who edited it since the target's copy (both need version history). |
 | **Status** | General selector (multi-select with search): *Incompatible*, then each status in the sort order (placeholder *All*) | Items matching **any** selected option. *Incompatible* = items whose required objects the target lacks. Each status option matches the tag shown, so an incompatible item matches *Incompatible* only. Kentico's general selector returns the selected values as a list, so `ContentSyncStatusMultiValueConditionBuilder` (the field's `FilterCondition` builder) compiles them into one parameter, comma-separated, which is read back like the other fields. Its options come from `ContentSyncStatusFilterOptionsDataProvider`, which leaves out *Reordered* unless `ComparePageOrder` is on (the Status column's legend does too). Verified live on 31.9.1, and the general selector, its data provider interface and `FilterCondition` exist in 30.8.0 (the library compiles against it). |
 | **Content type** | Dropdown of website content types (Pages) or reusable content types (Content hub) | Lists every type of that kind, not only the ones present in the selected scope, because an options provider can't see the selected channel/workspace. Options show the type's display name; the value is its code name. |
 | **Published from** / **Published to** | Two date inputs | Filter on the date in the Last published column (the local date, or the target's for Only on target). Both bounds are inclusive whole days, taken in the **server's** time zone: the date inputs carry no time zone and the server can't see the editor's, so near midnight a day boundary can differ from the column, which shows the editor's time zone. Items without a publish date are excluded while either bound is set. |
 
 Every filter value is read back from `LoadDataSettings.FilterWhereCondition`
-the same way as the channel/workspace (see Server workflow): each field
+(see Server workflow): each field
 compiles to a named parameter, strings as `string`, dates as `DateTime` and
 the Hide items in sync checkbox as `bool`; the Status selector's values arrive
 as one comma-separated string (see the Status row above).
@@ -236,7 +234,8 @@ minimums add up to 91 (Name 30, Content type 14, Status 17, Modified by 12,
 Last published 18): every status label and a full date and time fit. Long
 paths, content type names and user names are cut with an ellipsis; Kentico's
 cells show the full text on hover. Before 1.0.0 there were four columns (Name
-40, Content type 18); Modified by and Language took their width from them.
+40, Content type 18); Modified by took its width from them, as did the Language
+column of the 1.0.0 betas.
 Verified live on 31.9.1.
 
 **Modified by column.** Who last modified the row's language version on this
@@ -252,13 +251,10 @@ target's author for Only on target rows (it needs a new inventory schema
 version), and everyone who edited since the target's copy (it needs version
 history, `CMS_ContentItemVersion`, which isn't filled on every instance).
 
-**Language column.** Shown, and sortable by display name, on an instance with
-more than one content language, whichever language is selected, so the columns
-don't change with the filter. `ConfigurePage` adds it and `LoadData` adds the
-matching cell, both from the number of languages. Its minimum width (10) comes
-out of the name column's (20), so the minimums still add up to 91. Default
-sort ties are broken by name, then language, so an item's language versions
-stay together. Verified live on 31.9.1 with English and Spanish.
+**Language column.** Removed in 1.0.0: a list shows one language, the one in
+the top bar, so every row would repeat it (see
+[header-dropdowns.md](header-dropdowns.md)). In 1.0.0-beta.4, which compared
+every language by default, it said which language version each row was.
 
 **Column tooltips.** The Status and Last published column headers carry
 tooltips (`ColumnConfiguration.Tooltip`): what each status means and which
@@ -368,10 +364,10 @@ before the table loads can be banners. On `30.8.0` callouts offer two styles,
 | **No channels or workspaces** (a brand-new instance, or none the user can access) | Yes | `QuickTip` banner pointing to **Configuration → Channel management** or **Workspaces**, as plain text. Kentico's admin URLs aren't a public API, so the banner doesn't hardcode a link. |
 | **Target is missing objects Content Sync needs** (see the foundation's [Required objects](content-inventory-foundation.md#required-objects)) | No | The affected items show the Incompatible status (see Statuses), sort first, and can be filtered. |
 | **Target unavailable** (`TargetAvailable = false`) | No — depends on the selected scope | A single table row with a red "Target unavailable" status tag and an explanation. The table must not fall back to showing local content as if it were unclassified. |
-| **Selected scope no longer exists** (deleted after the filter was applied) | No | A single table row, "The selected channel/workspace no longer exists", with a grey "Not available" tag. |
+| **The address's channel, workspace or language isn't available** (deleted, or one the editor can't open, for example from an old bookmark) | No | A single table row, "This workspace doesn't exist or you can't open it. Choose another workspace in the top bar." (or channel, or language), with a grey "Not available" tag. It's never replaced with another channel or workspace. |
 | **Loading failed** (any unexpected exception in `LoadData`) | No | A single table row, "Sync status couldn't be loaded. Try Refresh; details are in the event log.", with a red "Error" tag. The exception is written to the event log, never shown. |
 | **Everything in sync** (with Hide items in sync checked) | No | Xperience's native empty state, which keeps the toolbar because a filter is applied. See Hide items in sync. |
-| **No items** (in the chosen channel/workspace, or matching the filters) | No | Xperience's native empty state (no rows returned). With a filter applied, Xperience words it as "We couldn't find any matches" and keeps the toolbar; that's accepted for consistency with other admin listings. With nothing applied, the tab opens where there's something to list (see the default channel/workspace above), so this state needs a filter, except when no channel or workspace has anything. |
+| **No items** (in the chosen channel/workspace and language, or matching the filters) | No | Xperience's native empty state (no rows returned). With a filter applied, Xperience words it as "We couldn't find any matches" and keeps the toolbar; that's accepted for consistency with other admin listings. On 31.2.0 and later a list opens with Hide items in sync applied, so this is the usual empty state. With nothing applied (earlier versions, or after the editor clears it), Xperience hides the toolbar, but the menu entry opens where there's something to list (see the default above), and the top bar's dropdowns stay either way, so the editor can always switch. |
 
 Before 1.0.0-beta.2, missing objects were also a `FriendlyWarning` banner
 listing up to 8 objects. It was removed: it grew with the number of issues and
@@ -430,6 +426,11 @@ there is no separate client-side filtering layer.
 
 ### How the channel/workspace selection reaches `LoadData`
 
+Since 1.0.0 the channel/workspace and language come from the address: they're
+page parameters of the levels above the list (`[PageParameter]` bound to the
+scope and language levels), so `LoadData` reads them directly. The rest of the
+filter still arrives as described below. See [header-dropdowns.md](header-dropdowns.md).
+
 This was the highest-risk piece of the design and needed live verification
 against a real instance before committing to it. The two override points that
 would let a page read a filter form's *raw* submitted values directly —
@@ -485,8 +486,9 @@ not usable by third-party code — ruled out, not merely deprioritized.
    tabs. The per-tab (rather than per-channel or per-user) scoping is a
    deliberate low-stakes tradeoff: a concurrent viewer on the same tab could
    get an unrequested cache bypass in a narrow race window. Confirmed live:
-   after Refresh the applied channel/workspace filter and search term are
-   kept, but a column sort resets to the default (Status) order — see Sorting.
+   after Refresh the channel/workspace and language (in the address), the
+   applied filters and the search term are kept, but a column sort resets to
+   the default (Status) order — see Sorting.
 
 ## Security and privacy
 
@@ -754,9 +756,10 @@ The 1.0.0-beta.2 statuses, filters and tooltips were verified live on
   published. The exception is an item the target has: it's listed as Not
   published, so it doesn't look deleted here. See
   [Publication-state scope](content-inventory-foundation.md#publication-state-scope).
-- Following the admin's own language switcher. `ListingPageBase`'s
-  `GetCurrentContentLanguage()` is `private`, not `protected`, so it isn't
-  reachable from a derived page; the Language filter is used instead.
+- Reading the language through `ListingPageBase`'s `GetCurrentContentLanguage()`,
+  which is `private`, not `protected`. The list reads it from its language
+  level's page parameter instead, the level that shows Kentico's language
+  dropdown (see [header-dropdowns.md](header-dropdowns.md)).
 - Triggering an actual Content Sync operation (push) from this page. The page
   is read-only status visibility; initiating a sync remains Xperience's own
   **Sync this page**/**Sync with all subpages** (page tree) and **Sync**

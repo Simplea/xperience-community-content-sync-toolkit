@@ -17,6 +17,9 @@ instance with its Content Sync target, with what's still pending listed first:
   (plus Reordered, if you turn on the page order check),
   with a multi-select status filter, search and a link to each item's editor.
   Items only on the target link to their editor on the target.
+- Kentico's own channel or workspace and language dropdowns in the top bar, as
+  in Content hub and Pages. Each tab opens on what's still pending, in the
+  channel or workspace and language you last chose.
 - Explanations of what to sync, including pages moved without being republished.
 - **Incompatible** items, which a sync would fail for because the target is missing
   a content type, language, channel or workspace this instance has, with what

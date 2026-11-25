@@ -261,9 +261,16 @@ items; see the spec.
 ## Updating versions
 
 - Retest and update the latest verified version after every Xperience refresh.
+- Include the round of switches in the status lists' top bar (see the Test
+  strategy in [header-dropdowns.md](specs/header-dropdowns.md)). The lists keep
+  Content synchronization's left menu through admin behaviour Kentico doesn't
+  document. If a refresh breaks it, tell users to set
+  `ContentSyncToolkit:FullReloadOnSwitch` until the toolkit adapts.
 - Do not raise the minimum merely because a newer Xperience release is available.
 - Raise the minimum only when required by an API, security fix, runtime lifecycle,
-  or an intentional change to the support window.
+  or an intentional change to the support window. When it's raised, update the
+  browser module's `@kentico/*` npm packages to the same version (see
+  CONTRIBUTING.md, Browser module).
 - After a stable Content Sync Toolkit release, raising the minimum Xperience
   version is a breaking compatibility change and requires a new major toolkit
   version.

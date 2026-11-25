@@ -43,6 +43,17 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/XperienceCommunity.ContentSyncToolkit/Client/package-lock.json
+
+      - name: Install the browser module's dependencies
+        working-directory: src/XperienceCommunity.ContentSyncToolkit/Client
+        run: npm ci --no-audit --no-fund
+
       - name: Restore minimum-version projects
         run: >-
           dotnet restore
@@ -85,6 +96,17 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/XperienceCommunity.ContentSyncToolkit/Client/package-lock.json
+
+      - name: Install the browser module's dependencies
+        working-directory: src/XperienceCommunity.ContentSyncToolkit/Client
+        run: npm ci --no-audit --no-fund
 
       - name: Install dependencies
         run: |

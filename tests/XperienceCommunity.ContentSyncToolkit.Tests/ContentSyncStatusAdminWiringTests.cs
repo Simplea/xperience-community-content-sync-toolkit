@@ -30,17 +30,51 @@ public class ContentSyncStatusAdminWiringTests
         Assert.That(declared, Does.Contain(SystemPermissions.VIEW));
     }
 
+    private static UIPageAttribute Registration(Type pageType) =>
+        typeof(ContentSyncStatusTabBase).Assembly.GetCustomAttributes<UIPageAttribute>().Single(page => page.Type == pageType);
+
     // Before Kentico's own list (order 100): the application opens on its first page.
-    [TestCase(typeof(ContentSyncStatusPagesTab), "pages", 10)]
-    [TestCase(typeof(ContentSyncStatusContentHubTab), "content-hub", 20)]
-    public void EveryTab_IsAPageOfKenticosApplication_BeforeItsList(Type tabType, string slug, int order)
+    [TestCase(typeof(ContentSyncPagesEntry), "pages", 10)]
+    [TestCase(typeof(ContentSyncContentHubEntry), "content-hub", 20)]
+    public void EveryMenuEntry_IsAPageOfKenticosApplication_BeforeItsList(Type entryType, string slug, int order)
     {
-        var registration = typeof(ContentSyncStatusTabBase).Assembly.GetCustomAttributes<UIPageAttribute>()
-            .Single(page => page.Type == tabType);
+        var registration = Registration(entryType);
 
         Assert.That(registration.ParentType, Is.EqualTo(typeof(ContentSynchronizationApplication)));
         Assert.That(registration.Slug, Is.EqualTo(slug));
         Assert.That(registration.Order, Is.EqualTo(order));
+        Assert.That(registration.TemplateName, Is.EqualTo(ContentSyncToolkitAdminModule.EntryTemplate));
+    }
+
+    // /content-sync/{tab}/{scope}/{language}/all: Kentico's workspace and language dropdowns in the top
+    // bar, then the list at the segment they navigate to. See docs/specs/header-dropdowns.md.
+    [TestCase(typeof(ContentSyncPagesEntry), typeof(ContentSyncPagesChannelLevel), typeof(ContentSyncPagesLanguageLevel), typeof(ContentSyncStatusPagesTab))]
+    [TestCase(typeof(ContentSyncContentHubEntry), typeof(ContentSyncContentHubWorkspaceLevel), typeof(ContentSyncContentHubLanguageLevel), typeof(ContentSyncStatusContentHubTab))]
+    public void EveryList_SitsUnderItsScopeAndLanguageLevels(Type entryType, Type scopeLevel, Type languageLevel, Type tabType)
+    {
+        Assert.That(Registration(scopeLevel).ParentType, Is.EqualTo(entryType));
+        Assert.That(Registration(scopeLevel).TemplateName, Is.EqualTo(TemplateNames.WORKSPACE));
+        Assert.That(Registration(languageLevel).ParentType, Is.EqualTo(scopeLevel));
+        Assert.That(Registration(languageLevel).TemplateName, Is.EqualTo(TemplateNames.CONTENT_LANGUAGE));
+        Assert.That(Registration(tabType).ParentType, Is.EqualTo(languageLevel));
+        Assert.That(Registration(tabType).ParameterDefaultValue, Is.EqualTo(ContentSyncStatusNavigation.ListSlug));
+        Assert.That(
+            new[] { scopeLevel, languageLevel, tabType }.Select(Registration).Select(registration => registration.Slug),
+            Is.All.EqualTo(PageParameterConstants.PARAMETERIZED_SLUG));
+    }
+
+    // The levels below a menu entry have no menu entry or breadcrumb of their own: the menu highlights the
+    // tab, and the breadcrumb names it.
+    [TestCase(typeof(ContentSyncPagesChannelLevel))]
+    [TestCase(typeof(ContentSyncPagesLanguageLevel))]
+    [TestCase(typeof(ContentSyncStatusPagesTab))]
+    [TestCase(typeof(ContentSyncContentHubWorkspaceLevel))]
+    [TestCase(typeof(ContentSyncContentHubLanguageLevel))]
+    [TestCase(typeof(ContentSyncStatusContentHubTab))]
+    public void LevelsBelowTheMenuEntry_AreLeftOutOfTheMenuAndBreadcrumbs(Type pageType)
+    {
+        Assert.That(pageType.GetCustomAttribute<UINavigationAttribute>()?.Display, Is.False);
+        Assert.That(pageType.GetCustomAttribute<UIBreadcrumbsAttribute>()?.Display, Is.False);
     }
 
     [TestCase("pages", true)]
@@ -73,10 +107,16 @@ public class ContentSyncStatusAdminWiringTests
         Assert.That(properties.Navigation.Items.Select(item => item.Path), Is.EqualTo(new[] { "synchronizations" }));
     }
 
-    // Enforced on every tab, so direct navigation is refused, not just the menu entry hidden.
+    // Enforced on every page, so direct navigation is refused, not just the menu entry hidden.
     [TestCase(typeof(ContentSyncStatusPagesTab))]
     [TestCase(typeof(ContentSyncStatusContentHubTab))]
-    public void EveryTab_EvaluatesTheViewPermission(Type tabType)
+    [TestCase(typeof(ContentSyncPagesEntry))]
+    [TestCase(typeof(ContentSyncContentHubEntry))]
+    [TestCase(typeof(ContentSyncPagesChannelLevel))]
+    [TestCase(typeof(ContentSyncPagesLanguageLevel))]
+    [TestCase(typeof(ContentSyncContentHubWorkspaceLevel))]
+    [TestCase(typeof(ContentSyncContentHubLanguageLevel))]
+    public void EveryPage_EvaluatesTheViewPermission(Type tabType)
     {
         var evaluated = tabType.GetCustomAttributesData()
             .Where(attribute => attribute.AttributeType == typeof(UIEvaluatePermissionAttribute))
@@ -93,6 +133,18 @@ public class ContentSyncStatusAdminWiringTests
             ?.GetCustomAttribute<PageCommandAttribute>();
 
         Assert.That(command, Is.Not.Null, "Refresh must be exposed as a page command");
+        Assert.That(command!.Permission, Is.EqualTo(SystemPermissions.VIEW));
+    }
+
+    // The menu entry template asks for the default only when there's no usable remembered choice.
+    [TestCase(typeof(ContentSyncPagesEntry))]
+    [TestCase(typeof(ContentSyncContentHubEntry))]
+    public void DefaultTargetCommand_RequiresTheViewPermission(Type entryType)
+    {
+        var command = entryType.GetMethod(nameof(ContentSyncStatusEntryBase.GetDefaultTarget), BindingFlags.Public | BindingFlags.Instance)
+            ?.GetCustomAttribute<PageCommandAttribute>();
+
+        Assert.That(command, Is.Not.Null, "GetDefaultTarget must be exposed as a page command");
         Assert.That(command!.Permission, Is.EqualTo(SystemPermissions.VIEW));
     }
 
@@ -162,15 +214,77 @@ public class ContentSyncStatusAdminWiringTests
         Assert.That(ContentSyncStatusFilterValueExtractor.ExtractDateParameter(condition, "Status"), Is.Null, "a string value isn't read as a date");
     }
 
-    // Every filter field is read back by its property name, so a rename must keep matching.
-    [TestCase(typeof(ContentSyncStatusPagesFilterModel), "Channel")]
-    [TestCase(typeof(ContentSyncStatusContentHubFilterModel), "Workspace")]
-    public void FilterModels_ExposeTheFieldsLoadDataReads(Type filterModelType, string scopeField)
+    // Every filter field is read back by its property name, so a rename must keep matching. The channel or
+    // workspace and the language aren't filter fields: Kentico's dropdowns in the top bar choose them.
+    [TestCase(typeof(ContentSyncStatusPagesFilterModel))]
+    [TestCase(typeof(ContentSyncStatusContentHubFilterModel))]
+    public void FilterModels_ExposeTheFieldsLoadDataReads(Type filterModelType)
     {
-        string[] expected = [scopeField, "Language", "OnlyMyChanges", "HideInSync", "Status", "ContentType", "PublishedFrom", "PublishedTo"];
+        string[] expected = ["OnlyMyChanges", "HideInSync", "Status", "ContentType", "PublishedFrom", "PublishedTo"];
 
         Assert.That(filterModelType.GetProperties().Select(property => property.Name), Is.EquivalentTo(expected));
     }
+
+    // Kentico 31.2.0 added FilterInitialValues; on earlier versions the lists open on every item.
+    [Test]
+    public void InitialFilter_HidesItemsInSync_WhereKenticoSupportsIt()
+    {
+        var properties = new ListingTemplateClientProperties();
+        var filterInitialValues = typeof(ListingTemplateClientProperties).GetProperty("FilterInitialValues");
+
+        ContentSyncStatusTabBase.ApplyInitialFilter(properties);
+
+        if (filterInitialValues is null)
+        {
+            Assert.Pass("This Kentico version has no FilterInitialValues; nothing to set.");
+        }
+
+        var values = (IDictionary<string, object>)filterInitialValues.GetValue(properties)!;
+        Assert.That(values, Is.EqualTo(new Dictionary<string, object> { ["HideInSync"] = true }));
+    }
+
+    // The browser module builds the same addresses from a remembered choice (Client/src/navigation.ts).
+    [TestCase("/content-sync/pages", 1, "en", "/content-sync/pages/1/en/all")]
+    [TestCase("/content-sync/content-hub/", 12, "es-MX", "/content-sync/content-hub/12/es-MX/all")]
+    public void ListPath_IsTheEntryThenScopeLanguageAndList(string entryPath, int scopeId, string languageName, string expected) =>
+        Assert.That(ContentSyncStatusNavigation.ListPath(entryPath, scopeId, languageName), Is.EqualTo(expected));
+
+    // One remembered choice per tab and user, so editors sharing a browser keep their own.
+    [Test]
+    public void RememberedChoice_IsKeptPerTabAndUser()
+    {
+        string[] keys =
+        [
+            ContentSyncStatusNavigation.StorageKey("pages", 1),
+            ContentSyncStatusNavigation.StorageKey("content-hub", 1),
+            ContentSyncStatusNavigation.StorageKey("pages", 2),
+        ];
+
+        Assert.That(keys, Is.Unique);
+        Assert.That(keys, Is.All.StartWith("xperiencecommunity/content-sync-toolkit/"));
+    }
+
+    // The module is built and embedded by the project (see its .csproj), under the names the server uses.
+    [Test]
+    public void BrowserModule_IsEmbedded_WithTheComponentsThePagesName()
+    {
+        var assembly = typeof(ContentSyncToolkitAdminModule).Assembly;
+        string? entry = assembly.GetManifestResourceNames()
+            .SingleOrDefault(name => name.Contains(".AdminResources.xperiencecommunity.content.sync.toolkit.entry.", StringComparison.Ordinal)
+                && name.EndsWith(".js", StringComparison.Ordinal));
+
+        Assert.That(entry, Is.Not.Null, "the browser module isn't embedded");
+        using var reader = new StreamReader(assembly.GetManifestResourceStream(entry!)!);
+        string module = reader.ReadToEnd();
+
+        // A page template's export adds "Template" to its name; a component's is its name.
+        Assert.That(module, Does.Contain(ContentSyncToolkitAdminModule.EntryTemplate.Split('/')[^1] + "Template"));
+        Assert.That(module, Does.Contain(ContentSyncToolkitAdminModule.NavigationComponent.Split('/')[^1]));
+    }
+
+    [Test]
+    public void FullReloadOnSwitch_IsOffByDefault() =>
+        Assert.That(new ContentSyncToolkitOptions().FullReloadOnSwitch, Is.False);
 
     // The Status filter allows several options; its condition carries them as one parameter that
     // the extractor reads like any other field.

@@ -11,4 +11,43 @@
     <PackageReference Include="Kentico.Xperience.Admin" />
   </ItemGroup>
 
+  <!--
+    The toolkit's browser module (Client/), embedded in the assembly as Kentico documents for custom
+    administration code: Kentico's IncludeEmbededResource target embeds @(AdminClientPath) under
+    AdminOrgName. The module is built here when its output is missing or older than its sources, so
+    building the project needs Node.js (see CONTRIBUTING.md). Set SkipClientBuild=true to embed an
+    existing build as it is. Design-time builds (IDEs, dotnet format) leave the module alone.
+  -->
+  <PropertyGroup>
+    <AdminOrgName>xperiencecommunity</AdminOrgName>
+    <ClientDirectory>$(MSBuildProjectDirectory)\Client\</ClientDirectory>
+    <ClientBuildStamp>$(BaseIntermediateOutputPath)client-module.stamp</ClientBuildStamp>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Client\**" />
+    <EmbeddedResource Remove="Client\**" />
+    <None Remove="Client\**" />
+    <ClientSource Include="Client\src\**;Client\package.json;Client\package-lock.json;Client\webpack.config.js;Client\babel.config.json;Client\tsconfig.json" />
+  </ItemGroup>
+
+  <Target Name="InstallClientModule" Condition="'$(SkipClientBuild)' != 'true' And !Exists('$(ClientDirectory)node_modules')">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(ClientDirectory)" />
+  </Target>
+
+  <Target Name="BuildClientModule" DependsOnTargets="InstallClientModule" Condition="'$(SkipClientBuild)' != 'true'"
+          Inputs="@(ClientSource)" Outputs="$(ClientBuildStamp)">
+    <Exec Command="npm run build" WorkingDirectory="$(ClientDirectory)" />
+    <Touch Files="$(ClientBuildStamp)" AlwaysCreate="true" />
+  </Target>
+
+  <!-- Runs before Kentico's target, so a module built in this same build is embedded. -->
+  <Target Name="IncludeClientModule" DependsOnTargets="BuildClientModule" BeforeTargets="IncludeEmbededResource;PrepareForBuild"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <AdminClientPath Include="$(ClientDirectory)dist\**" ProjectName="content-sync-toolkit" />
+    </ItemGroup>
+    <Error Condition="'@(AdminClientPath)' == ''" Text="The browser module isn't built: run npm ci and npm run build in $(ClientDirectory), or build without SkipClientBuild." />
+  </Target>
+
 </Project>

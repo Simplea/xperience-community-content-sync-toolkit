@@ -50,6 +50,17 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/XperienceCommunity.ContentSyncToolkit/Client/package-lock.json
+
+      - name: Install the browser module's dependencies
+        working-directory: src/XperienceCommunity.ContentSyncToolkit/Client
+        run: npm ci --no-audit --no-fund
+
       - name: Restore dependencies
         run: dotnet restore XperienceCommunity.ContentSyncToolkit.slnx --locked-mode
 
