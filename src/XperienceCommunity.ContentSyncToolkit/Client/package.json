@@ -23,14 +23,17 @@
     "@types/react": "18.3.31",
     "@types/react-dom": "18.3.7",
     "babel-loader": "10.1.1",
-    "react-router-dom": "6.30.1",
+    "react-router-dom": "6.30.6",
     "typescript": "5.9.3",
     "webpack": "5.108.4",
     "webpack-cli": "7.2.1"
   },
   "overrides": {
     "react": "$react",
-    "react-dom": "$react"
+    "react-dom": "$react",
+    "react-router-dom": "$react-router-dom",
+    "serialize-javascript": "7.1.4",
+    "i18next": "26.7.2"
   },
   "browserslist": [
     "> .2% and last 3 versions",
