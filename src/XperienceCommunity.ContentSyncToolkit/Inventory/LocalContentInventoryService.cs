@@ -90,6 +90,48 @@ internal sealed class LocalContentInventoryService(
         return await WithDisplayNamesAsync(Merge(published, unpublished), keys, cancellationToken);
     }
 
+    // The workspaces the items are in, each listed as above and kept to the items asked for: the same
+    // inventory rules, and few workspaces, since only items the source has elsewhere are asked for.
+    public async Task<IReadOnlyList<ContentInventoryItem>> GetContentHubItemsByGuidAsync(
+        string languageName, IReadOnlyCollection<Guid> guids, CancellationToken cancellationToken)
+    {
+        if (guids.Count == 0)
+        {
+            return [];
+        }
+
+        var workspaceIds = (await new ObjectQuery("cms.contentitem")
+            .Columns("ContentItemWorkspaceID")
+            .WhereIn("ContentItemGUID", guids.ToList())
+            .WhereTrue("ContentItemIsReusable")
+            .GetEnumerableTypedResultAsync(cancellationToken: cancellationToken))
+            .Select(item => item.GetValue("ContentItemWorkspaceID"))
+            .Where(id => id is not null and not DBNull)
+            .Select(Convert.ToInt32)
+            .Distinct()
+            .ToList();
+        if (workspaceIds.Count == 0)
+        {
+            return [];
+        }
+
+        var workspaceNames = (await new ObjectQuery("cms.workspace")
+            .Columns("WorkspaceName")
+            .WhereIn("WorkspaceID", workspaceIds)
+            .GetEnumerableTypedResultAsync(cancellationToken: cancellationToken))
+            .Select(workspace => (string)workspace.GetValue("WorkspaceName"))
+            .ToList();
+
+        var wanted = guids.ToHashSet();
+        var items = new List<ContentInventoryItem>();
+        foreach (string workspaceName in workspaceNames)
+        {
+            items.AddRange((await GetContentHubItemsAsync(workspaceName, languageName, cancellationToken)).Where(item => wanted.Contains(item.Guid)));
+        }
+
+        return items;
+    }
+
     // An item has either a published version or an unpublished one, never both, but the published
     // row wins should both ever appear, so a GUID is never listed twice.
     internal static IReadOnlyList<ContentInventoryItem> Merge(

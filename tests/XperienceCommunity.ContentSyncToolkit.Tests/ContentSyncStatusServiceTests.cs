@@ -87,6 +87,17 @@ public class ContentSyncStatusServiceTests
             return Task.FromResult(RequiredObjectsResult);
         }
 
+        public int ByGuidCallCount { get; private set; }
+
+        public ContentInventoryFetchResult ByGuidResult { get; set; } = ContentInventoryFetchResult.Success([]);
+
+        public Task<ContentInventoryFetchResult> GetContentHubItemsByGuidAsync(
+            string languageName, IReadOnlyCollection<Guid> guids, CancellationToken cancellationToken)
+        {
+            ByGuidCallCount++;
+            return Task.FromResult(ByGuidResult);
+        }
+
         // The sync status service doesn't look up target IDs; only the admin page does.
         public Task<TargetItemIdsFetchResult> GetWebPageIdsAsync(
             string channelName, string languageName, IReadOnlyCollection<Guid> guids, CancellationToken cancellationToken) =>
@@ -119,6 +130,67 @@ public class ContentSyncStatusServiceTests
             client,
             cache,
             Options.Create(new ContentSyncToolkitOptions { InventoryCacheDuration = TimeSpan.FromSeconds(90), ComparePageOrder = comparePageOrder }));
+
+    private static ContentInventoryItem HubItem(Guid guid, string workspaceName, DateTime? published) =>
+        new(guid, ContentInventoryItemKind.ContentHubItem, "DG.Coffee", workspaceName, "en", null, published, "Published");
+
+    // Content Sync doesn't move items between workspaces: an item moved here stays where it was on the
+    // target, and is compared with that copy instead of showing New however often it's synced.
+    [Test]
+    public async Task GetContentHubSyncStatusAsync_AnItemTheTargetHasInAnotherWorkspace_IsComparedWithIt()
+    {
+        var guid = Guid.NewGuid();
+        var published = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var local = new StubLocalContentInventoryService { ContentHubItems = [HubItem(guid, "Events", published)] };
+        var client = new StubContentInventoryClient { ByGuidResult = ContentInventoryFetchResult.Success([HubItem(guid, "Commerce", published)]) };
+
+        var result = await CreateService(local, client, new ContentInventoryCache(TimeProvider.System)).GetContentHubSyncStatusAsync("Events", "en", false, CancellationToken.None);
+
+        var item = result.Items.Single();
+        Assert.That(item.Status, Is.EqualTo(ContentSyncStatus.InSync));
+        Assert.That(item.Remote!.ScopeName, Is.EqualTo("Commerce"));
+    }
+
+    // An older target doesn't answer; the item shows New, as before.
+    [Test]
+    public async Task GetContentHubSyncStatusAsync_AnOlderTarget_LeavesTheItemNew()
+    {
+        var guid = Guid.NewGuid();
+        var local = new StubLocalContentInventoryService { ContentHubItems = [HubItem(guid, "Events", DateTime.UtcNow)] };
+        var client = new StubContentInventoryClient { ByGuidResult = ContentInventoryFetchResult.Failed(ContentInventoryFetchStatus.Rejected) };
+
+        var result = await CreateService(local, client, new ContentInventoryCache(TimeProvider.System)).GetContentHubSyncStatusAsync("Events", "en", false, CancellationToken.None);
+
+        Assert.That(result.Items.Single().Status, Is.EqualTo(ContentSyncStatus.New));
+    }
+
+    [Test]
+    public async Task GetContentHubSyncStatusAsync_AsksAboutItemsElsewhereOnce_UntilARefresh()
+    {
+        var local = new StubLocalContentInventoryService { ContentHubItems = [HubItem(Guid.NewGuid(), "Events", DateTime.UtcNow)] };
+        var client = new StubContentInventoryClient();
+        var service = CreateService(local, client, new ContentInventoryCache(TimeProvider.System));
+
+        await service.GetContentHubSyncStatusAsync("Events", "en", false, CancellationToken.None);
+        await service.GetContentHubSyncStatusAsync("Events", "en", false, CancellationToken.None);
+        Assert.That(client.ByGuidCallCount, Is.EqualTo(1));
+
+        await service.GetContentHubSyncStatusAsync("Events", "en", true, CancellationToken.None);
+        Assert.That(client.ByGuidCallCount, Is.EqualTo(2));
+    }
+
+    // Items the target has in this workspace aren't asked about.
+    [Test]
+    public async Task GetContentHubSyncStatusAsync_NothingMissing_DoesntAsk()
+    {
+        var guid = Guid.NewGuid();
+        var local = new StubLocalContentInventoryService { ContentHubItems = [HubItem(guid, "Events", DateTime.UtcNow)] };
+        var client = new StubContentInventoryClient { ContentHubResult = ContentInventoryFetchResult.Success([HubItem(guid, "Events", DateTime.UtcNow)]) };
+
+        await CreateService(local, client, new ContentInventoryCache(TimeProvider.System)).GetContentHubSyncStatusAsync("Events", "en", false, CancellationToken.None);
+
+        Assert.That(client.ByGuidCallCount, Is.Zero);
+    }
 
     private static readonly RequiredObject articleType =
         new(RequiredObjectKind.ContentType, Guid.NewGuid(), "DG.Article", "Article") { DefinitionHash = "A" };

@@ -169,7 +169,9 @@ Checked in November 2026, before the release.
 
 - the pages inside **Content synchronization** (#27); every language listed
   by default with the Language column (#29); **Moved here** for an item moved
-  to another workspace, and a sync from its new workspace clearing it (#28);
+  to another workspace, and a sync from its new workspace clearing it (#28;
+  corrected later: Content Sync doesn't move items between workspaces, see
+  [moved-between-workspaces.md](specs/moved-between-workspaces.md));
   the **Modified by** column and **Only my changes** (#32), with one page
   marked as last edited by another user;
 - issue #33, in fresh browser profiles: an empty workspace sorting first is

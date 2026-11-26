@@ -30,7 +30,8 @@ internal sealed class ContentSyncStatusService(
             ct => inventoryClient.GetContentHubItemsAsync(workspaceName, languageName, ct),
             CacheKey(ContentInventoryItemKind.ContentHubItem, workspaceName, languageName),
             forceRefresh,
-            cancellationToken);
+            cancellationToken,
+            (local, remote, ct) => GetMovedOnTargetAsync(workspaceName, languageName, local, remote, forceRefresh, ct));
 
     public async Task<RequiredObjectsCheckResult> CheckRequiredObjectsAsync(bool forceRefresh, CancellationToken cancellationToken)
     {
@@ -58,7 +59,8 @@ internal sealed class ContentSyncStatusService(
         Func<CancellationToken, Task<ContentInventoryFetchResult>> getRemote,
         string cacheKey,
         bool forceRefresh,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<IReadOnlyList<ContentInventoryItem>, IReadOnlyList<ContentInventoryItem>, CancellationToken, Task<IReadOnlyList<ContentInventoryItem>>>? getElsewhere = null)
     {
         if (forceRefresh || !cache.TryGet(cacheKey, out var remoteItems))
         {
@@ -78,6 +80,11 @@ internal sealed class ContentSyncStatusService(
         // Local is always re-queried fresh, even when the remote half came from cache — an editor
         // who just published locally should see that reflected immediately.
         var localItems = await getLocal(cancellationToken);
+        if (getElsewhere is not null)
+        {
+            remoteItems = [.. remoteItems, .. await getElsewhere(localItems, remoteItems, cancellationToken)];
+        }
+
         var items = ContentSyncStatusComparer.Compare(localItems, remoteItems, options.Value.ComparePageOrder);
 
         return new ContentSyncStatusResult(true, await AddRequiredObjectIssuesAsync(items, forceRefresh, cancellationToken));
@@ -166,6 +173,49 @@ internal sealed class ContentSyncStatusService(
 
     private static bool NeedsPush(ContentSyncStatusItem item) =>
         item.Local is not null && item.Status.NeedsSync();
+
+    /// <summary>
+    /// The items this workspace has that the target has in another workspace: Content Sync doesn't move
+    /// items between workspaces, so the target keeps an item where it was first synced, and it's compared
+    /// with that copy. Without this, a moved item would show New here forever, however often it's synced.
+    /// A target on an older toolkit version doesn't answer, which leaves such items New, as before.
+    /// See docs/specs/moved-between-workspaces.md.
+    /// </summary>
+    private async Task<IReadOnlyList<ContentInventoryItem>> GetMovedOnTargetAsync(
+        string workspaceName, string languageName, IReadOnlyList<ContentInventoryItem> local, IReadOnlyList<ContentInventoryItem> remote,
+        bool forceRefresh, CancellationToken cancellationToken)
+    {
+        var onTarget = remote.Select(item => item.Guid).ToHashSet();
+        var missing = local.Select(item => item.Guid).Where(guid => !onTarget.Contains(guid)).Distinct().Order().ToList();
+        if (missing.Count == 0)
+        {
+            return [];
+        }
+
+        // Keyed by the items asked about, so an item published here since is asked about too.
+        string cacheKey = $"{CacheKey(ContentInventoryItemKind.ContentHubItem, workspaceName, languageName)}|elsewhere|{string.Join(',', missing).GetHashCode(StringComparison.Ordinal)}";
+        if (!forceRefresh && cache.TryGet(cacheKey, out var cached))
+        {
+            return cached;
+        }
+
+        var found = new List<ContentInventoryItem>();
+        foreach (var batch in missing.Chunk(ContentSyncToolkitConstants.MaxItemIdGuids))
+        {
+            var result = await inventoryClient.GetContentHubItemsByGuidAsync(languageName, batch, cancellationToken);
+            if (result.Status != ContentInventoryFetchStatus.Success)
+            {
+                // Unanswered: these items stay New, as before this lookup existed.
+                found.Clear();
+                break;
+            }
+
+            found.AddRange(result.Items.Where(item => !string.Equals(item.ScopeName, workspaceName, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        cache.Set(cacheKey, found, options.Value.InventoryCacheDuration);
+        return found;
+    }
 
     private static string CacheKey(ContentInventoryItemKind kind, string scopeName, string languageName) =>
         $"{kind}|{scopeName}|{languageName}";

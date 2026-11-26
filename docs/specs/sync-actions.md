@@ -123,7 +123,7 @@ and its version can be sent:
 | Not published | No | "No published version to sync: publish it first." |
 | Incompatible | No | The existing tooltip (the content type must be deployed first) |
 | Only on target, Deleted here | No | "It isn't on this instance." |
-| Moved here | No | "Sync it from its new workspace, *name*." |
+| Moved here | No | "Its changes sync from *name*. A sync doesn't move it: move it to *name* on the target." (Content Sync doesn't move items between workspaces; see [moved-between-workspaces.md](moved-between-workspaces.md).) |
 
 Rows the editor isn't allowed to sync are disabled with "You don't have the Synchronize permission for
 this *page / workspace*."

@@ -28,6 +28,17 @@ internal sealed class ContentInventoryClient(HttpClient httpClient) : IContentIn
         return ToInventoryResult(status, body);
     }
 
+    public async Task<ContentInventoryFetchResult> GetContentHubItemsByGuidAsync(
+        string languageName, IReadOnlyCollection<Guid> guids, CancellationToken cancellationToken)
+    {
+        var (status, body) = await FetchAsync<ContentInventoryResponse>(
+            $"{ContentSyncToolkitConstants.ControllerRoute}/content-hub-items-by-guid" +
+            $"?languageName={Uri.EscapeDataString(languageName)}&guids={string.Join(',', guids)}",
+            cancellationToken);
+
+        return ToInventoryResult(status, body);
+    }
+
     public async Task<RequiredObjectsFetchResult> GetRequiredObjectsAsync(CancellationToken cancellationToken)
     {
         var (status, body) = await FetchAsync<RequiredObjectsResponse>(

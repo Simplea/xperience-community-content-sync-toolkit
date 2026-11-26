@@ -19,4 +19,13 @@ public interface ILocalContentInventoryService
     /// </summary>
     public Task<IReadOnlyList<ContentInventoryItem>> GetContentHubItemsAsync(
         string workspaceName, string languageName, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns the given content-hub items in the given language, in whatever workspace each is, so a
+    /// source can find an item it has in another workspace. Content Sync doesn't move items between
+    /// workspaces. Implementations written before this member existed find none.
+    /// </summary>
+    public Task<IReadOnlyList<ContentInventoryItem>> GetContentHubItemsByGuidAsync(
+        string languageName, IReadOnlyCollection<Guid> guids, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ContentInventoryItem>>([]);
 }

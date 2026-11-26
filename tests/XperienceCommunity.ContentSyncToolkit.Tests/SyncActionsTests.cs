@@ -51,12 +51,13 @@ public class SyncActionsTests
     public void Evaluate_OnlyOnTarget_IsntOnThisInstance() =>
         Assert.That(Evaluate(Item(ContentSyncStatus.OnlyOnTarget, local: false)).Reason, Is.EqualTo(ContentSyncRules.NotOnThisInstance));
 
+    // Its changes sync from the new workspace, but a sync doesn't move it on the target.
     [Test]
-    public void Evaluate_MovedHere_PointsToTheNewWorkspace()
+    public void Evaluate_MovedHere_PointsToTheNewWorkspace_AndSaysToMoveItThere()
     {
         var availability = Evaluate(Item(ContentSyncStatus.OnlyOnTarget, local: false), movedTo: new ContentSyncMovedItem(itemGuid, "Events"));
 
-        Assert.That(availability.Reason, Is.EqualTo("Sync it from its new workspace, Events."));
+        Assert.That(availability.Reason, Is.EqualTo("Its changes sync from Events. A sync doesn't move it: move it to Events on the target."));
         Assert.That(availability.Summary, Is.EqualTo(ContentSyncRules.MovedSummary));
     }
 
@@ -64,7 +65,7 @@ public class SyncActionsTests
     public void Evaluate_MovedToAWorkspaceTheUserCantSee_DoesntNameIt() =>
         Assert.That(
             Evaluate(Item(ContentSyncStatus.OnlyOnTarget, local: false), movedTo: new ContentSyncMovedItem(itemGuid, null)).Reason,
-            Is.EqualTo("Sync it from the workspace it moved to."));
+            Is.EqualTo("Its changes sync from the workspace it moved to. A sync doesn't move it: move it there on the target."));
 
     [Test]
     public void Evaluate_Incompatible_CantBeSynced()
