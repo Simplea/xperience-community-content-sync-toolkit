@@ -78,6 +78,12 @@ Its `@kentico/*` packages match the lowest supported Xperience version, and the
 admin provides React and `react-router-dom` at runtime (they're never bundled).
 When the lowest supported version changes, update those packages with it.
 
+`package.json` overrides a few of those packages' own dependencies
+(`react-router-dom`, `serialize-javascript`, `i18next`) with patched versions, to
+clear security alerts. They're only used to build, never bundled, so the overrides
+don't change the built module. Remove each one once the `@kentico/*` packages
+require a patched version themselves.
+
 ## Line endings
 
 Git normalizes repository text files to LF, and `.gitattributes` explicitly checks
