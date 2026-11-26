@@ -26,3 +26,13 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Browser module
+
+The toolkit's browser module (embedded in the package) bundles code from the
+following packages, under the MIT License above:
+
+- [React](https://github.com/facebook/react) (`react/jsx-runtime`), Copyright (c)
+  Facebook, Inc. and its affiliates.
+- [systemjs-webpack-interop](https://github.com/joeldenning/systemjs-webpack-interop),
+  Copyright (c) 2020 Joel Denning.

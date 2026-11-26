@@ -30,9 +30,6 @@ public static class ContentSyncToolkitAdminServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Microsoft.Extensions.Hosting.IHostedService, Sync.ContentSyncProgressService>());
         services.TryAddScoped<Sync.IContentSyncEngine, Sync.ContentSyncEngine>();
         services.TryAddScoped<Sync.IContentSyncActionService, Sync.ContentSyncActionService>();
-        services.TryAddTransient<ContentSyncStatusChannelOptionsProvider>();
-        services.TryAddTransient<ContentSyncStatusWorkspaceOptionsProvider>();
-        services.TryAddTransient<ContentSyncStatusLanguageOptionsProvider>();
         services.TryAddTransient<ContentSyncStatusWebPageTypeOptionsProvider>();
         services.TryAddTransient<ContentSyncStatusReusableTypeOptionsProvider>();
 

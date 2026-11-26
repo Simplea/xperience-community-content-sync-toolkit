@@ -44,6 +44,15 @@ public sealed class ContentSyncToolkitOptions
     public bool SyncActions { get; set; } = true;
 
     /// <summary>
+    /// Whether switching the channel, workspace or language in the status lists' top bar loads the whole
+    /// page again. Off by default: the lists switch without a reload and keep Content synchronization's
+    /// left menu, through the administration's own navigation. Turn it on if a Kentico update breaks
+    /// that (the left menu disappears after a switch) until the toolkit adapts. See
+    /// docs/specs/header-dropdowns.md.
+    /// </summary>
+    public bool FullReloadOnSwitch { get; set; }
+
+    /// <summary>
     /// A name for this instance, such as "Staging", shown with its host at the top of the status pages.
     /// Optional; without it the host alone is shown. See docs/specs/target-banner.md.
     /// </summary>

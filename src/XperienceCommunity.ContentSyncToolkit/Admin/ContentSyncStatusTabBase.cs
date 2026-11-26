@@ -74,11 +74,17 @@ internal abstract partial class ContentSyncStatusTabBase(
         Callouts = [],
     };
 
-    /// <summary>Key isolating this tab's pending Refresh from the other tab's.</summary>
+    /// <summary>Key isolating this tab's pending Refresh from the other tab's, and its remembered choice.</summary>
     protected abstract string TabKey { get; }
 
-    /// <summary>The filter model property holding the selected channel/workspace name.</summary>
-    protected abstract string ScopeFilterFieldName { get; }
+    /// <summary>The tab's menu entry, which the list's address starts with.</summary>
+    protected abstract Type EntryType { get; }
+
+    /// <summary>The channel or workspace in the address, chosen in Kentico's dropdown in the top bar.</summary>
+    protected abstract int SelectedScopeId { get; }
+
+    /// <summary>The language in the address, chosen in Kentico's language dropdown.</summary>
+    protected abstract string SelectedLanguageName { get; }
 
     /// <summary>"channel" or "workspace", for messages.</summary>
     protected abstract string ScopeNoun { get; }
@@ -92,14 +98,11 @@ internal abstract partial class ContentSyncStatusTabBase(
     protected abstract Task<ContentSyncStatusResult> GetStatusAsync(
         string scopeName, string languageName, bool forceRefresh, CancellationToken cancellationToken);
 
-    /// <summary>Local item IDs and draft state for the given items (one listing page), keyed by item GUID.</summary>
     /// <summary>Who last modified each of the scope's items' language version here, keyed by row GUID.</summary>
-    /// <summary>Whether the scope has any content on this instance, to choose where the page opens.</summary>
-    protected abstract Task<bool> HasContentAsync(ContentSyncScope scope, CancellationToken cancellationToken);
-
     protected abstract Task<IReadOnlyDictionary<Guid, ContentSyncModifier>> GetModifiersAsync(
         ContentSyncScope scope, string languageName, CancellationToken cancellationToken);
 
+    /// <summary>Local item IDs and draft state for the given items (one listing page), keyed by item GUID.</summary>
     protected abstract Task<IReadOnlyDictionary<Guid, ContentSyncLocalItem>> GetLocalItemsAsync(
         ContentSyncScope scope, string languageName, IReadOnlyList<ContentSyncStatusItem> items, CancellationToken cancellationToken);
 
@@ -147,16 +150,21 @@ internal abstract partial class ContentSyncStatusTabBase(
         PageConfiguration.HeaderActions.Single(action => action.Name == nameof(Refresh)).Title =
             ContentSyncStatusListingSupport.RefreshTooltip(options.Value.InventoryCacheDuration);
 
-        // LoadData adds the matching cell; see ContentSyncStatusListingSupport.ShowsLanguageColumn.
-        var languages = await filterOptionsProvider.GetContentLanguagesAsync(CancellationToken.None);
-        if (ContentSyncStatusListingSupport.ShowsLanguageColumn(languages.Count)
-            && !PageConfiguration.ColumnConfigurations.Any(column => column.Name == ContentSyncStatusListingSupport.LanguageColumn))
+        // Keeps the left menu when Kentico's dropdowns switch the list, and remembers the editor's choice.
+        // See docs/specs/header-dropdowns.md.
+        string entryPath = pageLinkGenerator.GetPath(EntryType);
+        PageConfiguration.SubcaptionComponent = new ContentSyncStatusNavigationComponent
         {
-            // Its width comes out of the name's, so the columns still fit a 1440px-wide window.
-            const int languageMinWidth = 10;
-            PageConfiguration.ColumnConfigurations[0].MinWidth -= languageMinWidth;
-            PageConfiguration.ColumnConfigurations.Insert(1, SortableColumn(ContentSyncStatusListingSupport.LanguageColumn, "Language", minWidth: languageMinWidth, maxWidth: 20));
-        }
+            ComponentProperties = new ContentSyncStatusNavigationProperties
+            {
+                EntryPath = entryPath,
+                ApplicationPath = pageLinkGenerator.GetPath(typeof(ContentSynchronizationApplication)),
+                FullReload = options.Value.FullReloadOnSwitch,
+                StorageKey = ContentSyncStatusNavigation.StorageKey(TabKey, (await userAccessor.Get()).UserID),
+                ScopeId = SelectedScopeId,
+                LanguageName = SelectedLanguageName,
+            },
+        };
 
         if (IsSourceConfigured)
         {
@@ -196,6 +204,7 @@ internal abstract partial class ContentSyncStatusTabBase(
 
         // Xperience opens a listing on its largest page size; 25, as in Content hub.
         properties.PageSize = DefaultPageSize;
+        ApplyInitialFilter(properties);
 
         if (!IsSourceConfigured)
         {
@@ -204,6 +213,19 @@ internal abstract partial class ContentSyncStatusTabBase(
 
         return properties;
     }
+
+    // The lists open on what differs: Hide items in sync applied, as a filter, so Kentico's empty state
+    // offers "Clear your filters" when nothing is pending, and an editor who clears it keeps that choice
+    // (Kentico remembers the filter per browser). FilterInitialValues is new in Kentico 31.2.0; on
+    // earlier versions the lists open on every item, pending first. See docs/specs/header-dropdowns.md.
+    private static readonly System.Reflection.PropertyInfo? filterInitialValues =
+        typeof(ListingTemplateClientProperties).GetProperty("FilterInitialValues");
+
+    internal static void ApplyInitialFilter(ListingTemplateClientProperties properties) =>
+        filterInitialValues?.SetValue(properties, new Dictionary<string, object>
+        {
+            [nameof(ContentSyncStatusFilterModelBase.HideInSync)] = true,
+        });
 
     // The Sync button in each row's Actions column, and Sync for ticked rows (which also adds the
     // checkboxes). Rows carry their own Sync button (an ActionCell), enabled or not; Xperience's client
@@ -320,7 +342,8 @@ internal abstract partial class ContentSyncStatusTabBase(
     public Task<INavigateResponse> Refresh()
     {
         refreshRequestStore.RequestRefresh(TabKey);
-        return Task.FromResult(NavigateTo(pageLinkGenerator.GetPath(GetType()), refetchAllTemplates: true));
+        string listPath = ContentSyncStatusNavigation.ListPath(pageLinkGenerator.GetPath(EntryType), SelectedScopeId, SelectedLanguageName);
+        return Task.FromResult(NavigateTo(listPath, refetchAllTemplates: true));
     }
 
     protected override async Task<LoadDataResult> LoadData(LoadDataSettings settings, CancellationToken cancellationToken)
@@ -328,22 +351,14 @@ internal abstract partial class ContentSyncStatusTabBase(
         var request = CreateRequest(settings);
 
         ContentSyncStatusView view;
-        IReadOnlyList<ContentSyncLanguage> languages = [];
         try
         {
-            // Loaded once: they decide both what's compared and whether rows have a Language cell.
-            languages = await filterOptionsProvider.GetContentLanguagesAsync(cancellationToken);
-            showsLanguage = ContentSyncStatusListingSupport.ShowsLanguageColumn(languages.Count);
-
-            // GetCurrentContentLanguage() on ListingPageBase is private, so the admin's own language
-            // switcher isn't reachable here; the Language filter (every language when unset) is.
             view = await ContentSyncStatusViewBuilder.BuildAsync(
                 request,
                 GetScopesAsync,
-                _ => Task.FromResult(languages),
+                filterOptionsProvider.GetContentLanguagesAsync,
                 GetStatusAsync,
                 GetModifiersAsync,
-                HasContentAsync,
                 cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -368,11 +383,11 @@ internal abstract partial class ContentSyncStatusTabBase(
                 "Target unavailable",
                 Enum.Parse<Color>(nameof(Color.AlertBackgroundHighEmphasis))),
             ContentSyncStatusViewKind.ScopeNotFound => MessageRow(
-                $"The selected {ScopeNoun} no longer exists. Clear the filter or choose another {ScopeNoun}.",
+                $"This {ScopeNoun} doesn't exist or you can't open it. Choose another {ScopeNoun} in the top bar.",
                 "Not available",
                 Enum.Parse<Color>(nameof(Color.BackgroundTagGrey))),
             ContentSyncStatusViewKind.LanguageNotFound => MessageRow(
-                "The selected language no longer exists. Clear the Language filter or choose another language.",
+                "This language doesn't exist. Choose another language in the top bar.",
                 "Not available",
                 Enum.Parse<Color>(nameof(Color.BackgroundTagGrey))),
 
@@ -386,15 +401,16 @@ internal abstract partial class ContentSyncStatusTabBase(
         };
     }
 
-    // Each filter field is read back by its filter model property name.
+    // The scope and language come from the address; each filter field is read back by its filter model
+    // property name.
     private ContentSyncStatusViewRequest CreateRequest(LoadDataSettings settings)
     {
         var where = settings.FilterWhereCondition;
 
         return new ContentSyncStatusViewRequest(
             IsSourceConfigured,
-            ContentSyncStatusFilterValueExtractor.ExtractStringParameter(where, ScopeFilterFieldName),
-            ContentSyncStatusFilterValueExtractor.ExtractStringParameter(where, nameof(ContentSyncStatusFilterModelBase.Language)),
+            SelectedScopeId,
+            SelectedLanguageName,
             refreshRequestStore.ConsumeRefreshRequest(TabKey),
             new ContentSyncStatusFilter(
                 ContentSyncStatusFilterValueExtractor.ExtractStringParameter(where, nameof(ContentSyncStatusFilterModelBase.Status)),
@@ -410,25 +426,12 @@ internal abstract partial class ContentSyncStatusTabBase(
             settings.SelectedPage);
     }
 
-    // Whether this instance has several languages, so rows carry a Language cell; set by LoadData.
-    private bool showsLanguage;
-
     private async Task<IEnumerable<Row>> ToRowsAsync(ContentSyncStatusView view, CancellationToken cancellationToken)
     {
-        var languageDisplayNames = ContentSyncStatusViewBuilder.LanguageDisplayNames(view.Languages);
-        var details = new Dictionary<(Guid, string), RowDetails>();
-
-        // Links, drafts and lookups are per language variant, so they're fetched for each language on the page.
-        if (view.Scope is not null)
-        {
-            foreach (var group in view.Items.GroupBy(ContentSyncStatusListingSupport.LanguageName, StringComparer.OrdinalIgnoreCase))
-            {
-                foreach (var (guid, rowDetails) in await GetRowDetailsAsync(view.Scope, group.Key, [.. group], cancellationToken))
-                {
-                    details[(guid, group.Key)] = rowDetails;
-                }
-            }
-        }
+        // Links, drafts and lookups are per language variant: the list's language.
+        var details = view.Scope is not null && view.LanguageName is not null
+            ? await GetRowDetailsAsync(view.Scope, view.LanguageName, view.Items, cancellationToken)
+            : new Dictionary<Guid, RowDetails>();
 
         // Where Xperience's Sync dialog is available, each row's Sync button opens it for that row.
         SyncButton? syncButton = null;
@@ -438,17 +441,12 @@ internal abstract partial class ContentSyncStatusTabBase(
             syncButton = new SyncButton(SynchronizeScopeNoun, RowConfirmationTitle, RowConfirmationDetail + PageOrderNote, dialogProperties);
         }
 
-        return [.. view.Items.Select(item =>
-        {
-            string language = ContentSyncStatusListingSupport.LanguageName(item);
-            return ToRow(
-                item,
-                details.GetValueOrDefault((item.Guid, language)),
-                showsLanguage ? ContentSyncStatusListingSupport.LanguageDisplayName(item, languageDisplayNames) : null,
-                view.ModifierOf(item)?.Name,
-                syncButton,
-                SyncActionsEnabled ? tracker.RunningSyncOf(Kind, item.Guid, language) : null);
-        })];
+        return [.. view.Items.Select(item => ToRow(
+            item,
+            details.GetValueOrDefault(item.Guid),
+            view.ModifierOf(item)?.Name,
+            syncButton,
+            SyncActionsEnabled ? tracker.RunningSyncOf(Kind, item.Guid, ContentSyncStatusListingSupport.LanguageName(item)) : null))];
     }
 
     /// <summary>A row's editor link, whether it opens the target, whether it has a newer draft, its recycle bin entry, and where it moved to.</summary>
@@ -579,10 +577,10 @@ internal abstract partial class ContentSyncStatusTabBase(
     /// <param name="Dialog">Xperience's Sync dialog, which the button opens where this version has it; otherwise the confirmation.</param>
     private sealed record SyncButton(string ScopeNoun, string ConfirmationTitle, string ConfirmationDetail, IActionComponentClientProperties? Dialog);
 
-    // An item is listed once per language, so its row is identified by both. With Sync actions on
-    // (syncButton set), the row ends with its Sync button.
+    // A row is one language version, identified by the item and its language, which the Sync actions
+    // read back. With Sync actions on (syncButton set), the row ends with its Sync button.
     private static Row ToRow(
-        ContentSyncStatusItem item, RowDetails details, string? language, string? modifiedBy, SyncButton? syncButton, ContentSyncTrackedSync? running) =>
+        ContentSyncStatusItem item, RowDetails details, string? modifiedBy, SyncButton? syncButton, ContentSyncTrackedSync? running) =>
         new()
         {
             Identifier = ContentSyncRules.RowId(item.Guid, ContentSyncStatusListingSupport.LanguageName(item)),
@@ -590,7 +588,6 @@ internal abstract partial class ContentSyncStatusTabBase(
             Cells =
             [
                 NameCell(item, details),
-                .. LanguageCell(language),
                 new StringCell { Value = ContentSyncStatusListingSupport.ContentTypeDisplayName(item) },
                 running is null
                     ? TagCell(
@@ -719,13 +716,9 @@ internal abstract partial class ContentSyncStatusTabBase(
     // Marks a link that opens in a new tab.
     private const string TargetLinkMarker = " ↗";
 
-    // No cell without the Language column; see ContentSyncStatusListingSupport.ShowsLanguageColumn.
-    private static IEnumerable<Cell> LanguageCell(string? language) =>
-        language is null ? [] : [new StringCell { Value = language }];
-
     // A single row explaining a state that depends on the selected scope, with a status-style tag
     // so it reads differently from both real rows and Xperience's native empty state.
-    private LoadDataResult MessageRow(string message, string tagLabel, Color color) =>
+    private static LoadDataResult MessageRow(string message, string tagLabel, Color color) =>
         new()
         {
             TotalCount = 1,
@@ -737,7 +730,6 @@ internal abstract partial class ContentSyncStatusTabBase(
                     Cells =
                     [
                         new StringCell { Value = message },
-                        .. LanguageCell(showsLanguage ? string.Empty : null),
                         new StringCell { Value = string.Empty },
                         TagCell(tagLabel, color),
                         new StringCell { Value = string.Empty },

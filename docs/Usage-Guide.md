@@ -95,6 +95,7 @@ Four optional toolkit settings, all on the source:
 | `SyncActions` | `true` | Whether editors can sync from the status pages (see [Sync from the status pages](#sync-from-the-status-pages)). Turn it off to keep the pages read-only. |
 | `InstanceLabel` | none | A name for this instance, such as "Staging", shown with its host at the top of the status pages. |
 | `TargetLabel` | none | A name for the target, such as "Production", shown with its host at the top of the status pages and in the sync confirmations. |
+| `FullReloadOnSwitch` | `false` | Whether switching the channel, workspace or language in the top bar loads the whole page again. Leave it off: the list switches without a reload. Turn it on only if, after a Kentico update, Content synchronization's left menu disappears when you switch, until a toolkit update fixes it. |
 
 ## Give editors access
 
@@ -148,21 +149,30 @@ The line at the top says which instances are compared, by host name, for
 example **staging.example.com → production.example.com**. Set `InstanceLabel`
 and `TargetLabel` to add names such as Staging and Production.
 
-Every item is listed, the ones still pending first (the list is sorted by
-**Status**, with **In sync** last). To see only what's pending, check **Hide
-items in sync** in the filter; Xperience remembers it in your browser.
+Each page shows one channel or workspace in one language, chosen in the top bar
+with Kentico's own dropdowns, as in Kentico's Content hub and Pages:
+
+- **Channel** (Pages) or **Workspace** (Content hub). With only one, Kentico
+  hides the dropdown.
+- **Language**. Each row is that language version of an item, and clicking it
+  opens that version.
+
+Opening a page from the navigation brings back the channel or workspace and
+language you last chose on it, in this browser. The first time, or when that
+choice is no longer available, it opens on the first channel or workspace with
+content you can see, in the channel's primary language (Pages) or the default
+content language (Content hub). Switching keeps the page's address up to date,
+so Back, Forward, bookmarks and shared links open the same list.
+
+The list opens with **Hide items in sync** applied, so it shows only what's
+pending, sorted by **Status**. Remove it from the applied filters to see every
+item, pending ones first; Xperience remembers that in your browser. On
+Xperience versions before 31.2.0, which can't apply a filter on opening, every
+item is listed, pending ones first.
 
 ![Pages tab in Content synchronization, listing pages as Incompatible, Unpublished, New, Changed and Moved first, then In sync, with Language and Modified by columns](images/pages-statuses.jpg)
 
 - **Filter** opens the filter panel. All fields are optional and combine:
-  - **Channel** (Pages) or **Workspace** (Content hub). Without a selection,
-    the first one with published content you can see is shown, so an empty
-    channel or workspace never hides the others.
-  - **Language**. Without a selection, every language is listed, one row per
-    language version, so nothing pending in another language goes unnoticed.
-    Choose a language to see only that one. With more than one language, a
-    **Language** column says which version each row is, and clicking a row
-    opens that version.
   - **Only my changes**: lists only the items you last edited on this instance
     (saving a draft counts), so you can see what you still need to sync. If
     someone edits an item after you, it's theirs: the **Modified by** column
@@ -171,7 +181,8 @@ items in sync** in the filter; Xperience remembers it in your browser.
   - **Hide items in sync**: lists only what differs, Incompatible and Only on
     target included. Selecting a **Status** or searching still looks at every
     item, so you can find an item that's in sync. When nothing is pending, the
-    list says it couldn't find any matches; clear the filter to see everything.
+    list says it couldn't find any matches; **Clear your filters here** shows
+    everything.
   - **Status**: choose one or more of the [statuses](#statuses); the list shows items
     matching any of them. Each option matches the tag shown, so an incompatible item
     only matches **Incompatible**.
@@ -241,8 +252,6 @@ What the toolkit adds to a sync:
 
 - **Reordered pages take their siblings along:** the other pages on the same
   level, in the same language, go too, so the order on the target matches.
-- **One sync per language:** a selection in several languages starts one sync
-  for each, one after the other.
 - **Large selections are split** into syncs of at most 200 pages or 1,000
   content items, as Kentico recommends.
 
@@ -476,7 +485,7 @@ outside the current view:
   target already has it, it shows as **Not published** instead.)
 - An unpublished content hub item the target doesn't have.
 - Items in another language, website channel or workspace than the one
-  selected in the filter.
+  selected in the top bar.
 - Items not translated into the selected language, even when the language
   falls back to another. Content Sync syncs each language version separately.
 - Pages you can't see in the page tree, and channels or workspaces you have no
@@ -490,10 +499,10 @@ outside the current view:
 - **A "Target unavailable" row**: the target couldn't be reached, rejected the
   secret, or doesn't have Content Sync's target role enabled.
 - **No rows**: nothing matches the applied filters, or the channel or
-  workspace you chose has no published content (in the selected language, if
-  you chose one). The toolbar stays, so you can change or clear the filters.
-- **A "Not available" row**: the selected channel, workspace, or language was
-  deleted after the filter was applied. Clear that filter or choose another.
+  workspace has no published content in the selected language.
+- **A "Not available" row**: the address names a channel, workspace or
+  language that doesn't exist or that you can't open, for example from an old
+  bookmark. Choose another in the top bar.
 
 ## What is compared
 
@@ -514,8 +523,7 @@ outside the current view:
     recommends editing only on the source; a sync overwrites target edits.
   - **Scheduled publish or unpublish dates.** Content Sync doesn't transfer
     them, and no status reflects them.
-- **Every language, unless you choose one.** Each language version is
-  compared on its own, as Content Sync syncs them, so an item can be **In
-  sync** in one language and **Changed** in another. The target is asked for
-  each language in turn, so on a site with many languages the first load and
-  Refresh take longer.
+- **One language at a time.** Each language version is compared on its own,
+  as Content Sync syncs them, so an item can be **In sync** in one language and
+  **Changed** in another. Switch the language in the top bar to see another
+  language's changes.

@@ -21,19 +21,7 @@ internal static class ContentSyncStatusListingSupport
     public const string ContentTypeColumn = "contentType";
     public const string StatusColumn = "status";
     public const string LastPublishedColumn = "lastPublished";
-    public const string LanguageColumn = "language";
     public const string ModifiedByColumn = "modifiedBy";
-
-    // No language selected lists every language: the page says what's pending, and a default language
-    // nobody chose shows nowhere, not even as an applied filter, so "everything is in sync" would
-    // silently mean only that language. Selecting one narrows the list.
-    public const string AllLanguagesLabel = "All languages";
-
-    public static bool IsAllLanguages(string? requestedLanguageName) => string.IsNullOrEmpty(requestedLanguageName);
-
-    // The Language column is shown on an instance with more than one language, whichever is selected,
-    // so the columns don't change with the filter.
-    public static bool ShowsLanguageColumn(int languageCount) => languageCount > 1;
 
     // Status filter values: Incompatible, or a ContentSyncStatus member name.
     public const string IncompatibleStatusFilter = "incompatible";
@@ -88,11 +76,10 @@ internal static class ContentSyncStatusListingSupport
         + "<strong>Moved here</strong>: nothing from this workspace; sync it from the workspace it moved to.<br>"
         + "<strong>In sync</strong>: nothing; it's the same on both.";
 
-    // Every item is listed, pending ones first by the Status sort, unless the editor checks Hide items in
-    // sync. Even then, a Status selection or a search looks at every item, since "is this item synced?"
-    // must not come back empty. Listing everything by default keeps the list from being empty while the
-    // channel or workspace has content: with nothing applied, Xperience hides the toolbar, Filter
-    // included, under an empty list (issue #33).
+    // Hide items in sync leaves what differs. Even then, a Status selection or a search looks at every
+    // item, since "is this item synced?" must not come back empty. Where Kentico supports it, the lists
+    // open with it applied (see ContentSyncStatusTabBase.ApplyInitialFilter): an applied filter keeps the
+    // toolbar under an empty list, which Kentico otherwise hides (issue #33).
     public static bool HidesInSync(ContentSyncStatusFilter filter, string? searchTerm) =>
         filter.HideInSync && ParseStatusFilter(filter.Status) is null && string.IsNullOrWhiteSpace(searchTerm);
 
@@ -171,24 +158,17 @@ internal static class ContentSyncStatusListingSupport
     // also the fallback when no column is sent): Incompatible first, since those need a developer before
     // anyone can sync them, then by status (see statusOrder). Within a status, the most recently
     // published come first, since those are what editors are working on; every other sort breaks ties
-    // by display name, ascending, then by language, so an item's languages stay together. Tie-breaks
-    // don't follow the sort direction. languageDisplayNames sorts the Language column by the names it
-    // shows; without them, by code name.
+    // by display name, ascending. Tie-breaks don't follow the sort direction.
     public static IReadOnlyList<ContentSyncStatusItem> ApplySort(
         IReadOnlyList<ContentSyncStatusItem> items,
         string? sortBy,
         bool descending,
-        IReadOnlyDictionary<string, string>? languageDisplayNames = null,
         Func<ContentSyncStatusItem, string>? modifiedBy = null)
     {
-        string Language(ContentSyncStatusItem item) => LanguageDisplayName(item, languageDisplayNames);
-
         var ordered = sortBy switch
         {
             _ when IsColumn(sortBy, NameColumn) =>
                 Order(items, DisplayName, StringComparer.OrdinalIgnoreCase, descending),
-            _ when IsColumn(sortBy, LanguageColumn) =>
-                Order(items, Language, StringComparer.OrdinalIgnoreCase, descending),
             _ when IsColumn(sortBy, ModifiedByColumn) && modifiedBy is not null =>
                 Order(items, modifiedBy, StringComparer.OrdinalIgnoreCase, descending),
             _ when IsColumn(sortBy, ContentTypeColumn) =>
@@ -199,7 +179,7 @@ internal static class ContentSyncStatusListingSupport
                 .ThenByDescending(PublishedOrEarliest),
         };
 
-        return [.. ordered.ThenBy(DisplayName, StringComparer.OrdinalIgnoreCase).ThenBy(Language, StringComparer.OrdinalIgnoreCase)];
+        return [.. ordered.ThenBy(DisplayName, StringComparer.OrdinalIgnoreCase)];
     }
 
     // Never-published items sort as the earliest possible date.
@@ -259,12 +239,6 @@ internal static class ContentSyncStatusListingSupport
 
     /// <summary>The language variant the item's row is about.</summary>
     public static string LanguageName(ContentSyncStatusItem item) => (item.Local ?? item.Remote)?.LanguageName ?? string.Empty;
-
-    public static string LanguageDisplayName(ContentSyncStatusItem item, IReadOnlyDictionary<string, string>? languageDisplayNames)
-    {
-        string name = LanguageName(item);
-        return languageDisplayNames?.GetValueOrDefault(name) ?? name;
-    }
 
     private const string CannotDeleteHint =
         " Content Sync can't delete content: if it was deleted here, delete it on the target.";

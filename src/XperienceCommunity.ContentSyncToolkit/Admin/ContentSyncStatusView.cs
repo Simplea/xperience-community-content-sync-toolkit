@@ -25,23 +25,18 @@ internal sealed record ContentSyncStatusView(
     /// <summary>The channel/workspace the items belong to; set once the scope is resolved.</summary>
     public ContentSyncScope? Scope { get; init; }
 
-    /// <summary>The compared language; set once the language is resolved, and null when every language is compared.</summary>
+    /// <summary>The compared language's code name; set once the language is resolved.</summary>
     public string? LanguageName { get; init; }
 
-    /// <summary>This instance's languages, for the Language column; set once they're loaded.</summary>
-    public IReadOnlyList<ContentSyncLanguage> Languages { get; init; } = [];
+    /// <summary>Who last modified each listed item's language version here, keyed by row GUID. Only on target items have none.</summary>
+    public IReadOnlyDictionary<Guid, ContentSyncModifier> Modifiers { get; init; } = new Dictionary<Guid, ContentSyncModifier>();
 
-    /// <summary>Who last modified each listed language version here, keyed by row GUID and language. Only on target items have none.</summary>
-    public IReadOnlyDictionary<(Guid Guid, string LanguageName), ContentSyncModifier> Modifiers { get; init; } =
-        new Dictionary<(Guid, string), ContentSyncModifier>();
-
-    public ContentSyncModifier? ModifierOf(ContentSyncStatusItem item) =>
-        Modifiers.GetValueOrDefault((item.Guid, ContentSyncStatusListingSupport.LanguageName(item)));
+    public ContentSyncModifier? ModifierOf(ContentSyncStatusItem item) => Modifiers.GetValueOrDefault(item.Guid);
 
     public static ContentSyncStatusView Of(ContentSyncStatusViewKind kind) => new(kind, [], 0);
 }
 
-/// <summary>The filter panel's fields other than the channel/workspace and language. Null means not filtered.</summary>
+/// <summary>The filter panel's fields. Null means not filtered.</summary>
 /// <param name="Status">A <see cref="ContentSyncStatusListingSupport.ParseStatusFilter"/> value.</param>
 /// <param name="ContentTypeName">A content type code name.</param>
 /// <param name="PublishedFrom">First day to include, from a date input (midnight).</param>
@@ -56,12 +51,12 @@ internal sealed record ContentSyncStatusFilter(
     bool HideInSync = false,
     bool OnlyMyChanges = false);
 
-// RequestedScopeName/RequestedLanguageName come from the filter, or are null when not applied.
-// PageIndex is zero-based, as LoadDataSettings.SelectedPage provides it.
+// ScopeId (the channel's or workspace's ID) and LanguageName (a code name) come from the address, chosen
+// in Kentico's dropdowns in the top bar. PageIndex is zero-based, as LoadDataSettings.SelectedPage provides it.
 internal sealed record ContentSyncStatusViewRequest(
     bool IsSourceConfigured,
-    string? RequestedScopeName,
-    string? RequestedLanguageName,
+    int ScopeId,
+    string LanguageName,
     bool ForceRefresh,
     ContentSyncStatusFilter Filter,
     string? SearchTerm,
@@ -74,7 +69,7 @@ internal sealed record ContentSyncStatusViewRequest(
 /// Every decision a sync status tab makes about what to show, kept free of Xperience's page
 /// types so it can be unit tested. States are checked in a fixed order: configuration first
 /// (no fetch is attempted without a target), then available scopes, then the requested scope and
-/// language, then target availability, then whether the scope has content.
+/// language, then target availability, then whether there's anything to list.
 /// </summary>
 internal static class ContentSyncStatusViewBuilder
 {
@@ -84,7 +79,6 @@ internal static class ContentSyncStatusViewBuilder
         Func<CancellationToken, Task<IReadOnlyList<ContentSyncLanguage>>> getLanguages,
         Func<string, string, bool, CancellationToken, Task<ContentSyncStatusResult>> getStatus,
         Func<ContentSyncScope, string, CancellationToken, Task<IReadOnlyDictionary<Guid, ContentSyncModifier>>> getModifiers,
-        Func<ContentSyncScope, CancellationToken, Task<bool>> hasContent,
         CancellationToken cancellationToken)
     {
         if (!request.IsSourceConfigured)
@@ -98,53 +92,41 @@ internal static class ContentSyncStatusViewBuilder
             return ContentSyncStatusView.Of(ContentSyncStatusViewKind.NoScopes);
         }
 
-        var scope = string.IsNullOrEmpty(request.RequestedScopeName)
-            ? await DefaultScopeAsync(scopes, hasContent, cancellationToken)
-            : ResolveScope(scopes, request.RequestedScopeName);
+        // Only the editor's own scopes: an address with another ID (deleted, or one they can't open)
+        // isn't replaced with a different scope.
+        var scope = scopes.FirstOrDefault(candidate => candidate.Id == request.ScopeId);
         if (scope is null)
         {
             return ContentSyncStatusView.Of(ContentSyncStatusViewKind.ScopeNotFound);
         }
 
-        var languages = await getLanguages(cancellationToken);
-        if (languages.Count == 0)
-        {
-            return ContentSyncStatusView.Of(ContentSyncStatusViewKind.Empty);
-        }
-
-        bool allLanguages = ContentSyncStatusListingSupport.IsAllLanguages(request.RequestedLanguageName);
-        string? languageName = allLanguages ? null : ResolveLanguageName(languages, request.RequestedLanguageName);
-        if (!allLanguages && languageName is null)
+        string? languageName = ResolveLanguageName(await getLanguages(cancellationToken), request.LanguageName);
+        if (languageName is null)
         {
             return ContentSyncStatusView.Of(ContentSyncStatusViewKind.LanguageNotFound);
         }
 
-        // Each language is its own comparison, cached on its own, as when it's selected alone. They run
-        // one after another, so a site with many languages doesn't send the target as many requests at once.
-        List<ContentSyncStatusItem> allItems = [];
-        var modifiers = new Dictionary<(Guid, string), ContentSyncModifier>();
-        foreach (string name in languageName is null ? languages.Select(language => language.Name) : [languageName])
+        var result = await getStatus(scope.Name, languageName, request.ForceRefresh, cancellationToken);
+        if (!result.TargetAvailable)
         {
-            var result = await getStatus(scope.Name, name, request.ForceRefresh, cancellationToken);
-            if (!result.TargetAvailable)
+            return ContentSyncStatusView.Of(ContentSyncStatusViewKind.TargetUnavailable);
+        }
+
+        // Only items with a copy here have a modifier here, and only they can be the user's.
+        var languageModifiers = await getModifiers(scope, languageName, cancellationToken);
+        var modifiers = new Dictionary<Guid, ContentSyncModifier>();
+        List<ContentSyncStatusItem> allItems = [];
+        foreach (var item in result.Items)
+        {
+            var modifier = item.Local is null ? null : languageModifiers.GetValueOrDefault(item.Guid);
+            if (modifier is not null)
             {
-                return ContentSyncStatusView.Of(ContentSyncStatusViewKind.TargetUnavailable);
+                modifiers[item.Guid] = modifier;
             }
 
-            // Only items with a copy here have a modifier here, and only they can be the user's.
-            var languageModifiers = await getModifiers(scope, name, cancellationToken);
-            foreach (var item in result.Items)
+            if (!request.Filter.OnlyMyChanges || modifier?.IsCurrentUser == true)
             {
-                var modifier = item.Local is null ? null : languageModifiers.GetValueOrDefault(item.Guid);
-                if (modifier is not null)
-                {
-                    modifiers[(item.Guid, ContentSyncStatusListingSupport.LanguageName(item))] = modifier;
-                }
-
-                if (!request.Filter.OnlyMyChanges || modifier?.IsCurrentUser == true)
-                {
-                    allItems.Add(item);
-                }
+                allItems.Add(item);
             }
         }
 
@@ -169,8 +151,7 @@ internal static class ContentSyncStatusViewBuilder
             items,
             request.SortBy,
             request.SortDescending,
-            LanguageDisplayNames(languages),
-            item => modifiers.GetValueOrDefault((item.Guid, ContentSyncStatusListingSupport.LanguageName(item)))?.Name ?? string.Empty);
+            item => modifiers.GetValueOrDefault(item.Guid)?.Name ?? string.Empty);
         int totalCount = items.Count;
         items = ContentSyncStatusListingSupport.ApplyPaging(items, request.PageSize, request.PageIndex);
 
@@ -178,22 +159,17 @@ internal static class ContentSyncStatusViewBuilder
         {
             Scope = scope,
             LanguageName = languageName,
-            Languages = languages,
             Modifiers = modifiers,
         };
     }
 
-    public static IReadOnlyDictionary<string, string> LanguageDisplayNames(IReadOnlyList<ContentSyncLanguage> languages) =>
-        languages
-            .DistinctBy(language => language.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(language => language.Name, language => language.DisplayName, StringComparer.OrdinalIgnoreCase);
-
-    // No filter applied yet defaults to the first scope; a requested scope that no longer exists
-    // (deleted after the dropdown loaded) returns null rather than silently showing another one.
-    // With none chosen, the first scope with content here, so the list isn't empty: Xperience hides the
-    // toolbar, Filter included, under an empty list with nothing applied. Only when every scope is empty,
-    // and there's nothing to switch to, the first one.
-    private static async Task<ContentSyncScope> DefaultScopeAsync(
+    /// <summary>
+    /// Where a tab opens without a remembered choice: the first scope with content here, so the list
+    /// isn't empty, since Xperience hides the toolbar under an empty list with no filter applied
+    /// (issue #33). Only when every scope is empty, and there's nothing to switch to, the first one.
+    /// Null when the editor has no scopes.
+    /// </summary>
+    public static async Task<ContentSyncScope?> DefaultScopeAsync(
         IReadOnlyList<ContentSyncScope> scopes, Func<ContentSyncScope, CancellationToken, Task<bool>> hasContent, CancellationToken cancellationToken)
     {
         foreach (var candidate in scopes)
@@ -204,20 +180,10 @@ internal static class ContentSyncStatusViewBuilder
             }
         }
 
-        return scopes[0];
+        return scopes.Count > 0 ? scopes[0] : null;
     }
 
-    private static ContentSyncScope? ResolveScope(IReadOnlyList<ContentSyncScope> scopes, string? requestedScopeName)
-    {
-        if (string.IsNullOrEmpty(requestedScopeName))
-        {
-            return scopes[0];
-        }
-
-        return scopes.FirstOrDefault(scope => string.Equals(scope.Name, requestedScopeName, StringComparison.OrdinalIgnoreCase));
-    }
-
-    // As for scopes, a requested language that no longer exists returns null rather than another one.
-    private static string? ResolveLanguageName(IReadOnlyList<ContentSyncLanguage> languages, string? requestedLanguageName) =>
+    // A language that no longer exists returns null rather than another one.
+    private static string? ResolveLanguageName(IReadOnlyList<ContentSyncLanguage> languages, string requestedLanguageName) =>
         languages.FirstOrDefault(language => string.Equals(language.Name, requestedLanguageName, StringComparison.OrdinalIgnoreCase))?.Name;
 }

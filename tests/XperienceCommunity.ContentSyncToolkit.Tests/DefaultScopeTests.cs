@@ -1,12 +1,9 @@
 using XperienceCommunity.ContentSyncToolkit.Admin;
-using XperienceCommunity.ContentSyncToolkit.Inventory;
-using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
 namespace XperienceCommunity.ContentSyncToolkit.Tests;
 
-// Where a tab opens when no channel or workspace is chosen: on a first visit, or after Clear all. With
-// nothing applied, Xperience hides the toolbar under an empty list, so it must open where there's something
-// to list (issue #33).
+// Where a tab opens from its menu entry without a remembered choice. Xperience hides the toolbar under an
+// empty list with no filter applied, so it opens where there's something to list (issue #33).
 public class DefaultScopeTests
 {
     private static readonly ContentSyncScope empty = new(1, "Empty", "AAA Empty");
@@ -14,30 +11,13 @@ public class DefaultScopeTests
     private static readonly ContentSyncScope other = new(3, "Other", "Other");
 
     private readonly List<string> checkedScopes = [];
-    private readonly List<string> comparedScopes = [];
 
     [SetUp]
-    public void Reset()
-    {
-        checkedScopes.Clear();
-        comparedScopes.Clear();
-    }
+    public void Reset() => checkedScopes.Clear();
 
-    private Task<ContentSyncStatusView> Build(string? requestedScopeName, Func<ContentSyncScope, bool> hasContent) =>
-        ContentSyncStatusViewBuilder.BuildAsync(
-            new ContentSyncStatusViewRequest(true, requestedScopeName, null, false, new ContentSyncStatusFilter(), null, null, false, 50, 0),
-            _ => Task.FromResult<IReadOnlyList<ContentSyncScope>>([empty, withContent, other]),
-            _ => Task.FromResult<IReadOnlyList<ContentSyncLanguage>>([new("en", "English", true)]),
-            (scopeName, _, _, _) =>
-            {
-                comparedScopes.Add(scopeName);
-                return Task.FromResult(new ContentSyncStatusResult(true, [
-                    new ContentSyncStatusItem(Guid.NewGuid(), ContentSyncStatus.InSync,
-                        new ContentInventoryItem(Guid.NewGuid(), ContentInventoryItemKind.WebPage, "Test.Type", scopeName, "en", "/A", DateTime.UtcNow, "Published"),
-                        null),
-                ]));
-            },
-            (_, _, _) => Task.FromResult<IReadOnlyDictionary<Guid, ContentSyncModifier>>(new Dictionary<Guid, ContentSyncModifier>()),
+    private Task<ContentSyncScope?> Default(IReadOnlyList<ContentSyncScope> scopes, Func<ContentSyncScope, bool> hasContent) =>
+        ContentSyncStatusViewBuilder.DefaultScopeAsync(
+            scopes,
             (scope, _) =>
             {
                 checkedScopes.Add(scope.Name);
@@ -46,49 +26,49 @@ public class DefaultScopeTests
             CancellationToken.None);
 
     [Test]
-    public async Task NothingChosen_OpensOnTheFirstScopeWithContent()
+    public async Task OpensOnTheFirstScopeWithContent()
     {
-        var view = await Build(null, scope => scope != empty);
+        var scope = await Default([empty, withContent, other], scope => scope != empty);
 
-        Assert.That(view.Scope, Is.EqualTo(withContent));
-        Assert.That(comparedScopes, Is.EqualTo(new[] { "WithContent" }), "only the opened scope is compared with the target");
+        Assert.That(scope, Is.EqualTo(withContent));
     }
 
     // Each check is a small query here, never a call to the target, and it stops at the first match.
     [Test]
-    public async Task NothingChosen_StopsCheckingAtTheFirstMatch()
+    public async Task StopsCheckingAtTheFirstMatch()
     {
-        await Build(null, scope => scope != empty);
+        await Default([empty, withContent, other], scope => scope != empty);
 
         Assert.That(checkedScopes, Is.EqualTo(new[] { "Empty", "WithContent" }));
     }
 
     // There's nothing to switch to, so a hidden toolbar costs nothing.
     [Test]
-    public async Task NothingChosen_AndNoScopeHasContent_OpensOnTheFirst()
+    public async Task WhenNoScopeHasContent_OpensOnTheFirst()
     {
-        var view = await Build(null, _ => false);
+        var scope = await Default([empty, withContent, other], _ => false);
 
-        Assert.That(view.Scope, Is.EqualTo(empty));
+        Assert.That(scope, Is.EqualTo(empty));
         Assert.That(checkedScopes, Is.EqualTo(new[] { "Empty", "WithContent", "Other" }));
     }
 
-    // A chosen scope is a filter: Xperience keeps the toolbar even if it lists nothing, so it's used as is.
     [Test]
-    public async Task ChosenScope_IsUsedWithoutChecking()
-    {
-        var view = await Build("Empty", _ => false);
+    public async Task WithoutScopes_IsNull() => Assert.That(await Default([], _ => true), Is.Null);
 
-        Assert.That(view.Scope, Is.EqualTo(empty));
-        Assert.That(checkedScopes, Is.Empty);
+    // Content hub opens on the default content language, as Kentico's Content hub does; Pages too when a
+    // channel's primary language can't be found.
+    [Test]
+    public void DefaultContentLanguage_IsTheOneMarkedDefault()
+    {
+        IReadOnlyList<ContentSyncLanguage> languages = [new("es", "Spanish", false), new("en", "English", true)];
+
+        Assert.That(ContentSyncStatusEntryBase.DefaultContentLanguage(languages), Is.EqualTo("en"));
     }
 
     [Test]
-    public async Task ChosenScopeThatNoLongerExists_IsNotFound_NotReplaced()
+    public void DefaultContentLanguage_WithNoneMarked_IsTheFirst_AndWithNoLanguages_IsNull()
     {
-        var view = await Build("Deleted", _ => true);
-
-        Assert.That(view.Kind, Is.EqualTo(ContentSyncStatusViewKind.ScopeNotFound));
-        Assert.That(checkedScopes, Is.Empty);
+        Assert.That(ContentSyncStatusEntryBase.DefaultContentLanguage([new("es", "Spanish", false), new("en", "English", false)]), Is.EqualTo("es"));
+        Assert.That(ContentSyncStatusEntryBase.DefaultContentLanguage([]), Is.Null);
     }
 }

@@ -1,7 +1,6 @@
 using CMS.Membership;
 
 using Kentico.Xperience.Admin.Base;
-using Kentico.Xperience.Admin.Base.UIPages;
 
 using Microsoft.Extensions.Options;
 
@@ -11,17 +10,22 @@ using XperienceCommunity.ContentSyncToolkit.Inventory;
 using XperienceCommunity.ContentSyncToolkit.Sync;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
+// Under the menu entry, the workspace and the language (see ContentSyncStatusNavigation.cs), at the
+// segment Kentico's dropdowns navigate to. See docs/specs/sync-status-admin-page.md.
 [assembly: UIPage(
-    typeof(ContentSynchronizationApplication),
-    ContentSyncApplicationExtender.ContentHubSlug,
+    typeof(ContentSyncContentHubLanguageLevel),
+    PageParameterConstants.PARAMETERIZED_SLUG,
     typeof(ContentSyncStatusContentHubTab),
     "Content hub",
     TemplateNames.LISTING,
-    20)]
+    0,
+    ParameterDefaultValue = ContentSyncStatusNavigation.ListSlug)]
 
 namespace XperienceCommunity.ContentSyncToolkit.Admin;
 
 [UIEvaluatePermission(SystemPermissions.VIEW)]
+[UINavigation(false)]
+[UIBreadcrumbs(false)]
 internal sealed class ContentSyncStatusContentHubTab(
     IContentSyncToolkitSettings settings,
     IOptions<ContentSyncToolkitOptions> options,
@@ -55,9 +59,20 @@ internal sealed class ContentSyncStatusContentHubTab(
         dialog,
         pageLinkGenerator)
 {
-    protected override string TabKey => "content-hub";
+    /// <summary>The workspace in the address. A workspace scope's ID is its WorkspaceID.</summary>
+    [PageParameter(typeof(IntPageModelBinder), typeof(ContentSyncContentHubWorkspaceLevel))]
+    public int WorkspaceId { get; set; }
 
-    protected override string ScopeFilterFieldName => nameof(ContentSyncStatusContentHubFilterModel.Workspace);
+    [PageParameter(typeof(StringPageModelBinder), typeof(ContentSyncContentHubLanguageLevel))]
+    public string LanguageName { get; set; } = string.Empty;
+
+    protected override string TabKey => ContentSyncApplicationExtender.ContentHubSlug;
+
+    protected override Type EntryType => typeof(ContentSyncContentHubEntry);
+
+    protected override int SelectedScopeId => WorkspaceId;
+
+    protected override string SelectedLanguageName => LanguageName;
 
     protected override bool RowGuidsAreContentItemGuids => true;
 
@@ -81,9 +96,6 @@ internal sealed class ContentSyncStatusContentHubTab(
 
     protected override Task<IReadOnlyList<ContentSyncScope>> GetScopesAsync(CancellationToken cancellationToken) =>
         scopeProvider.GetWorkspacesAsync(cancellationToken);
-
-    protected override Task<bool> HasContentAsync(ContentSyncScope scope, CancellationToken cancellationToken) =>
-        scopeAccess.HasContentItemsAsync(scope, cancellationToken);
 
     // A workspace scope's ID is its WorkspaceID.
     protected override Task<IReadOnlyDictionary<Guid, ContentSyncModifier>> GetModifiersAsync(

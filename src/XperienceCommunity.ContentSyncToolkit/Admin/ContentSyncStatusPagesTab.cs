@@ -1,7 +1,6 @@
 using CMS.Membership;
 
 using Kentico.Xperience.Admin.Base;
-using Kentico.Xperience.Admin.Base.UIPages;
 
 using Microsoft.Extensions.Options;
 
@@ -11,19 +10,22 @@ using XperienceCommunity.ContentSyncToolkit.Inventory;
 using XperienceCommunity.ContentSyncToolkit.Sync;
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
 
-// A page of Kentico's Content synchronization application, before its own list (order 100), so the
-// application opens on what's still pending. See docs/specs/sync-status-admin-page.md.
+// Under the menu entry, the channel and the language (see ContentSyncStatusNavigation.cs), at the
+// segment Kentico's dropdowns navigate to. See docs/specs/sync-status-admin-page.md.
 [assembly: UIPage(
-    typeof(ContentSynchronizationApplication),
-    ContentSyncApplicationExtender.PagesSlug,
+    typeof(ContentSyncPagesLanguageLevel),
+    PageParameterConstants.PARAMETERIZED_SLUG,
     typeof(ContentSyncStatusPagesTab),
     "Pages",
     TemplateNames.LISTING,
-    10)]
+    0,
+    ParameterDefaultValue = ContentSyncStatusNavigation.ListSlug)]
 
 namespace XperienceCommunity.ContentSyncToolkit.Admin;
 
 [UIEvaluatePermission(SystemPermissions.VIEW)]
+[UINavigation(false)]
+[UIBreadcrumbs(false)]
 internal sealed class ContentSyncStatusPagesTab(
     IContentSyncToolkitSettings settings,
     IOptions<ContentSyncToolkitOptions> options,
@@ -56,9 +58,20 @@ internal sealed class ContentSyncStatusPagesTab(
         dialog,
         pageLinkGenerator)
 {
-    protected override string TabKey => "pages";
+    /// <summary>The channel in the address. A website channel scope's ID is its WebsiteChannelID.</summary>
+    [PageParameter(typeof(IntPageModelBinder), typeof(ContentSyncPagesChannelLevel))]
+    public int ChannelId { get; set; }
 
-    protected override string ScopeFilterFieldName => nameof(ContentSyncStatusPagesFilterModel.Channel);
+    [PageParameter(typeof(StringPageModelBinder), typeof(ContentSyncPagesLanguageLevel))]
+    public string LanguageName { get; set; } = string.Empty;
+
+    protected override string TabKey => ContentSyncApplicationExtender.PagesSlug;
+
+    protected override Type EntryType => typeof(ContentSyncPagesEntry);
+
+    protected override int SelectedScopeId => ChannelId;
+
+    protected override string SelectedLanguageName => LanguageName;
 
     protected override bool RowGuidsAreContentItemGuids => false;
 
@@ -102,10 +115,6 @@ internal sealed class ContentSyncStatusPagesTab(
 
         return visibility.Apply(result);
     }
-
-    // Pages the user can't see in the page tree don't count, as they aren't listed.
-    protected override Task<bool> HasContentAsync(ContentSyncScope scope, CancellationToken cancellationToken) =>
-        scopeAccess.HasVisiblePagesAsync(scope, cancellationToken);
 
     // A website channel scope's ID is its WebsiteChannelID.
     protected override Task<IReadOnlyDictionary<Guid, ContentSyncModifier>> GetModifiersAsync(

@@ -36,13 +36,13 @@ public class OnlyMyChangesTests
         bool onlyMyChanges,
         Func<string, IReadOnlyList<ContentSyncStatusItem>> items,
         Func<string, Dictionary<Guid, ContentSyncModifier>> modifiers,
-        string? languageName = null,
+        string languageName = "en",
         bool showInSync = true,
         string? sortBy = null,
         bool sortDescending = false) =>
         ContentSyncStatusViewBuilder.BuildAsync(
             new ContentSyncStatusViewRequest(
-                true, null, languageName, false, new ContentSyncStatusFilter(OnlyMyChanges: onlyMyChanges, HideInSync: !showInSync),
+                true, 7, languageName, false, new ContentSyncStatusFilter(OnlyMyChanges: onlyMyChanges, HideInSync: !showInSync),
                 null, sortBy, sortDescending, 50, 0),
             _ => Task.FromResult(scopes),
             _ => Task.FromResult(languages),
@@ -52,7 +52,6 @@ public class OnlyMyChangesTests
                 lookups.Add((scope.Id, language));
                 return Task.FromResult<IReadOnlyDictionary<Guid, ContentSyncModifier>>(modifiers(language));
             },
-            (_, _) => Task.FromResult(true),
             CancellationToken.None);
 
     [Test]
@@ -90,34 +89,36 @@ public class OnlyMyChangesTests
         Assert.That(mine.Items, Is.Empty);
     }
 
-    // Each language version has its own last modifier.
-    [Test]
-    public async Task AllLanguages_AreMatchedPerLanguage()
+    // Each language version has its own last modifier: the selected language's counts.
+    [TestCase("es", true)]
+    [TestCase("en", false)]
+    public async Task OnlyMyChanges_UsesTheSelectedLanguagesModifier(string languageName, bool listed)
     {
         var guid = Guid.NewGuid();
 
         var view = await Build(
             true,
             language => [Local(guid, language)],
-            language => new() { [guid] = language == "es" ? me : ana });
+            language => new() { [guid] = language == "es" ? me : ana },
+            languageName);
 
-        Assert.That(view.Items.Select(ContentSyncStatusListingSupport.LanguageName), Is.EqualTo(new[] { "es" }));
-        Assert.That(lookups.Select(lookup => lookup.LanguageName), Is.EqualTo(new[] { "es", "en" }));
+        Assert.That(view.Items.Any(), Is.EqualTo(listed));
+        Assert.That(lookups.Select(lookup => lookup.LanguageName), Is.EqualTo(new[] { languageName }));
     }
 
-    [Test]
-    public async Task ModifierOf_NamesWhoLastEditedEachLanguageVersion()
+    [TestCase("es", "Global Administrator")]
+    [TestCase("en", "Ana Editor")]
+    public async Task ModifierOf_NamesWhoLastEditedTheLanguageVersion(string languageName, string expected)
     {
         var guid = Guid.NewGuid();
 
         var view = await Build(
             false,
             language => [Local(guid, language)],
-            language => new() { [guid] = language == "es" ? me : ana });
+            language => new() { [guid] = language == "es" ? me : ana },
+            languageName);
 
-        Assert.That(
-            view.Items.Select(item => $"{ContentSyncStatusListingSupport.LanguageName(item)} {view.ModifierOf(item)?.Name}"),
-            Is.EquivalentTo(new[] { "es Global Administrator", "en Ana Editor" }));
+        Assert.That(view.ModifierOf(view.Items.Single())?.Name, Is.EqualTo(expected));
     }
 
     [Test]
