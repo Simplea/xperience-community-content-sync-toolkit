@@ -127,7 +127,7 @@ equivalent of an issue form, with these fields:
 
 | Field | Type | Required |
 | --- | --- | --- |
-| How is the toolkit working for you? | Dropdown: Works well / Works, with some problems / Doesn't work for us | Yes |
+| How is the toolkit working for you? | Dropdown: Works well / Works, with some problems / Doesn't work for us | No (see below) |
 | What works, or what's missing? | Text area | Yes |
 | Content Sync Toolkit version | Text, prefilled | No |
 | Xperience by Kentico version | Text, prefilled | No |
@@ -135,8 +135,10 @@ equivalent of an issue form, with these fields:
 
 - The link prefills the two versions through query parameters named after the fields' IDs
   (`toolkit-version`, `kentico-version`), as issue forms allow. GitHub documents this for issue forms,
-  not for discussion forms; it's checked once Discussions are on. If GitHub ignores them, the form opens
-  with the two fields empty, which is harmless.
+  not for discussion forms, but it works there too (checked after the merge). If GitHub stops honouring
+  them, the form opens with the two fields empty, which is harmless.
+- The dropdown isn't required: GitHub preselects the first option of a required dropdown, so every
+  post would say "Works well" unless changed. Optional, it starts on "None".
 - The category's format is "Open-ended discussion", so replies and threads work.
 
 **C. A pinned feedback discussion per release.** Created when a release is published, in the Feedback
@@ -203,8 +205,9 @@ November 2026, driven with the Playwright CLI:
   - `FeedbackLinks=false`: the chip without the Feedback link.
 - `30.8.0`, with the library packed as `1.0.0-route2`: the chip, dot and hover text as above, and the
   toolbar where it was with the old caption (it covered the chip before the invisible caption).
-- Not checked yet: the link against GitHub's real form. GitHub reads discussion forms only from the
-  default branch, so it's checked once this is merged.
+- GitHub's real form, after the merge: the link opens the Feedback form with both versions filled in
+  (`toolkit-version` and `kentico-version` work as query parameters on discussion forms too). It also
+  showed the required dropdown preselecting "Works well", so the dropdown was made optional.
 
 ## Decisions
 
