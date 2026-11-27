@@ -32,7 +32,7 @@ instance with its Content Sync target, with what's still pending listed first:
 - Built for large sites: a tab of 20,000 pages opens in about a third of a
   second.
 
-![Pages tab in Content synchronization, listing pages as Incompatible, Unpublished, New, Changed and Moved first, then In sync, with Language and Modified by columns](https://raw.githubusercontent.com/Simplea/xperience-community-content-sync-toolkit/main/docs/images/pages-statuses.jpg)
+![Pages tab in Content synchronization, with the language dropdown in the top bar and Hide items in sync applied, listing pages as Incompatible, Unpublished, New, Changed, Moved and Reordered, with Modified by and a Sync button on each row](https://raw.githubusercontent.com/Simplea/xperience-community-content-sync-toolkit/main/docs/images/pages-statuses.jpg)
 
 Hover a status to see what it's based on and what to do. An incompatible item
 names what the target is missing, in the same words as Kentico's Content Sync
@@ -58,7 +58,7 @@ The project is developed and maintained by Andres Villenas at SimpleA.
 
 | Xperience Version | Library Version |
 | ----------------- | --------------- |
-| 30.8.0 or newer   | 1.0.0-beta.4    |
+| 30.8.0 or newer   | 1.0.0-beta.5    |
 
 Runtime-verified on 30.8.0 and 31.9.1.
 

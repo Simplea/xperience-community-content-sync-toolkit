@@ -170,7 +170,7 @@ item, pending ones first; Xperience remembers that in your browser. On
 Xperience versions before 31.2.0, which can't apply a filter on opening, every
 item is listed, pending ones first.
 
-![Pages tab in Content synchronization, listing pages as Incompatible, Unpublished, New, Changed and Moved first, then In sync, with Language and Modified by columns](images/pages-statuses.jpg)
+![Pages tab in Content synchronization, with the language dropdown in the top bar and Hide items in sync applied, listing pages as Incompatible, Unpublished, New, Changed, Moved and Reordered, with Modified by and a Sync button on each row](images/pages-statuses.jpg)
 
 - **Filter** opens the filter panel. All fields are optional and combine:
   - **Only my changes**: lists only the items you last edited on this instance
@@ -190,7 +190,7 @@ item is listed, pending ones first.
   - **Published from** / **Published to**: whole days, both included, matched
     against the Last published column.
 
-  <img src="images/filter-panel.png" width="380" alt="Filter panel with Workspace, Language (All languages), Only my changes, Hide items in sync checked, Unpublished and New selected in the Status filter, Content type and the Published dates">
+  <img src="images/filter-panel.png" width="380" alt="Filter panel with Only my changes, Hide items in sync checked, Unpublished and New selected in the Status filter, Content type and the Published dates">
 - **Search** by path (Pages) or name (Content hub, the name the Content hub
   shows); press Enter to apply.
 - **Modified by** shows who last edited each item on this instance, saving a
@@ -307,7 +307,7 @@ Hover the ⓘ next to **Status** for the same summary in the application:
 
 Hover a status tag for details about that item.
 
-![Content hub tab listing items as Unpublished, New, Changed, Not published and Only on target first, then In sync](images/content-hub-statuses.jpg)
+![Content hub tab, with the workspace and language dropdowns in the top bar and Hide items in sync applied, listing items as Unpublished, New, Changed, Not published, Moved here, Only on target and Deleted here](images/content-hub-statuses.jpg)
 
 ### What each status covers
 
