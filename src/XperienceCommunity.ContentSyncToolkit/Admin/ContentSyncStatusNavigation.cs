@@ -327,10 +327,31 @@ internal sealed class ContentSyncStatusNavigationProperties
     public int ScopeId { get; set; }
 
     public string LanguageName { get; set; } = string.Empty;
+
+    /// <summary>The route chip; <see langword="null"/> when the source isn't configured.</summary>
+    public ContentSyncRouteProperties? Route { get; set; }
+}
+
+/// <summary>What the route chip shows; see <see cref="ContentSyncRoute"/>.</summary>
+internal sealed class ContentSyncRouteProperties
+{
+    public ContentSyncRouteSide This { get; set; } = new(string.Empty, string.Empty, false);
+
+    public ContentSyncRouteSide Target { get; set; } = new(string.Empty, string.Empty, false);
+
+    /// <summary>The Feedback link; empty when <c>ContentSyncToolkit:FeedbackLinks</c> is off.</summary>
+    public string FeedbackUrl { get; set; } = string.Empty;
+
+    /// <summary>Where the one-time line after a sync goes; empty when the links are off.</summary>
+    public string AfterSyncUrl { get; set; } = string.Empty;
+
+    /// <summary>Where the browser remembers that the line was dismissed.</summary>
+    public string FeedbackStorageKey { get; set; } = string.Empty;
 }
 
 /// <summary>
-/// Renders nothing, next to a status list's caption. It keeps Content synchronization's left menu when
+/// The route chip above a status list (which instances it compares, whether the target answered, and
+/// the feedback links), and no UI otherwise. It keeps Content synchronization's left menu when
 /// Kentico's dropdowns switch the list (the admin would otherwise draw the list without it), and saves
 /// the list's channel or workspace and language as the editor's last choice on the tab.
 /// </summary>
@@ -347,6 +368,7 @@ internal sealed class ContentSyncStatusNavigationComponent
         componentClientProperties.StorageKey = ComponentProperties.StorageKey;
         componentClientProperties.ScopeId = ComponentProperties.ScopeId;
         componentClientProperties.LanguageName = ComponentProperties.LanguageName;
+        componentClientProperties.Route = ComponentProperties.Route;
 
         return base.ConfigureComponentClientProperties(componentClientProperties);
     }

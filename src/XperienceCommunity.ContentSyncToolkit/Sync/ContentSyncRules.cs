@@ -194,14 +194,4 @@ internal static class ContentSyncRules
         string sign = offset < TimeSpan.Zero ? "-" : "+";
         return $"{local:g} (UTC{sign}{offset.Duration():hh}:{offset.Duration():mm})";
     }
-
-    /// <summary>
-    /// The line naming the instances the list compares, "staging.example.com → production.example.com".
-    /// See docs/specs/target-banner.md.
-    /// </summary>
-    public static string InstancesCaption(string? thisHost, string? thisLabel, Uri targetUrl, string? targetLabel)
-    {
-        string target = InstanceName(TargetName(targetUrl), targetLabel);
-        return string.IsNullOrEmpty(thisHost) ? $"Compared with {target}" : $"{InstanceName(thisHost, thisLabel)} → {target}";
-    }
 }

@@ -12,6 +12,17 @@ internal enum ContentSyncTargetFailure
     Error,
 }
 
+/// <summary>What the last list request to a target got, for the route chip's dot.</summary>
+internal enum ContentSyncTargetState
+{
+    /// <summary>No list request since this instance started.</summary>
+    Unknown,
+    Answered,
+    Unreachable,
+    Rejected,
+    Error,
+}
+
 /// <summary>
 /// Writes the source's Event log entries about its Content Sync target: when the lists stop getting an
 /// answer, why, and when they get one again, and when the target runs an older toolkit. Entries are
@@ -30,6 +41,9 @@ internal interface IContentSyncTargetHealth
     /// answer: then the target is older, not refusing.
     /// </summary>
     public void FeatureMissing(Uri target, string feature);
+
+    /// <summary>What the last list request to the target got. In memory; nothing is sent to the target.</summary>
+    public ContentSyncTargetState Current(Uri target);
 }
 
 internal sealed class ContentSyncTargetHealth(IEventLogService eventLogService) : IContentSyncTargetHealth
@@ -112,6 +126,26 @@ internal sealed class ContentSyncTargetHealth(IEventLogService eventLogService) 
         eventLogService.LogInformation(EventSource, "TARGETOLDER",
             $"The Content Sync target {Name(target)} doesn't support {feature} (it answered 404 Not Found), so it most likely runs an older " +
             "version of the Content Sync Toolkit. The lists still work without it. Update the toolkit on the target to the same version as this instance.");
+    }
+
+    public ContentSyncTargetState Current(Uri target)
+    {
+        if (!states.TryGetValue(Name(target), out var state))
+        {
+            return ContentSyncTargetState.Unknown;
+        }
+
+        lock (state)
+        {
+            return state.Failing switch
+            {
+                ContentSyncTargetFailure.Unreachable => ContentSyncTargetState.Unreachable,
+                ContentSyncTargetFailure.Rejected => ContentSyncTargetState.Rejected,
+                ContentSyncTargetFailure.Error => ContentSyncTargetState.Error,
+                null when state.ListsAnswered => ContentSyncTargetState.Answered,
+                _ => ContentSyncTargetState.Unknown,
+            };
+        }
     }
 
     private State StateOf(Uri target) => states.GetOrAdd(Name(target), _ => new State());

@@ -1,7 +1,8 @@
 # Feature specification: Show which instances the list compares
 
 Status: **implemented** (November 2026). Reviewed before building; where the build differs, this spec
-says how.
+says how. In 1.0.0-beta.6 the caption became the route chip
+([route-chip-and-feedback.md](route-chip-and-feedback.md)): same hosts and labels, drawn by the toolkit.
 
 ## Context
 

@@ -29,7 +29,7 @@ GitHub identity for a short-lived NuGet.org credential immediately before publis
 - Prerelease: `beta.N` while gathering feedback and `rc.N` when preparing a stable
   release.
 
-The next planned release is `1.0.0-beta.5`.
+The next planned release is `1.0.0-beta.6`.
 
 ## Publishing a release
 
@@ -44,16 +44,22 @@ The next planned release is `1.0.0-beta.5`.
    least: the admin page loads, each status badge renders in its intended color,
    Refresh works, and the empty and unavailable states render.
 3. Update public documentation and prepare GitHub release notes.
-4. Create and push an annotated tag:
+4. Create the release's feedback discussion in the **Feedback** category of
+   GitHub Discussions, titled "Feedback on 1.0.0-beta.N", with what changed and
+   a request for what works and what doesn't. Pin it and unpin the previous one.
+   Set `ContentSyncRoute.ReleaseFeedbackUrl` to its address in the release
+   commit, so the one-time line after a sync opens it (see
+   [route-chip-and-feedback.md](specs/route-chip-and-feedback.md)).
+5. Create and push an annotated tag:
 
    ```powershell
    git tag -a v1.0.0-beta.5 -m "Release 1.0.0-beta.5"
    git push origin v1.0.0-beta.5
    ```
 
-5. Approve the `nuget-release` environment deployment.
-6. Verify the package metadata and installation instructions on NuGet.org.
-7. Create the matching GitHub release and attach the package artifacts produced by
+6. Approve the `nuget-release` environment deployment.
+7. Verify the package metadata and installation instructions on NuGet.org.
+8. Create the matching GitHub release and attach the package artifacts produced by
    the workflow when desired.
 
 Published NuGet package versions are immutable. Never move or reuse a release tag;

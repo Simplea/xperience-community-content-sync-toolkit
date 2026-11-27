@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { isWithin, otherSpelling, saveChoice } from "./navigation";
+import { RouteChip, RouteProps } from "./RouteChip";
 
 interface StatusNavigationProps {
   /** The tab's menu entry below the admin path, e.g. "/content-sync/pages". */
@@ -14,10 +15,13 @@ interface StatusNavigationProps {
   readonly storageKey: string;
   readonly scopeId: number;
   readonly languageName: string;
+  /** The route chip; null when the source isn't configured. */
+  readonly route: RouteProps | null;
 }
 
 /**
- * Renders nothing, next to a status list's caption (see ContentSyncStatusNavigationComponent).
+ * The route chip above a status list (see RouteChip and ContentSyncStatusNavigationComponent), and
+ * the list's navigation.
  *
  * Kentico's dropdowns in the top bar, and the left menu, navigate within the admin. Leaving a list for
  * another address of Content synchronization, the admin redraws only the levels that changed, and
@@ -35,6 +39,7 @@ export const StatusNavigationComponent = ({
   storageKey,
   scopeId,
   languageName,
+  route,
 }: StatusNavigationProps) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -107,5 +112,5 @@ export const StatusNavigationComponent = ({
     };
   }, [entryPath, applicationPath, fullReload]);
 
-  return null;
+  return route ? <RouteChip route={route} /> : null;
 };

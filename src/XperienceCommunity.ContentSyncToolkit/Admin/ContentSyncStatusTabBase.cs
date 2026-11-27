@@ -150,9 +150,12 @@ internal abstract partial class ContentSyncStatusTabBase(
         PageConfiguration.HeaderActions.Single(action => action.Name == nameof(Refresh)).Title =
             ContentSyncStatusListingSupport.RefreshTooltip(options.Value.InventoryCacheDuration);
 
-        // Keeps the left menu when Kentico's dropdowns switch the list, and remembers the editor's choice.
-        // See docs/specs/header-dropdowns.md.
+        // Keeps the left menu when Kentico's dropdowns switch the list, and remembers the editor's choice
+        // (docs/specs/header-dropdowns.md). It also draws the route chip: which instances the list compares,
+        // this one by the address the editor uses, the target by Content Sync's settings
+        // (docs/specs/route-chip-and-feedback.md).
         string entryPath = pageLinkGenerator.GetPath(EntryType);
+        int userId = (await userAccessor.Get()).UserID;
         PageConfiguration.SubcaptionComponent = new ContentSyncStatusNavigationComponent
         {
             ComponentProperties = new ContentSyncStatusNavigationProperties
@@ -160,19 +163,18 @@ internal abstract partial class ContentSyncStatusTabBase(
                 EntryPath = entryPath,
                 ApplicationPath = pageLinkGenerator.GetPath(typeof(ContentSynchronizationApplication)),
                 FullReload = options.Value.FullReloadOnSwitch,
-                StorageKey = ContentSyncStatusNavigation.StorageKey(TabKey, (await userAccessor.Get()).UserID),
+                StorageKey = ContentSyncStatusNavigation.StorageKey(TabKey, userId),
                 ScopeId = SelectedScopeId,
                 LanguageName = SelectedLanguageName,
+                Route = IsSourceConfigured ? RouteProperties(userId) : null,
             },
         };
 
-        if (IsSourceConfigured)
+        // Xperience 30.x places the list below the caption by the caption's height alone, so without one
+        // the list would cover the route chip. An invisible caption keeps the line; 31.x lays it out itself.
+        if (IsSourceConfigured && ContentSyncRoute.NeedsCaptionLine(ContentSyncRoute.KenticoVersion))
         {
-            // Which instances are compared, above the toolbar: this one by the address the editor uses, the
-            // target by Content Sync's settings. See docs/specs/target-banner.md.
-            var request = Service.Resolve<Microsoft.AspNetCore.Http.IHttpContextAccessor>().HttpContext?.Request;
-            PageConfiguration.Caption = ContentSyncRules.InstancesCaption(
-                request?.Host.Value, options.Value.InstanceLabel, settings.Source.TargetUrl!, options.Value.TargetLabel);
+            PageConfiguration.Caption = "\u00A0";
         }
 
         if (SyncActionsEnabled)
@@ -193,6 +195,41 @@ internal abstract partial class ContentSyncStatusTabBase(
         }
 
         await base.ConfigurePage();
+    }
+
+    private ContentSyncRouteProperties RouteProperties(int userId)
+    {
+        var request = Service.Resolve<Microsoft.AspNetCore.Http.IHttpContextAccessor>().HttpContext?.Request;
+        string feedbackUrl = options.Value.FeedbackLinks
+            ? ContentSyncRoute.FeedbackUrl(ContentSyncRoute.ToolkitVersion, ContentSyncRoute.KenticoVersion)
+            : string.Empty;
+
+        return new ContentSyncRouteProperties
+        {
+            This = ContentSyncRoute.Side(request?.Host.Value, options.Value.InstanceLabel, "This instance"),
+            Target = ContentSyncRoute.Side(ContentSyncRules.TargetName(settings.Source.TargetUrl), options.Value.TargetLabel, "The target"),
+            FeedbackUrl = feedbackUrl,
+            AfterSyncUrl = feedbackUrl.Length == 0 ? string.Empty : ContentSyncRoute.AfterSyncUrl(ContentSyncRoute.ReleaseFeedbackUrl, feedbackUrl),
+            FeedbackStorageKey = ContentSyncRoute.FeedbackStorageKey(ContentSyncRoute.ToolkitVersion, userId),
+        };
+    }
+
+    /// <summary>
+    /// The route chip's dot and one-time line: what the list's last request to the target got (in memory,
+    /// nothing is sent), and whether this user has a recent completed sync.
+    /// </summary>
+    [PageCommand(Permission = SystemPermissions.VIEW)]
+    public async Task<ICommandResponse<ContentSyncRouteState>> GetRouteState()
+    {
+        var state = settings.Source.TargetUrl is { } target
+            ? Service.Resolve<IContentSyncTargetHealth>().Current(target)
+            : ContentSyncTargetState.Unknown;
+        string userName = (await userAccessor.Get()).UserName;
+        bool links = options.Value.FeedbackLinks;
+        return ResponseFrom(new ContentSyncRouteState(
+            state.ToString().ToLowerInvariant(),
+            links && tracker.HasRecentCompletedSync(userName),
+            links && tracker.HasRunningSync(userName)));
     }
 
     // Without a target to compare with, this instance has nothing to show here, and the application

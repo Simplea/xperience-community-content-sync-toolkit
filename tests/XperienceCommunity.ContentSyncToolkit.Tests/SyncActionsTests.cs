@@ -294,17 +294,4 @@ public class SyncActionsTests
 
         Assert.That(text, Does.StartWith(new DateTime(2026, 11, 20, 20, 2, 0, DateTimeKind.Unspecified).ToString("g")).And.EndWith("(UTC+01:00)"));
     }
-
-    [Test]
-    public void InstancesCaption_NamesBothInstances() =>
-        Assert.That(
-            ContentSyncRules.InstancesCaption("staging.example.com", "Staging", new Uri("https://production.example.com/"), "Production"),
-            Is.EqualTo("Staging (staging.example.com) → Production (production.example.com)"));
-
-    // Without a request (no host to read), only the target is named.
-    [Test]
-    public void InstancesCaption_WithoutThisInstancesHost_NamesTheTarget() =>
-        Assert.That(
-            ContentSyncRules.InstancesCaption(null, null, new Uri("https://localhost:27311/"), null),
-            Is.EqualTo("Compared with localhost:27311"));
 }

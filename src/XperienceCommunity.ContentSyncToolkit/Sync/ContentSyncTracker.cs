@@ -93,6 +93,23 @@ internal sealed class ContentSyncTracker(TimeProvider timeProvider)
             sync.IsRunning && sync.Kind == kind
             && sync.Rows.Any(row => row.Guid == guid && string.Equals(row.LanguageName, languageName, StringComparison.OrdinalIgnoreCase)));
 
+    /// <summary>
+    /// Whether this user has a sync from the lists that completed without failing in the last 24 hours,
+    /// on either tab. It shows the one-time feedback line; see docs/specs/route-chip-and-feedback.md.
+    /// </summary>
+    public bool HasRecentCompletedSync(string userName)
+    {
+        var now = timeProvider.GetUtcNow();
+        return syncs.Values.Any(sync =>
+            sync.FinishedAt is { } finished && now - finished <= Retention
+            && sync.Progress is { Failed: false }
+            && string.Equals(sync.UserName, userName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Whether this user has a sync from the lists still running, on either tab.</summary>
+    public bool HasRunningSync(string userName) =>
+        syncs.Values.Any(sync => sync.IsRunning && string.Equals(sync.UserName, userName, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>Failed syncs of this kind from the last 24 hours, newest first; older ones are forgotten.</summary>
     public IReadOnlyList<ContentSyncTrackedSync> RecentFailures(ContentInventoryItemKind kind)
     {

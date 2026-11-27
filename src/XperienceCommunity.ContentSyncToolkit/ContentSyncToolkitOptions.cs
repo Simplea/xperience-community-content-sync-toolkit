@@ -63,4 +63,12 @@ public sealed class ContentSyncToolkitOptions
     /// and in the Sync confirmations. Optional; without it the host alone is shown.
     /// </summary>
     public string? TargetLabel { get; set; }
+
+    /// <summary>
+    /// Whether the status pages show the Feedback link next to the instances, and the one-time line
+    /// after an editor's first completed sync of each version. Both are plain links to the toolkit's
+    /// GitHub Discussions; nothing is sent. Defaults to <see langword="true"/>. See
+    /// docs/specs/route-chip-and-feedback.md.
+    /// </summary>
+    public bool FeedbackLinks { get; set; } = true;
 }
