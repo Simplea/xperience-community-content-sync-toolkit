@@ -260,6 +260,30 @@ Known limitation, on `31.9.1`: on the Pages tab, the blue bar at the bottom of
 Xperience's dialog is empty. Xperience's client has text there only for content
 items; see the spec.
 
+### 1.0.0-beta.5
+
+Checked in November 2026, before the release. Besides the sync round above,
+the top bar's dropdowns and the Moved here fix were tested while they were
+built; see the test records in [header-dropdowns.md](specs/header-dropdowns.md)
+and [moved-between-workspaces.md](specs/moved-between-workspaces.md).
+
+`31.9.1`, on the repository's Dancing Goat rig from the release branch, with
+`ComparePageOrder` on: both tabs open on their default channel or workspace and
+language with **Hide items in sync** applied, and every status tag shows in its
+color with its tooltip (Incompatible; Unpublished, New, Changed, Moved and
+Reordered; Not published, both unpublished-then-edited and never published;
+Moved here; Only on target; Deleted here; In sync with a newer draft). These
+are the documentation screenshots.
+
+`30.8.0`, with the library packed as `1.0.0-beta.5-local1` on the `30.8.0`
+Dancing Goat site: the round of switches in the top bar (17 steps: workspace
+and language switches, Back and Forward, the left menu between the tabs and
+the list of synchronizations, the remembered choice on each tab and a
+remembered workspace that no longer exists, direct links in another letter
+case and to a workspace that doesn't exist, a browser reload and Refresh). The
+left menu stayed on every step, and only direct links and the reload loaded
+the page again.
+
 ## Updating versions
 
 - Retest and update the latest verified version after every Xperience refresh.
