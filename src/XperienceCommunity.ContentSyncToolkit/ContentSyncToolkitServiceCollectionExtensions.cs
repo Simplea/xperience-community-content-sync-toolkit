@@ -43,6 +43,9 @@ public static class ContentSyncToolkitServiceCollectionExtensions
         services.TryAddTransient<IContentSyncItemIdResolver, ContentSyncItemIdResolver>();
         services.TryAddTransient<IContentItemIdLookup, ContentItemIdLookup>();
         services.TryAddSingleton<IContentSyncTargetSecretValidator, ContentSyncTargetSecretValidator>();
+        // The Event log entries about the target (on a source) and about refused requests (on a target).
+        services.TryAddSingleton<IContentSyncTargetHealth, ContentSyncTargetHealth>();
+        services.TryAddSingleton<IContentSyncRefusedRequestLog, ContentSyncRefusedRequestLog>();
         services.TryAddSingleton<IContentInventoryCache, ContentInventoryCache>();
         services.TryAddScoped<IContentSyncStatusService, ContentSyncStatusService>();
 
