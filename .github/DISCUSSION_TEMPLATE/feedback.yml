@@ -1,0 +1,47 @@
+title: "Feedback: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for telling us how the Content Sync Toolkit works for you. Bugs with steps to reproduce are
+        easier to follow up as an [issue](https://github.com/Simplea/xperience-community-content-sync-toolkit/issues/new/choose); everything else is welcome here.
+  - type: dropdown
+    id: how-it-works
+    attributes:
+      label: How is the toolkit working for you?
+      options:
+        - Works well
+        - Works, with some problems
+        - Doesn't work for us
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What works, or what's missing?
+      description: What you use it for, what helped, what got in the way, what you'd like next.
+    validations:
+      required: true
+  - type: input
+    id: toolkit-version
+    attributes:
+      label: Content Sync Toolkit version
+      placeholder: 1.0.0-beta.6
+    validations:
+      required: false
+  - type: input
+    id: kentico-version
+    attributes:
+      label: Xperience by Kentico version
+      placeholder: 31.9.1
+    validations:
+      required: false
+  - type: checkboxes
+    id: usage
+    attributes:
+      label: How you use it
+      options:
+        - label: Pages
+        - label: Content hub
+        - label: Sync from the status pages
+        - label: Two or more targets

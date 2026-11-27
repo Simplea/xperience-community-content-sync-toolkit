@@ -93,8 +93,9 @@ Four optional toolkit settings, all on the source:
 | `TargetAdminUrl` | `{TargetUrl}/admin` | Where **Only on target** rows open the target's administration. Set it when Content Sync's `TargetUrl` isn't an address editors' browsers can reach, such as an internal host name. |
 | `ComparePageOrder` | `false` | Whether pages in a different position among their siblings on the target show as **Reordered**. Turn it on if your site displays pages in page tree order, such as a menu built from the tree. Without it, those pages show as **In sync** and **Reordered** isn't offered. Pages under a different parent always show as **Moved**. |
 | `SyncActions` | `true` | Whether editors can sync from the status pages (see [Sync from the status pages](#sync-from-the-status-pages)). Turn it off to keep the pages read-only. |
-| `InstanceLabel` | none | A name for this instance, such as "Staging", shown with its host at the top of the status pages. |
-| `TargetLabel` | none | A name for the target, such as "Production", shown with its host at the top of the status pages and in the sync confirmations. |
+| `InstanceLabel` | none | A name for this instance, such as "Staging", shown at the top of the status pages instead of its host (the host shows on hover). |
+| `TargetLabel` | none | A name for the target, such as "Production", shown at the top of the status pages instead of its host (the host shows on hover), and with its host in the sync confirmations. |
+| `FeedbackLinks` | `true` | Whether the status pages show the **Feedback** link, and a one-time line after an editor's first completed sync of each version. Both open the toolkit's GitHub Discussions; nothing is sent from your site. Turn it off to hide both. |
 | `FullReloadOnSwitch` | `false` | Whether switching the channel, workspace or language in the top bar loads the whole page again. Leave it off: the list switches without a reload. Turn it on only if, after a Kentico update, Content synchronization's left menu disappears when you switch, until a toolkit update fixes it. |
 
 ## Give editors access
@@ -147,7 +148,17 @@ channel at a time) and **Content hub** (one workspace at a time). Xperience's ow
 
 The line at the top says which instances are compared, by host name, for
 example **staging.example.com → production.example.com**. Set `InstanceLabel`
-and `TargetLabel` to add names such as Staging and Production.
+and `TargetLabel` to show names such as **Staging → Production** instead; hover
+a name to see its host. The dot before the target shows how the list's last
+request to it went: green when it answered, red when it didn't (hover it for
+why; the details are in the Event log), grey before the list has loaded. It
+checks nothing on its own.
+
+**Feedback** at the end of the line opens the toolkit's feedback form on GitHub,
+with your toolkit and Xperience versions filled in. After your first completed
+sync with a new version, a line under it asks how the toolkit works for you;
+close it and it doesn't come back until the next version. `FeedbackLinks` hides
+both.
 
 Each page shows one channel or workspace in one language, chosen in the top bar
 with Kentico's own dropdowns, as in Kentico's Content hub and Pages:
