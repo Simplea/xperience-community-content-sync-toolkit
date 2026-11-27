@@ -15,20 +15,41 @@ public interface IContentSyncTargetSecretValidator
     public bool IsValid(string? providedSecret);
 }
 
+/// <summary>Why the secret check failed, for this instance's own Event log only; callers never see it.</summary>
+internal enum ContentSyncTargetSecretCheck
+{
+    Valid,
+    TargetRoleOff,
+    NoSecretConfigured,
+    WrongSecret,
+}
+
 internal sealed class ContentSyncTargetSecretValidator(IContentSyncToolkitSettings settings) : IContentSyncTargetSecretValidator
 {
-    public bool IsValid(string? providedSecret)
-    {
-        var target = settings.Target;
+    public bool IsValid(string? providedSecret) => Check(settings.Target, providedSecret) == ContentSyncTargetSecretCheck.Valid;
 
-        if (!target.Enabled || string.IsNullOrEmpty(target.Secret) || string.IsNullOrEmpty(providedSecret))
+    internal static ContentSyncTargetSecretCheck Check(EffectiveTargetSettings target, string? providedSecret)
+    {
+        if (!target.Enabled)
         {
-            return false;
+            return ContentSyncTargetSecretCheck.TargetRoleOff;
+        }
+
+        if (string.IsNullOrEmpty(target.Secret))
+        {
+            return ContentSyncTargetSecretCheck.NoSecretConfigured;
+        }
+
+        if (string.IsNullOrEmpty(providedSecret))
+        {
+            return ContentSyncTargetSecretCheck.WrongSecret;
         }
 
         byte[] expected = Encoding.UTF8.GetBytes(target.Secret);
         byte[] actual = Encoding.UTF8.GetBytes(providedSecret);
 
-        return expected.Length == actual.Length && CryptographicOperations.FixedTimeEquals(expected, actual);
+        return expected.Length == actual.Length && CryptographicOperations.FixedTimeEquals(expected, actual)
+            ? ContentSyncTargetSecretCheck.Valid
+            : ContentSyncTargetSecretCheck.WrongSecret;
     }
 }

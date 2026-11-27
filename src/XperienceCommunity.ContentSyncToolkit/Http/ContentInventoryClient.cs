@@ -4,45 +4,53 @@ using XperienceCommunity.ContentSyncToolkit.Inventory;
 
 namespace XperienceCommunity.ContentSyncToolkit.Http;
 
-internal sealed class ContentInventoryClient(HttpClient httpClient) : IContentInventoryClient
+// Every request to the target goes through FetchAsync. The two list requests report to the target's health
+// (the Event log entries); the endpoints added later report only that a target doesn't have them yet. See
+// docs/specs/event-log-diagnostics.md.
+internal sealed class ContentInventoryClient(HttpClient httpClient, IContentSyncTargetHealth? health = null) : IContentInventoryClient
 {
+    private const string MovedItemsFeature = "items moved to another workspace";
+    private const string RequiredObjectsFeature = "the check of content types, languages and channels before a sync";
+    private const string ItemLinksFeature = "links to items only on the target";
+
     public async Task<ContentInventoryFetchResult> GetWebPagesAsync(
         string channelName, string languageName, CancellationToken cancellationToken)
     {
-        var (status, body) = await FetchAsync<ContentInventoryResponse>(
+        var fetched = await FetchAsync<ContentInventoryResponse>(
             $"{ContentSyncToolkitConstants.ControllerRoute}/web-pages" +
             $"?channelName={Uri.EscapeDataString(channelName)}&languageName={Uri.EscapeDataString(languageName)}",
             cancellationToken);
 
-        return ToInventoryResult(status, body);
+        return ToInventoryResult(ReportList(fetched));
     }
 
     public async Task<ContentInventoryFetchResult> GetContentHubItemsAsync(
         string workspaceName, string languageName, CancellationToken cancellationToken)
     {
-        var (status, body) = await FetchAsync<ContentInventoryResponse>(
+        var fetched = await FetchAsync<ContentInventoryResponse>(
             $"{ContentSyncToolkitConstants.ControllerRoute}/content-hub-items" +
             $"?workspaceName={Uri.EscapeDataString(workspaceName)}&languageName={Uri.EscapeDataString(languageName)}",
             cancellationToken);
 
-        return ToInventoryResult(status, body);
+        return ToInventoryResult(ReportList(fetched));
     }
 
     public async Task<ContentInventoryFetchResult> GetContentHubItemsByGuidAsync(
         string languageName, IReadOnlyCollection<Guid> guids, CancellationToken cancellationToken)
     {
-        var (status, body) = await FetchAsync<ContentInventoryResponse>(
+        var fetched = await FetchAsync<ContentInventoryResponse>(
             $"{ContentSyncToolkitConstants.ControllerRoute}/content-hub-items-by-guid" +
             $"?languageName={Uri.EscapeDataString(languageName)}&guids={string.Join(',', guids)}",
             cancellationToken);
 
-        return ToInventoryResult(status, body);
+        return ToInventoryResult(ReportFeature(fetched, MovedItemsFeature));
     }
 
     public async Task<RequiredObjectsFetchResult> GetRequiredObjectsAsync(CancellationToken cancellationToken)
     {
-        var (status, body) = await FetchAsync<RequiredObjectsResponse>(
-            $"{ContentSyncToolkitConstants.ControllerRoute}/required-objects", cancellationToken);
+        var (status, body, _, _) = ReportFeature(
+            await FetchAsync<RequiredObjectsResponse>($"{ContentSyncToolkitConstants.ControllerRoute}/required-objects", cancellationToken),
+            RequiredObjectsFeature);
 
         return body?.Objects is not null
             ? RequiredObjectsFetchResult.Success(body.Objects)
@@ -52,27 +60,28 @@ internal sealed class ContentInventoryClient(HttpClient httpClient) : IContentIn
     public async Task<TargetItemIdsFetchResult> GetWebPageIdsAsync(
         string channelName, string languageName, IReadOnlyCollection<Guid> guids, CancellationToken cancellationToken)
     {
-        var (status, body) = await FetchAsync<TargetItemIdsResponse>(
+        var fetched = await FetchAsync<TargetItemIdsResponse>(
             $"{ContentSyncToolkitConstants.ControllerRoute}/web-page-ids" +
             $"?channelName={Uri.EscapeDataString(channelName)}&languageName={Uri.EscapeDataString(languageName)}&guids={string.Join(',', guids)}",
             cancellationToken);
 
-        return ToItemIdsResult(status, body);
+        return ToItemIdsResult(ReportFeature(fetched, ItemLinksFeature));
     }
 
     public async Task<TargetItemIdsFetchResult> GetContentItemIdsAsync(
         string workspaceName, string languageName, IReadOnlyCollection<Guid> guids, CancellationToken cancellationToken)
     {
-        var (status, body) = await FetchAsync<TargetItemIdsResponse>(
+        var fetched = await FetchAsync<TargetItemIdsResponse>(
             $"{ContentSyncToolkitConstants.ControllerRoute}/content-item-ids" +
             $"?workspaceName={Uri.EscapeDataString(workspaceName)}&languageName={Uri.EscapeDataString(languageName)}&guids={string.Join(',', guids)}",
             cancellationToken);
 
-        return ToItemIdsResult(status, body);
+        return ToItemIdsResult(ReportFeature(fetched, ItemLinksFeature));
     }
 
-    private static TargetItemIdsFetchResult ToItemIdsResult(ContentInventoryFetchStatus status, TargetItemIdsResponse? body)
+    private static TargetItemIdsFetchResult ToItemIdsResult(Fetched<TargetItemIdsResponse> fetched)
     {
+        var (status, body, _, _) = fetched;
         if (body?.Items is null)
         {
             return TargetItemIdsFetchResult.Failed(FailureStatus(status));
@@ -88,8 +97,9 @@ internal sealed class ContentInventoryClient(HttpClient httpClient) : IContentIn
         };
     }
 
-    private static ContentInventoryFetchResult ToInventoryResult(ContentInventoryFetchStatus status, ContentInventoryResponse? body)
+    private static ContentInventoryFetchResult ToInventoryResult(Fetched<ContentInventoryResponse> fetched)
     {
+        var (status, body, _, _) = fetched;
         if (body?.Items is null)
         {
             return ContentInventoryFetchResult.Failed(FailureStatus(status));
@@ -104,7 +114,47 @@ internal sealed class ContentInventoryClient(HttpClient httpClient) : IContentIn
     private static ContentInventoryFetchStatus FailureStatus(ContentInventoryFetchStatus status) =>
         status == ContentInventoryFetchStatus.Success ? ContentInventoryFetchStatus.Error : status;
 
-    private async Task<(ContentInventoryFetchStatus Status, TResponse? Body)> FetchAsync<TResponse>(
+    /// <summary>A request's outcome: the body on success, otherwise what went wrong, for the Event log.</summary>
+    private readonly record struct Fetched<TResponse>(ContentInventoryFetchStatus Status, TResponse? Body, string? Detail, int? StatusCode)
+        where TResponse : class;
+
+    private Fetched<ContentInventoryResponse> ReportList(Fetched<ContentInventoryResponse> fetched)
+    {
+        if (health is not null && httpClient.BaseAddress is { } target)
+        {
+            if (fetched.Body?.Items is not null)
+            {
+                health.ListAnswered(target, fetched.Body.SchemaVersion);
+            }
+            else
+            {
+                var (failure, detail) = fetched.Status switch
+                {
+                    ContentInventoryFetchStatus.Unreachable => (ContentSyncTargetFailure.Unreachable, fetched.Detail ?? "no answer"),
+                    ContentInventoryFetchStatus.Rejected => (ContentSyncTargetFailure.Rejected, fetched.Detail ?? "an error status"),
+                    ContentInventoryFetchStatus.Success or ContentInventoryFetchStatus.Error or _ =>
+                        (ContentSyncTargetFailure.Error, fetched.Detail ?? "an unexpected answer"),
+                };
+                health.ListFailed(target, failure, detail);
+            }
+        }
+
+        return fetched;
+    }
+
+    // A 404 from an endpoint added after the first release: an older target, as long as the lists answer.
+    private Fetched<TResponse> ReportFeature<TResponse>(Fetched<TResponse> fetched, string feature)
+        where TResponse : class
+    {
+        if (health is not null && httpClient.BaseAddress is { } target && fetched.StatusCode == 404)
+        {
+            health.FeatureMissing(target, feature);
+        }
+
+        return fetched;
+    }
+
+    private async Task<Fetched<TResponse>> FetchAsync<TResponse>(
         string requestUri, CancellationToken cancellationToken)
         where TResponse : class
     {
@@ -124,25 +174,27 @@ internal sealed class ContentInventoryClient(HttpClient httpClient) : IContentIn
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             // Timed out; the caller did not request cancellation.
-            return (ContentInventoryFetchStatus.Unreachable, null);
+            return new(ContentInventoryFetchStatus.Unreachable, null,
+                $"no answer within {httpClient.Timeout.TotalSeconds:0} seconds (ContentSyncToolkit:RequestTimeout)", null);
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
-            return (ContentInventoryFetchStatus.Unreachable, null);
+            return new(ContentInventoryFetchStatus.Unreachable, null, ex.Message, null);
         }
 
+        int statusCode = (int)response.StatusCode;
         if (!response.IsSuccessStatusCode)
         {
-            return (ContentInventoryFetchStatus.Rejected, null);
+            return new(ContentInventoryFetchStatus.Rejected, null, $"{statusCode} {response.ReasonPhrase ?? response.StatusCode.ToString()}", statusCode);
         }
 
         try
         {
-            return (ContentInventoryFetchStatus.Success, await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken));
+            return new(ContentInventoryFetchStatus.Success, await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken), null, statusCode);
         }
         catch (Exception ex) when (ex is System.Text.Json.JsonException or NotSupportedException)
         {
-            return (ContentInventoryFetchStatus.Error, null);
+            return new(ContentInventoryFetchStatus.Error, null, null, statusCode);
         }
     }
 

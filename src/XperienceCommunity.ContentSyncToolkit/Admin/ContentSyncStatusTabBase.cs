@@ -730,6 +730,8 @@ internal abstract partial class ContentSyncStatusTabBase(
 
     // A single row explaining a state that depends on the selected scope, with a status-style tag
     // so it reads differently from both real rows and Xperience's native empty state.
+    // A message in the list's place, disabled so it can't be selected for a sync. Hovering it shows the whole
+    // message where the column cuts it short.
     private static LoadDataResult MessageRow(string message, string tagLabel, Color color) =>
         new()
         {
@@ -739,6 +741,8 @@ internal abstract partial class ContentSyncStatusTabBase(
                 new Row
                 {
                     Identifier = "message",
+                    Disabled = true,
+                    InactiveMessage = message,
                     Cells =
                     [
                         new StringCell { Value = message },

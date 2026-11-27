@@ -504,7 +504,13 @@ outside the current view:
   configured as a source on this instance (`Source:Enabled` with a
   `Source:TargetUrl`), so there's nothing to compare.
 - **A "Target unavailable" row**: the target couldn't be reached, rejected the
-  secret, or doesn't have Content Sync's target role enabled.
+  secret, or doesn't have Content Sync's target role enabled. The **Event log**
+  (source `ContentSyncToolkit`) says which: on this instance, why the target
+  didn't answer (`TARGETUNREACHABLE`, `TARGETREJECTED`, `TARGETERROR`), and
+  on the target, why it refused the request (`REQUESTREJECTED`: a different
+  secret, or the target role off). Each problem is logged once when it starts,
+  with `TARGETRECOVERED` when the target answers again, not on every page load.
+  `TARGETOLDER` means the target runs an older version of the toolkit.
 - **No rows**: nothing matches the applied filters, or the channel or
   workspace has no published content in the selected language.
 - **A "Not available" row**: the address names a channel, workspace or
