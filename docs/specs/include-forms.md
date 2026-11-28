@@ -13,7 +13,7 @@ selection
 ([Work with content sync](https://docs.kentico.com/guides/digital-marketing/work-with-content-governance/work-with-content-sync)).
 
 The toolkit hosts that same dialog on the Pages and Content hub tabs, but answers that the editor may
-never sync forms, so the checkbox doesn't show, and every sync from the list goes with
+never sync forms, so the checkbox is greyed out, and every sync from the list goes with
 `includeLinkedForms: false`. That was decision 3 of [sync-actions.md](sync-actions.md): forms would wait
 for their own tab. This spec reverses it. The checkbox works as in Kentico, without listing forms; a
 Forms tab is a separate, later piece ([forms-tab.md](forms-tab.md)).
@@ -25,8 +25,8 @@ From the forms spike (November 2026, on `31.9.1`, with Kentico's public signatur
 
 - **`ISynchronizationService.Create`** has an `includeLinkedForms` parameter from `30.9.0`, when Kentico
   added forms to Content Sync. `30.8.0`'s `Create` has none.
-- **The dialog** shows **Include forms** when `LoadContentSynchronizationInitialData` answers
-  `hasFormSyncPermission: true`. It starts unticked. Its Sync sends `includeLinkedForms` in
+- **The dialog** enables **Include forms** when `LoadContentSynchronizationInitialData` answers
+  `hasFormSyncPermission: true`, and greys it out otherwise. It starts unticked. Its Sync sends `includeLinkedForms` in
   `CreateContentSynchronization`.
 - **Checked end to end:** with the toolkit's answer changed to `true`, the Pages tab's dialog showed the
   checkbox; ticked, the toolkit passed the flag to `Create`, and the page's form ("Coffee sample list")
@@ -82,11 +82,10 @@ selection sends no forms, whatever the checkbox says. Listing forms there belong
   - the checkbox shows on both tabs for an administrator, unticked;
   - a page with a form, synced with the box ticked: the form arrives on the target; unticked: it
     doesn't change;
-  - an editor without Forms' Synchronize permission: no checkbox;
+  - an editor without Forms' Synchronize permission: the checkbox greyed out;
   - the Event log entry says forms were included.
 - `30.8.0`: no checkbox; syncs as today.
-- `31.11.0` (workspaces) is checked when the rig moves to it ([forms-tab.md](forms-tab.md), open
-  question 3).
+- `31.11.0` (workspaces): the checkbox offered and the form sent, as on `31.9.1`.
 
 ## Checked
 
@@ -102,11 +101,21 @@ November 2026, driven with the Playwright CLI:
     the form didn't change on the target.
 - `30.8.0`, with the library packed as `1.0.0-forms1`: the toolkit's own confirmation, with no forms
   option; the sync started, and its Event log entry has no forms line.
-- Not checked yet:
-  - an editor without Forms' Synchronize permission (the rig's test editor couldn't sign in; their roles
-    have no Forms permission, which is what the check reads);
-  - the Content hub tab's dialog (the same command as the Pages tab's);
-  - `31.11.0`, with forms in workspaces.
+- `31.9.1`, the Content hub tab, as administrator, with "Panama Los Lajones Honey": the dialog offers
+  **Include forms**; ticked, Sync sent `includeLinkedForms: true`, the sync finished, and the Event log
+  entry says "Forms used on these items: included."
+- `31.9.1`, the Pages tab, as an editor whose roles have no Forms permission: the initial data answers
+  `hasFormSyncPermission: false`, and Kentico's dialog shows **Include forms** greyed out.
+- `31.11.0`, a second pair made from Kentico's `31.11.0` templates (forms in the
+  `DancingGoat.DancingGoatLtd` workspace), with the library packed as `1.0.0-forms2`, as administrator on
+  the Pages tab: the dialog offers **Include forms**; ticked, Sync sent `includeLinkedForms: true`, the
+  "Coffee sample list" form arrived on the target, and the Event log entry says forms were included.
+- `31.11.0`, the same pair, as an editor who isn't an administrator (a role with **Manage permissions**
+  for the pages channel, **View** for Content synchronization, and Forms' **View** and **Synchronize**
+  per workspace):
+  - all forms in "Dancing Goat Ltd.", the permission there: `hasFormSyncPermission: true`;
+  - one form moved to "Dancing Goat Commerce", no permission there: `false`, the checkbox greyed out;
+  - the permission added in "Dancing Goat Commerce" too: `true` again.
 
 ## Decisions
 
