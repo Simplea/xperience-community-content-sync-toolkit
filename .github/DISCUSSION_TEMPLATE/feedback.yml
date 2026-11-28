@@ -14,7 +14,7 @@ body:
         - Works, with some problems
         - Doesn't work for us
     validations:
-      required: true
+      required: false
   - type: textarea
     id: details
     attributes:
