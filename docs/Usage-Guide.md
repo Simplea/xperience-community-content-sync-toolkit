@@ -257,9 +257,9 @@ In the dialog:
   target** to a date and time.
 - Untick rows you don't want to send.
 - **Include forms** sends the forms the pages show (added with the Form
-  widget) along with them, as in Kentico's own Sync dialog. It shows from
-  Xperience 30.9.0, if you have the Synchronize permission for Forms, and
-  starts unticked.
+  widget) along with them, as in Kentico's own Sync dialog. It's there from
+  Xperience 30.9.0 and starts unticked. Without the Synchronize permission
+  for Forms, it's greyed out.
 - **Detailed selection** lists the selected items with everything that goes
   with them (linked content items, parent pages), so you can leave some out.
   Forms aren't listed there, so a sync from Detailed selection sends none.
