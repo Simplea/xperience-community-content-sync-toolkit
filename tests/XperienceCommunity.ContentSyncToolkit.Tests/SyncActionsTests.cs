@@ -187,6 +187,44 @@ public class SyncActionsTests
         Assert.That(arguments[7], Is.True, "withSelectedDependencies");
     }
 
+    // Include forms: the editor's choice reaches Kentico. See docs/specs/include-forms.md.
+    [Test]
+    public void CreateArguments_On31_WithIncludeForms_SendsTheFormsToo()
+    {
+        object?[] arguments = ContentSyncEngine.CreateArguments(
+            Parameters(nameof(Create31)), Request() with { IncludeLinkedForms = true }, CancellationToken.None);
+
+        Assert.That(arguments[5], Is.True, "includeLinkedForms");
+    }
+
+    // 30.8.0 can't send forms: asking fails clearly rather than syncing without them.
+    [Test]
+    public void CreateArguments_On30_WithIncludeForms_FailsClearly() =>
+        Assert.That(
+            () => ContentSyncEngine.CreateArguments(Parameters(nameof(Create30)), Request() with { IncludeLinkedForms = true }, CancellationToken.None),
+            Throws.TypeOf<NotSupportedException>().With.Message.Contains("forms"));
+
+    [Test]
+    public void SupportsParameter_IncludeForms_From30_9()
+    {
+        Assert.That(ContentSyncEngine.SupportsParameter(Parameters(nameof(Create30)), "includeLinkedForms"), Is.False);
+        Assert.That(ContentSyncEngine.SupportsParameter(Parameters(nameof(Create31)), "includeLinkedForms"), Is.True);
+    }
+
+    [Test]
+    public void DescribeStarted_SaysWhenFormsWereIncluded()
+    {
+        var page = Page("/Landing_pages/Coffee_samples", ContentSyncStatus.Changed);
+        ContentSyncPlannedRow[] rows = [new(page.Guid, "en", 141, 11, page, ContentSyncAvailability.Available)];
+        var request = new ContentSyncActionRequest([rows[0].RowId], ContentInventoryItemKind.WebPage, null, IncludeForms: true);
+
+        string withForms = ContentSyncActionService.DescribeStarted(Guid.NewGuid(), "editor", "English", request, rows, includeForms: true);
+        string without = ContentSyncActionService.DescribeStarted(Guid.NewGuid(), "editor", "English", request, rows, includeForms: false);
+
+        Assert.That(withForms, Does.Contain("Pages: 1.").And.Contain("Forms used on these pages: included."));
+        Assert.That(without, Does.Not.Contain("Forms"));
+    }
+
     // A future Xperience version with a parameter the toolkit doesn't know fails clearly, never guesses.
     [Test]
     public void CreateArguments_AnUnknownParameter_FailsClearly() =>

@@ -1,11 +1,13 @@
 using CMS.Core;
 using CMS.DataEngine;
 using CMS.Membership;
+using CMS.OnlineForms;
 using CMS.Websites;
 
 using Kentico.Xperience.Admin.Base;
 using Kentico.Xperience.Admin.Base.Authentication;
 using Kentico.Xperience.Admin.Base.UIPages;
+using Kentico.Xperience.Admin.DigitalMarketing.UIPages;
 using Kentico.Xperience.Admin.Websites.UIPages;
 
 using XperienceCommunity.ContentSyncToolkit.SyncStatus;
@@ -61,6 +63,13 @@ internal interface IContentSyncScopeAccess
     /// </summary>
     public Task<IReadOnlySet<int>> GetSynchronizablePagesAsync(
         ContentSyncScope websiteChannel, IReadOnlyCollection<int> pageIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether the user may send the pages' forms with them (Include forms): Xperience's Synchronize
+    /// permission for Forms. From <c>31.11.0</c>, forms belong to workspaces, and the permission is
+    /// needed in every workspace that has forms. See docs/specs/include-forms.md.
+    /// </summary>
+    public Task<bool> CanSynchronizeFormsAsync(CancellationToken cancellationToken);
 }
 
 internal sealed class ContentSyncScopeAccess(
@@ -284,6 +293,49 @@ internal sealed class ContentSyncScopeAccess(
         var allowed = await GetDisplayableAsync([.. pageIds], aclManager, PermissionCheck(roleIds, SynchronizePermission), cancellationToken);
 
         return allowed.Where(pair => pair.Value).Select(pair => pair.Key).ToHashSet();
+    }
+
+    // Forms belong to workspaces from 31.11.0; the toolkit is built against an earlier version.
+    private const string FormWorkspaceIdColumn = "FormWorkspaceID";
+    private static readonly bool formsHaveWorkspaces = typeof(BizFormInfo).GetProperty(FormWorkspaceIdColumn) is not null;
+
+    public async Task<bool> CanSynchronizeFormsAsync(CancellationToken cancellationToken)
+    {
+        var user = await GetCurrentUserAsync(cancellationToken);
+        if (user is null)
+        {
+            return false;
+        }
+
+        if (user.IsAdministrator())
+        {
+            return true;
+        }
+
+        if (!formsHaveWorkspaces)
+        {
+            return await HasApplicationPermissionAsync(FormsApplication.IDENTIFIER, SynchronizePermission, await GetRoleIdsAsync(user, cancellationToken), cancellationToken);
+        }
+
+        // The engine sends all the pages' forms, so the user needs the permission wherever a form can be,
+        // not only in one workspace as Xperience's own dialog asks.
+        var workspaceIds = (await new ObjectQuery(BizFormInfo.OBJECT_TYPE)
+                .Column(FormWorkspaceIdColumn)
+                .Distinct()
+                .GetEnumerableTypedResultAsync(cancellationToken: cancellationToken))
+            .Select(form => Convert.ToInt32(form.GetValue(FormWorkspaceIdColumn) ?? 0))
+            .Where(id => id > 0)
+            .Distinct();
+
+        foreach (int workspaceId in workspaceIds)
+        {
+            if (!(await workspacePermissionEvaluator.Evaluate(SynchronizePermission, typeof(FormsApplication), workspaceId)).Succeeded)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static async Task<bool> AnyAsync(ObjectQuery query, CancellationToken cancellationToken) =>
