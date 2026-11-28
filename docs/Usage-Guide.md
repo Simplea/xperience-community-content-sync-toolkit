@@ -256,8 +256,13 @@ In the dialog:
 - **Restore on the target immediately**, or **Postpone restoration on the
   target** to a date and time.
 - Untick rows you don't want to send.
+- **Include forms** sends the forms the pages show (added with the Form
+  widget) along with them, as in Kentico's own Sync dialog. It shows from
+  Xperience 30.9.0, if you have the Synchronize permission for Forms, and
+  starts unticked.
 - **Detailed selection** lists the selected items with everything that goes
   with them (linked content items, parent pages), so you can leave some out.
+  Forms aren't listed there, so a sync from Detailed selection sends none.
 - After **Sync**, the dialog follows the sync until it finishes.
 
 What the toolkit adds to a sync:

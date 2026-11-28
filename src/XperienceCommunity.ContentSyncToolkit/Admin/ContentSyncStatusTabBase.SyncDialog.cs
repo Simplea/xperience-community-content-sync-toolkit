@@ -102,10 +102,11 @@ internal abstract partial class ContentSyncStatusTabBase
         }));
     }
 
-    // Forms aren't listed on the status list yet, so the dialog doesn't offer to include linked forms.
+    // Include forms, as in Xperience's dialog: offered when the user may sync forms on this version. The
+    // forms aren't listed, in Xperience's dialog either. See docs/specs/include-forms.md.
     [PageCommand(Permission = SystemPermissions.VIEW)]
-    public Task<ICommandResponse<object>> LoadContentSynchronizationInitialData() =>
-        Task.FromResult(ResponseFrom<object>(new { hasFormSyncPermission = false }));
+    public async Task<ICommandResponse<object>> LoadContentSynchronizationInitialData(CancellationToken cancellationToken) =>
+        ResponseFrom<object>(new { hasFormSyncPermission = SyncActionsEnabled && await actionService.CanIncludeFormsAsync(cancellationToken) });
 
     // ---- What goes -------------------------------------------------------------------------------
 
@@ -209,7 +210,7 @@ internal abstract partial class ContentSyncStatusTabBase
         }
 
         return await StartFromDialogAsync(
-            new ContentSyncActionRequest(rowIds, Kind, scheduledRestore),
+            new ContentSyncActionRequest(rowIds, Kind, scheduledRestore, args.IncludeLinkedForms),
             (plan, request) => actionService.StartAsync(plan, request, cancellationToken),
             cancellationToken);
     }
@@ -233,7 +234,7 @@ internal abstract partial class ContentSyncStatusTabBase
         var (chosenPlan, dependencies) = ChooseDetailed(plan!, SelectedContentItemIds(args));
 
         return await StartFromDialogAsync(
-            new ContentSyncActionRequest([.. chosenPlan.Rows.Select(row => row.RowId)], Kind, scheduledRestore),
+            new ContentSyncActionRequest([.. chosenPlan.Rows.Select(row => row.RowId)], Kind, scheduledRestore, args.IncludeLinkedForms),
             (_, request) => actionService.StartWithSelectedDependenciesAsync(chosenPlan, request, dependencies, cancellationToken),
             cancellationToken,
             chosenPlan);
@@ -651,6 +652,9 @@ internal sealed class SyncDialogCreate
     public Dictionary<string, List<JsonElement>>? SelectedIdentifiers { get; set; }
 
     public DateTimeOffset? ScheduledRestore { get; set; }
+
+    /// <summary>Include forms, when the dialog offered it.</summary>
+    public bool IncludeLinkedForms { get; set; }
 }
 
 internal sealed class SyncDialogProgressRequest

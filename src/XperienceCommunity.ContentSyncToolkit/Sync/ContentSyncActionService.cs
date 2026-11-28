@@ -18,7 +18,9 @@ namespace XperienceCommunity.ContentSyncToolkit.Sync;
 /// <param name="RowIds">Row identifiers, "{guid}_{language}": <c>WebPageItemGUID</c>s on Pages, <c>ContentItemGUID</c>s on Content hub.</param>
 /// <param name="Kind">Which tab the rows are from.</param>
 /// <param name="ScheduledRestore">When the target restores them; <see langword="null"/> for as soon as it can.</param>
-internal sealed record ContentSyncActionRequest(IReadOnlyList<string> RowIds, ContentInventoryItemKind Kind, DateTime? ScheduledRestore);
+/// <param name="IncludeForms">Send the forms the pages show with them (Xperience's Include forms), if the user may.</param>
+internal sealed record ContentSyncActionRequest(
+    IReadOnlyList<string> RowIds, ContentInventoryItemKind Kind, DateTime? ScheduledRestore, bool IncludeForms = false);
 
 /// <summary>What happened, for the message the editor sees.</summary>
 /// <param name="Succeeded">Whether anything was sent and nothing failed straight away.</param>
@@ -82,6 +84,12 @@ internal interface IContentSyncActionService
     /// </summary>
     public Task<ContentSyncActionResult> StartWithSelectedDependenciesAsync(
         ContentSyncPlan plan, ContentSyncActionRequest request, IReadOnlyCollection<int> selectedContentItemIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether the user may send forms with pages (Include forms): this Xperience version can, and the user
+    /// has the Synchronize permission for Forms. See docs/specs/include-forms.md.
+    /// </summary>
+    public Task<bool> CanIncludeFormsAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -294,6 +302,9 @@ internal sealed class ContentSyncActionService(
             })];
     }
 
+    public async Task<bool> CanIncludeFormsAsync(CancellationToken cancellationToken) =>
+        engine.SupportsLinkedForms && await scopeAccess.CanSynchronizeFormsAsync(cancellationToken);
+
     // Xperience's Sync dialog follows each sync's progress itself, so starting from it doesn't wait.
     public Task<ContentSyncActionResult> StartAsync(ContentSyncPlan plan, ContentSyncActionRequest request, CancellationToken cancellationToken) =>
         StartAsync(plan, request, selectedContentItemIds: null, waitForFailures: false, cancellationToken);
@@ -323,6 +334,8 @@ internal sealed class ContentSyncActionService(
             return new ContentSyncActionResult(false, "Nothing was synced. " + DescribeSkipped(skipped));
         }
 
+        // Checked again here: the dialog only offers the checkbox to users who may.
+        bool includeForms = request.IncludeForms && await CanIncludeFormsAsync(cancellationToken);
         var user = await userAccessor.Get();
         var languages = (await languageProvider.Get().GetEnumerableTypedResultAsync(cancellationToken: cancellationToken))
             .ToDictionary(language => language.ContentLanguageName, StringComparer.OrdinalIgnoreCase);
@@ -349,13 +362,14 @@ internal sealed class ContentSyncActionService(
                     request.ScheduledRestore)
                 {
                     WithSelectedDependencies = selectedContentItemIds is not null,
+                    IncludeLinkedForms = includeForms,
                 },
                 cancellationToken);
 
             started.Add((syncGuid, batch, language.ContentLanguageDisplayName));
             tracker.Add(new ContentSyncTrackedSync(
                 syncGuid, request.Kind, [.. batch.Select(row => (row.Guid, row.LanguageName))], user.UserName, timeProvider.GetUtcNow(), request.ScheduledRestore));
-            eventLogService.LogInformation(EventSource, "SYNCSTARTED", DescribeStarted(syncGuid, user.UserName, language.ContentLanguageDisplayName, request, batch));
+            eventLogService.LogInformation(EventSource, "SYNCSTARTED", DescribeStarted(syncGuid, user.UserName, language.ContentLanguageDisplayName, request, batch, includeForms));
         }
 
         if (started.Count == 0)
@@ -508,13 +522,19 @@ internal sealed class ContentSyncActionService(
 
     // The Event log entry for a started sync: who, what and when, one item per line. Kentico's own list
     // of content synchronizations records the sync but not which items it included.
-    private static string DescribeStarted(
-        Guid syncGuid, string userName, string language, ContentSyncActionRequest request, IReadOnlyList<ContentSyncPlannedRow> rows)
+    internal static string DescribeStarted(
+        Guid syncGuid, string userName, string language, ContentSyncActionRequest request, IReadOnlyList<ContentSyncPlannedRow> rows, bool includeForms)
     {
+        string noun = request.Kind == ContentInventoryItemKind.WebPage ? "pages" : "items";
         var text = new StringBuilder()
             .AppendLine($"Sync {syncGuid} started from the Content Sync Toolkit's status list by {userName}.")
-            .AppendLine($"Language: {language}. {(request.Kind == ContentInventoryItemKind.WebPage ? "Pages" : "Items")}: {rows.Count}.")
+            .AppendLine($"Language: {language}. {char.ToUpperInvariant(noun[0])}{noun[1..]}: {rows.Count}.")
             .AppendLine(request.ScheduledRestore is { } when ? $"Restore on the target: {when:u}." : "Restore on the target: immediately.");
+
+        if (includeForms)
+        {
+            text.AppendLine($"Forms used on these {noun}: included.");
+        }
 
         foreach (var row in rows)
         {

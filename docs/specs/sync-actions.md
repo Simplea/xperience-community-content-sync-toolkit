@@ -360,6 +360,8 @@ Agreed in review (November 2026):
    tab next to Pages and Content hub, with the same Sync actions, along with any other kind of content
    Content Sync can transfer. See [Sync status beyond pages and content hub
    items](sync-status-more-object-types.md), Forms.
+   *Replaced in 1.0.0-beta.6:* the dialog offers **Include forms** as Kentico's does
+   ([include-forms.md](include-forms.md)).
 4. **The actions are on by default;** `ContentSyncToolkit:SyncActions` turns them off.
 5. **Detailed selection** (excluding linked content) was left out of the first build; with Xperience's
    dialog it's supported (see On the status list).

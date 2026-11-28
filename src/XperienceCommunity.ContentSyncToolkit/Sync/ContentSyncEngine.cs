@@ -25,6 +25,12 @@ internal sealed record ContentSyncEngineRequest(
     /// from <c>31.x</c>). The versions then include the dependencies the editor chose.
     /// </summary>
     public bool WithSelectedDependencies { get; init; }
+
+    /// <summary>
+    /// Send the forms the pages show in Page Builder with them (Xperience's Include forms, from
+    /// <c>30.9.0</c>). See docs/specs/include-forms.md.
+    /// </summary>
+    public bool IncludeLinkedForms { get; init; }
 }
 
 /// <summary>Where a sync is, in the toolkit's terms; Kentico's status names differ by version.</summary>
@@ -56,6 +62,9 @@ internal sealed record ContentSyncProgress(ContentSyncProgressState State, strin
 /// <summary>Starts Content Sync for language versions and reads its progress.</summary>
 internal interface IContentSyncEngine
 {
+    /// <summary>Whether this Xperience version can send forms with pages (<c>30.9.0</c> and later).</summary>
+    public bool SupportsLinkedForms { get; }
+
     public Task<Guid> StartAsync(ContentSyncEngineRequest request, CancellationToken cancellationToken);
 
     public Task<ContentSyncProgress> GetProgressAsync(Guid synchronizationGuid, CancellationToken cancellationToken);
@@ -74,6 +83,13 @@ internal sealed class ContentSyncEngine(ISynchronizationService synchronizationS
 {
     private static readonly MethodInfo createMethod = typeof(ISynchronizationService).GetMethod(nameof(ISynchronizationService.Create))
         ?? throw new InvalidOperationException("Xperience's ISynchronizationService has no Create method.");
+
+    private const string IncludeLinkedFormsParameter = "includeLinkedForms";
+
+    public bool SupportsLinkedForms { get; } = SupportsParameter(createMethod.GetParameters(), IncludeLinkedFormsParameter);
+
+    internal static bool SupportsParameter(IReadOnlyList<ParameterInfo> parameters, string name) =>
+        parameters.Any(parameter => parameter.Name == name);
 
     public async Task<Guid> StartAsync(ContentSyncEngineRequest request, CancellationToken cancellationToken)
     {
@@ -98,9 +114,14 @@ internal sealed class ContentSyncEngine(ISynchronizationService synchronizationS
     internal static object?[] CreateArguments(IReadOnlyList<ParameterInfo> parameters, ContentSyncEngineRequest request, CancellationToken cancellationToken)
     {
         var ids = request.VersionIds.ToList();
-        if (request.WithSelectedDependencies && !parameters.Any(parameter => parameter.Name == "withSelectedDependencies"))
+        if (request.WithSelectedDependencies && !SupportsParameter(parameters, "withSelectedDependencies"))
         {
             throw new NotSupportedException("This Xperience version can't sync with selected dependencies.");
+        }
+
+        if (request.IncludeLinkedForms && !SupportsParameter(parameters, IncludeLinkedFormsParameter))
+        {
+            throw new NotSupportedException("This Xperience version can't sync forms with pages.");
         }
 
         return [.. parameters.Select<ParameterInfo, object?>(parameter => parameter.Name switch
@@ -111,7 +132,7 @@ internal sealed class ContentSyncEngine(ISynchronizationService synchronizationS
             "retrieveFunc" => (Func<IReadOnlyCollection<BaseInfo>>)(() => [.. request.Versions]),
             "languageId" => request.LanguageId,
             "cultureCode" => "en-US",
-            "includeLinkedForms" => false,
+            IncludeLinkedFormsParameter => request.IncludeLinkedForms,
             "withSelectedDependencies" => request.WithSelectedDependencies,
             "synchronizationIdentifiers" => ids,
             // Both
